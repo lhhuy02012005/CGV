@@ -145,21 +145,99 @@ flowchart TD
   * **Vấn đề:** Nếu User A click chọn ghế H5 làm màu xám nhưng sau đó bỏ đi, tắt trình duyệt hoặc không bấm "Thanh toán", hệ thống không thể khóa vĩnh viễn ghế đó trên giao diện của người khác.
   * **Cơ chế:** Trạng thái "Holding" được lưu trên Redis với thời hạn ngắn (**TTL: 30 giây đến 60 giây**).
   * **Nhả khóa tự động:** Nếu hết 30s mà User A không bấm chuyển sang thanh toán, Redis Key tự động bị xóa (hoặc qua scheduler/keyspace notification), hệ thống lập tức bắn một lệnh WebSocket khác tới room phòng chiếu: `{"seat": "H5", "status": "AVAILABLE"}` để **thổi sáng lại ghế H5** cho tất cả người dùng khác tiếp tục chọn.
-* **Lớp 3: Pessimistic Locking (Khóa bi quan tại Database) — Lớp bảo vệ thép cuối cùng:**
-  * **Kịch bản xảy ra:** Kích hoạt ở tỷ lệ cực nhỏ ($< 5\%$) khi User A và User B ở hai đường truyền khác nhau vô tình bấm nút "Thanh toán" vào đúng một phần nghìn giây (millisecond) trước khi mạng kịp đồng bộ gói tin WebSocket.
-  * **Cơ chế:** Cả hai request cùng chui xuống Backend. Backend thực thi câu lệnh SQL có khóa bi quan:
-    ```sql
-    SELECT * FROM showtime_seats WHERE showtime_id = :stId AND seat_id = :seatId FOR UPDATE;
-    ```
-    với cấu hình **thời gian chờ tối đa 3 giây (3000ms)** (`jakarta.persistence.lock.timeout = 3000` hoặc Postgres `lock_timeout = '3s'`).
-  * **Xử lý kết quả:** Database cho phép Transaction của A đi trước và bắt Request của B phải chờ tối đa 3 giây. Khi A commit thành công (`status = BOOKED`), Transaction của B đọc dữ liệu thấy ghế đã chốt nên dừng lại và trả về lỗi `409 Conflict` kèm thông báo: *"Ghế này vừa có người nhanh tay hơn"*.
-  * **Bảo vệ hạ tầng:** Việc giới hạn thời gian chờ tối đa 3 giây giúp **Connection Pool (HikariCP) không bị treo vĩnh viễn** nếu hệ thống gặp sự cố mạng đột ngột hoặc deadlock.
+* **Lớp 3: Mô hình Khóa Kép Chống Tranh Chấp Cực Hạn (Dual-Shield: Redisson kết hợp Pessimistic Locking):**
+  Trong kiến trúc phân tán cấp doanh nghiệp (Enterprise-grade), **Redisson (Redis Distributed Lock)** và **Pessimistic Locking (`SELECT ... FOR UPDATE` tại Database)** đóng vai trò ở hai tầng độc lập, bổ trợ mật thiết cho nhau chứ không hề triệt tiêu hay dư thừa:
+  
+  * **Tầng ngoài (Application Layer — Redisson Distributed Lock):**
+    * **Vị trí chặn:** Chặn ngay tại tầng Application / In-Memory (Redis) trước khi request kịp chui sâu xuống cơ sở dữ liệu.
+    * **Ưu điểm vượt trội:** Xử lý trên RAM với độ trễ cực thấp ($< 1ms$), giảm tải tuyệt đối cho **HikariCP Database Connection Pool** khi có hàng ngàn người cùng bấm đặt ghế vào một tích tắc (Flash Sale/High Concurrency).
+    * **Cách áp dụng:** Dùng Redisson để khóa theo cụm key `lock:showtime:{id}:seat:{id}` trong khoảng **3 – 5 giây** khi người dùng bấm nút thanh toán. Ai chiếm được khóa trên Redis mới có quyền chui xuống Database thực hiện Transaction chốt đơn. Hàng trăm request còn lại bị từ chối ngay lập tức ở tầng RAM mà Database không phải gánh chịu hàng chờ (waiting queue). Lọc sạch **99% request va chạm**.
+  
+  * **Tầng trong (Database Storage Layer — Pessimistic Locking `SELECT ... FOR UPDATE`):**
+    * **Vị trí chặn:** Chốt chặn vật lý tại tầng Cơ sở dữ liệu PostgreSQL.
+    * **Lý do không nên bỏ hoàn toàn:** Redis là hệ thống In-Memory (lưu trên RAM), dù rất hiếm nhưng vẫn tiềm ẩn rủi ro Redis Cluster bị mất kết nối mạng tạm thời, failover giữa Master-Replica hoặc lệch đồng hồ giữa các nodes (split-brain). Khóa `SELECT ... FOR UPDATE` (kèm **thời gian chờ tối đa 3 giây**) chính là **"Lớp phòng thủ cuối cùng" (Last Line of Defense)** bảo đảm tính toàn vẹn dữ liệu tuyệt đối (chuẩn ACID) cho các bảng `bookings` và `booking_seats`.
+
+  * **Bảng đối sánh vai trò 2 tầng khóa:**
+    | Tiêu chí phân tích | Redisson (Redis Distributed Lock) | Pessimistic Locking (`SELECT ... FOR UPDATE`) |
+    | :--- | :--- | :--- |
+    | **Tầng triển khai** | Application / RAM (In-Memory) | Database Storage (PostgreSQL Disk / WAL) |
+    | **Tốc độ xử lý** | Siêu nhanh ($< 1ms$) | Chậm hơn ($5ms - 20ms$) do I/O và Transaction Log |
+    | **Mục đích chiến lược** | Chặn 99% request trùng, triệt tiêu tải cho DB Connection Pool | Đảm bảo 100% tính toàn vẹn dữ liệu ACID chuẩn doanh nghiệp |
+    | **Kịch bản rủi ro** | Rủi ro rớt mạng Redis cluster / split-brain | Treo Connection Pool nếu không cấu hình Timeout |
+    | **Thời gian khóa** | 3 – 5 giây (khi submit thanh toán) | Tối đa 3000ms (`jakarta.persistence.lock.timeout`) |
+
+#### 🚀 Kiến trúc Quản lý Trạng thái Ghế & Chiến lược Cache Đỉnh cao (Redis & Caching Strategy)
+
+##### 1. Mô hình In-Memory Seat Map & Cache-Aside Pattern
+Hệ thống áp dụng mô hình **In-Memory Seat Map Pattern** kết hợp **Cache-Aside Pattern** để quản lý trạng thái ghế ngồi trên Redis Cluster, biến RAM thành lớp màng chắn hỏa lực đầu tiên trước khi bất kỳ request nào có cơ hội chạm xuống PostgreSQL:
+* **Chặn đọc (Read Load Optimization):** Hàng chục ngàn người dùng cùng mở trang xem sơ đồ rạp tại thời điểm công chiếu bom tấn sẽ đọc trạng thái trực tiếp từ RAM của Redis với độ trễ dưới $1ms$, hoàn toàn giải phóng Database khỏi áp lực đọc khổng lồ.
+* **Chặn ghi và tranh chấp (Write & Lock Optimization):** Khi người dùng bấm chọn hoặc chuyển sang thanh toán, Redisson tạo khóa phân tán theo từng ghế riêng biệt (ví dụ: `lock:showtime:{showtime_id}:seat:A5`).
+* **Lọc request tại tầng RAM:** Người nhanh tay nhất chiếm được khóa trên Redis được quyền đi tiếp xuống Database. Toàn bộ các request đến sau bị chặn đứng và từ chối ngay lập tức tại tầng Redis, loại bỏ triệt để hiện tượng hàng ngàn kết nối xếp hàng chờ nghẽn mạng tại lệnh `SELECT ... FOR UPDATE`.
+
+##### 2. Vòng đời Dữ liệu và Thời điểm Nạp / Xóa Cache ghế
+```
+[Admin tạo Suất chiếu] ──(Proactive Loading)──► [Lưu DB + Khởi tạo Redis Hash: showtime:{id}:seats]
+                                                              │
+[User truy cập (Nếu Cache Miss)] ──(Lazy Loading)────────────► [Truy vấn PostgreSQL -> Nạp ngược Redis]
+                                                              │
+[Suất chiếu kết thúc] ─────────────(Lifecycle Cleanup)────────► [TTL / Scheduled Job: Xóa Key giải phóng RAM]
+```
+* **Thời điểm nạp chủ động (Proactive Loading):** Ngay khi Quản trị viên (Admin) tạo một suất chiếu mới trên hệ thống, backend lưu thông tin vào PostgreSQL và đồng thời khởi tạo ngay lập tức sơ đồ ghế của phòng chiếu đó lên Redis dưới dạng **Redis Hash** với định dạng key: `showtime:{showtime_id}:seats` (Ví dụ: `{ "A1": "AVAILABLE", "A2": "HOLDING", "A3": "BOOKED" }`).
+* **Thời điểm dự phòng (Lazy Loading / Fallback):** Nếu key trên Redis bị mất do sự cố khởi động lại (restart/eviction), khi có người dùng đầu tiên truy cập, hệ thống tự động truy vấn PostgreSQL, nạp ngược dữ liệu lên Redis rồi mới phục vụ request cho client.
+* **Thời điểm xóa dọn dẹp (Lifecycle Cleanup):** Khi suất chiếu kết thúc (qua giờ chiếu), hệ thống kích hoạt Scheduled Job tự động hoặc sử dụng cơ chế Redis TTL để xóa sạch key `showtime:{showtime_id}:seats` khỏi Redis, giải phóng hoàn toàn bộ nhớ RAM cho các suất chiếu mới.
+
+##### 3. Thách thức khi Scale nhiều Instance Redis & Giải pháp từ Redisson
+Khi hệ thống mở rộng lên mô hình phân tán nhiều node (Redis Cluster hoặc Master-Replica with Sentinel):
+* **Nhược điểm & Rủi ro khi scale:**
+  * **Mất khóa khi Failover (Asynchronous Replication Issue):** Nếu dùng lệnh khóa đơn giản `SETNX` trên một Redis Master đơn lẻ, khi Master nhận lệnh khóa nhưng gặp sự cố crash trước khi kịp đồng bộ sang Replica, Replica được đẩy lên làm Master mới mà không hề biết về khóa đó $\rightarrow$ Client thứ hai gửi request sẽ tiếp tục được cấp khóa $\rightarrow$ **Xảy ra Double-Locking (2 người cùng giữ khóa 1 ghế)**.
+  * **Cross-slot Limitations:** Trên Redis Cluster, các key nằm rải rác trên các hash slots khác nhau giữa nhiều node khiến việc thực thi transaction nhiều key bị lỗi (Crossslot Keys Error).
+* **Giải pháp giải quyết từ Redisson:**
+  * **Thuật toán Redlock (Redlock Algorithm):** Redisson hỗ trợ cài đặt thuật toán Redlock: Client thực hiện acquire lock độc lập trên đa số ($N/2 + 1$) nodes Redis với cơ chế tính toán timeout chặt chẽ. Khóa chỉ được coi là thành công khi chiếm được đa số nodes trong thời gian ngắn hơn lease time.
+  * **Cơ chế Watchdog (Tự động gia hạn khóa):** Nếu nghiệp vụ thanh toán kéo dài chưa kịp commit xong, Redisson Watchdog tự động gia hạn thời gian giữ khóa (mỗi 10s gia hạn thêm 30s), ngăn chặn tình trạng khóa bị nhả sớm giữa chừng khi server đang xử lý logic nặng.
+  * **Hash Tags `{...}` trong Redis Cluster:** Đặt Hash Tags theo suất chiếu `{showtime_id}:seats` và `{showtime_id}:seat:A5` để ép toàn bộ dữ liệu ghế và khóa của cùng một suất chiếu luôn được băm về chung một Hash Slot trên cùng một Node Redis, bảo đảm tính toàn vẹn và thực thi nguyên tử.
+
+##### 4. Phân tích Bản chất: Tại sao Giữ ghế dùng Redisson mà Voucher lại dùng Redis + Lua Script?
+Hai bài toán có bản chất nghiệp vụ và yêu cầu hiệu năng hoàn toàn khác nhau, đòi hỏi hai vũ khí kỹ thuật chuyên biệt:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ BÀI TOÁN GIỮ GHẾ (Stateful Resource)         BÀI TOÁN ÁP DỤNG VOUCHER (Stateless Counter)   │
+│ • Tính chất: Kéo dài (Holding 5 - 10 phút)    • Tính chất: Tức thời (Check-and-Decrement)    │
+│ • Thao tác: User điền info, chọn bắp nước     • Thao tác: Bấm áp dụng là chốt trừ trong 1ms  │
+│ • Giải pháp: Redisson Distributed Lock (RLock)• Giải pháp: Redis Cluster + Hash Tag + Lua   │
+│ • Lý do: Cần giữ quyền sở hữu độc quyền có TTL• Lý do: Cần Throughput cực đại, không overhead│
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+* **Tại sao Ghế ngồi lại dùng Redisson (Distributed Lock)?**
+  * **Tính chất bài toán:** Ghế ngồi cần trạng thái **kéo dài (Stateful / Holding)**. Khi người dùng click chọn ghế A5, họ cần "giữ chỗ" ghế đó trong 5 – 10 phút để thong thả chọn combo bắp nước, áp mã giảm giá và nhập thông tin thẻ.
+  * **Vai trò Redisson:** Tạo khóa phân tán (`RLock`) có thời gian sống (TTL) và Watchdog bảo vệ, đảm bảo trong suốt phiên thao tác không ai có thể chạm vào hay cướp mất ghế A5. Khóa chỉ được giải phóng khi người dùng thanh toán xong hoặc hủy đơn.
+* **Tại sao Voucher lại dùng Redis + Lua Script thay vì Redisson?**
+  * **Tính chất bài toán:** Voucher là dạng **thao tác tức thời (Atomic Counter / Check-and-Decrement)**. Không người dùng nào cần "giữ" mã giảm giá trong 10 phút; bấm "Áp dụng" là hệ thống phải kiểm tra xem mã còn lượt (`usage_limit > 0`) hay không và trừ ngay trong tích tắc (vài trăm microsecond).
+  * **Nhược điểm nếu dùng Redisson cho Voucher:** Trong các đợt Flash Sale hàng triệu người giật code cùng một giây, nếu dùng `RLock` cho từng mã voucher, hệ thống sẽ tạo ra một hàng đợi (Queue) các thread tranh chấp khóa khổng lồ. Việc liên tục gửi gói tin mạng `lock()` và `unlock()` sẽ khiến tốc độ xử lý (Throughput) sụt giảm thảm hại.
+  * **Ưu điểm vượt trội của Lua Script:**
+    * Lua Script thực thi toàn bộ logic: Kiểm tra `current < limit` $\rightarrow$ Trừ biến đếm `DECR` $\rightarrow$ Trả kết quả thành công bên trong một **khối nguyên tử duy nhất trên RAM Redis**.
+    * Gom cụm key về cùng 1 node bằng Hash Tag: `{voucher_code}:count` và `{voucher_code}:info`.
+    * Đạt thông lượng xử lý **hàng chục ngàn request check voucher/giây** mà không tốn chi phí khởi tạo, theo dõi và giải phóng lock object.
+
+---
+
+#### 📊 Bảng tổng hợp Thành phần Cache & Tối ưu Truy vấn (Bản chuẩn Scale lớn)
+
+| Thành phần cần Cache / Tối ưu | Vị trí / Công nghệ áp dụng | Mục đích tối ưu & Cơ chế xử lý High Concurrency |
+| :--- | :--- | :--- |
+| **Sơ đồ trạng thái ghế (Seat Map)** | **Redis Cluster** (In-Memory Seat Map + Hash Tags `{showtime_id}`) | Phân rã dữ liệu ghế theo từng suất chiếu (`{showtime_id}:*`) ra các node Redis, đọc trực tiếp từ RAM ($< 1ms$), kết hợp Redisson khóa phân tán chống tranh chấp vé. |
+| **Danh sách suất chiếu (Showtimes)** | **Redis Cache** & **PostgreSQL Composite Index** | Cache lịch chiếu theo phim/rạp để tăng tốc hiển thị trang chủ; đánh chỉ mục tổ hợp trên cột `(room_id, start_time, end_time)` tại PostgreSQL ngăn trùng giờ chiếu. |
+| **Danh mục phim & Chi tiết phim** | **Redis Cache** & **PostgreSQL GIN Index (`pg_trgm`)** | Cache danh sách phim đang chiếu (`NOW_SHOWING`) và sắp chiếu; sử dụng GIN Index trên `unaccent(lower(title))` cho phép tìm kiếm tên phim tiếng Việt không dấu siêu tốc dưới $5ms$. |
+| **Mã giảm giá / Voucher (Promotions)** | **Redis Cluster** + **Hash Tag (`{voucher_id}:*`)** + **Lua Script** | Gom cụm các key của cùng một voucher về chung một node bằng Hash Tag, sau đó chạy mã Lua nguyên tử (Atomic) trên RAM để check và trừ `usage_limit` siêu tốc, chịu tải hàng triệu request Flash Sale mà không sợ race condition hay nghẽn cổ chai. |
+| **Phân trang dữ liệu lớn (History/Bookings)** | **Keyset / Cursor-based Pagination** | Thay thế hoàn toàn phân trang bằng `OFFSET` truyền thống (gây quét bảng chậm dần) bằng con trỏ `created_at` / `id` để tối ưu hiệu năng truy vấn lịch sử đặt vé quy mô hàng triệu bản ghi ($O(1)$ thay vì $O(N)$). |
+
+---
 
 #### 🚀 Các Kỹ thuật Nâng cao Khác (Advanced Capabilities)
 * **Transactional Outbox Pattern:** Tách bảng `outbox_events_booking` và `outbox_events_payment` để publish event vào Kafka mà không gặp lỗi Dual-Write.
 * **Idempotency:** Lưu và kiểm tra `Idempotency-Key` (dùng `transaction_id` hoặc UUID) tại Webhook thanh toán và Kafka consumer chống xử lý lặp lại.
 * **Optimistic Locking (`@Version`):** Quản lý phiên bản dữ liệu trong bảng `users` (chống mất điểm khi cộng loyalty_points đồng thời) và bảng `promotions` (chống vượt `usage_limit`).
-* **PostgreSQL GIN Index `pg_trgm`:** Tìm kiếm phim không dấu siêu tốc ($<5ms$).
 * **Spring Batch Chunk Processing:** Đọc theo luồng file CSV 1.000.000 voucher, RAM tiêu thụ $<256MB$.
 
 ---
@@ -553,22 +631,25 @@ sequenceDiagram
         FE_A->>BS: POST /api/v1/bookings/checkout {showtimeId: 101, seatId: "H5"}
     end
 
-    Note over BS,DB: LỚP 3: Pessimistic Locking tại Database (Va chạm cực hiếm < 5%)
-    Note over UserA,UserB: Giả sử User A và B bấm Thanh toán cùng 1 tích tắc trước khi WS kịp đồng bộ
-    par Request của User A tới DB trước
+    Note over BS,DB: LỚP 3: Mô hình Khóa Kép (Redisson chặn tầng ngoài -> Database FOR UPDATE chốt tầng trong)
+    Note over UserA,UserB: User A và B cùng bấm nút "Thanh toán" vào đúng 1 tích tắc
+    par Request A tới Booking Service
+        BS->>R: Redisson: tryLock("lock:st:101:seat:H5", wait=3s, lease=5s)
+        R-->>BS: Khóa Redis thành công (Acquired by A trong 0.5ms)
         BS->>DB: SELECT * FROM showtime_seats WHERE seat_id = 'H5' FOR UPDATE (Timeout: 3000ms)
-        DB-->>BS: Khóa dòng thành công (Granted for A)
+        DB-->>BS: Chốt dòng vật lý thành công (ACID Guaranteed)
         BS->>DB: UPDATE showtime_seats SET status = 'BOOKED'
         BS->>DB: INSERT INTO bookings (...) & COMMIT TRANSACTION
-    and Request của User B tới DB chậm hơn một phần nghìn giây
-        BS->>DB: SELECT * FROM showtime_seats WHERE seat_id = 'H5' FOR UPDATE (Timeout: 3000ms)
-        Note over DB: B bị giữ chờ xếp hàng trong tối đa 3 giây
-        Note over DB: A commit xong, giải phóng lock -> B đọc thấy status = 'BOOKED'
-        DB-->>BS: Dữ liệu trả về đã là BOOKED (hoặc quá 3s ném LockTimeoutException)
-        BS-->>FE_B: 409 Conflict ("Ghế H5 vừa có người nhanh tay hơn, vui lòng chọn ghế khác")
-        FE_B-->>UserB: Hiển thị thông báo và cập nhật ghế H5 sang màu đỏ đã bán
+        BS->>R: Redisson: unlock("lock:st:101:seat:H5")
+        BS-->>FE_A: 200 OK (Chuyển sang bước thanh toán tiền)
+    and Request B tới Booking Service (Chậm hơn 1 millisecond)
+        BS->>R: Redisson: tryLock("lock:st:101:seat:H5", wait=3s, lease=5s)
+        Note over R,BS: Khóa đang do A nắm giữ -> B bị từ chối ngay tại RAM!
+        R-->>BS: Khóa thất bại (Lock Busy)
+        BS-->>FE_B: 409 Conflict ("Ghế H5 đang được thanh toán bởi người khác")
+        Note over DB: Database Connection Pool hoàn toàn không bị tốn 1 connection nào cho B!
     end
-    Note over DB: Giới hạn Timeout 3s bảo vệ tuyệt đối HikariCP Connection Pool không bị treo
+    Note over DB: Trường hợp cực hiếm Redis cluster failover: Khóa DB FOR UPDATE là chốt chặn thép cuối cùng!
 ```
 
 ---
@@ -920,6 +1001,9 @@ Bảng câu hỏi được thiết kế theo đúng định hướng phản bi�
 | **5** | *"Nếu Webhook thanh toán từ VNPay bị gửi lặp lại 2 lần do mạng chậm, hệ thống có bị cộng 2 lần điểm thưởng không?"* (Tầng 3) | Không, nhờ cơ chế **Idempotency**. `transaction_id` từ đối tác được dùng làm khóa duy nhất (`idempotency_key`) lưu trong Redis/DB; nếu gói tin thứ hai gửi đến có cùng `transaction_id`, hệ thống phát hiện đã xử lý và phản hồi ngay mà không thực thi lại logic nghiệp vụ. |
 | **6** | *"Tìm kiếm không dấu tại sao không dùng `LIKE '%phim%'` mà phải tạo GIN Index `pg_trgm`?"* (Tầng 3) | `LIKE '%...%'` ép cơ sở dữ liệu phải quét toàn bộ bảng (**Full Table Scan** - độ phức tạp $O(N)$). Sử dụng **GIN Index với thuật toán Trigram** biến câu lệnh thành **Bitmap Index Scan**, trả kết quả trong dưới $5ms$ ngay cả trên tập dữ liệu hàng trăm ngàn bản ghi. |
 | **7** | *"File CSV import chứa 1.000.000 dòng mã voucher, làm sao nạp vào database mà không gây tràn bộ nhớ RAM (OutOfMemory)?"* (Tầng 3) | Áp dụng **Spring Batch Chunk Processing**: Hệ thống đọc dữ liệu dạng Stream từng phân đoạn 1.000 dòng/lần, validate và ghi hàng loạt bằng `JdbcTemplate.batchUpdate` rồi giải phóng bộ nhớ ngay. Mức chiếm dụng RAM luôn ổn định dưới 256MB. |
+| **8** | *"Tại sao đã dùng Redisson (Redis Distributed Lock) rồi mà vẫn cần Pessimistic Locking (FOR UPDATE) ở Database? Có thừa không?"* (Tầng 3) | **Không hề thừa! Hai cơ chế đóng vai trò ở hai tầng độc lập và bổ trợ nhau hoàn hảo**:<br>1. **Redisson (Tầng Application / RAM):** Khóa 3-5 giây để **lọc sạch 99% request trùng lặp** ở tầng microsecond khi có hàng ngàn người cùng bấm đặt ghế (Flash Sale), triệt tiêu hoàn toàn gánh nặng cho HikariCP Database Connection Pool.<br>2. **Pessimistic Locking (Tầng Database Storage):** Là **"Lớp phòng thủ cuối cùng" (Last Line of Defense)**. Do Redis là In-Memory nên dù hiếm vẫn có nguy cơ cluster bị failover hoặc split-brain; câu lệnh `SELECT ... FOR UPDATE` (Timeout 3s) tại PostgreSQL đảm bảo tính nhất quán dữ liệu tuyệt đối (chuẩn ACID) cho các bảng `bookings` và `booking_seats`. |
+| **9** | *"Tại sao bài toán Giữ ghế lại dùng Redisson (Distributed Lock) mà trừ lượt Voucher lại dùng Redis + Lua Script?"* (Tầng 3) | **Do bản chất vòng đời tài nguyên khác nhau**:<br>• **Ghế ngồi là tài nguyên Stateful (Kéo dài):** Người dùng cần giữ chỗ độc quyền trong 5–10 phút để chọn bắp nước và nhập thẻ $\rightarrow$ Redisson cung cấp `RLock` có lease time, tự động gia hạn bằng Watchdog và bảo đảm tính độc quyền theo thời gian.<br>• **Voucher là tài nguyên Stateless (Tức thời):** Người dùng bấm áp dụng là kiểm tra và trừ ngay trong vài microsecond $\rightarrow$ Nếu dùng Redisson sẽ sinh hàng đợi chờ lock khổng lồ và tốn overhead mạng `lock()/unlock()`. Dùng **Lua Script** thực thi nguyên tử `check-and-decrement` trên RAM trong 1 lệnh duy nhất, đạt thông lượng hàng chục ngàn TPS mà không cần lock object. |
+| **10** | *"Khi scale nhiều node Redis (Cluster / Sentinel), làm sao tránh mất khóa khi Failover và chạy được Multi-key?"* (Tầng 3) | **Áp dụng 2 giải pháp chuẩn enterprise**:<br>1. **Thuật toán Redlock:** Thay vì tin tưởng 1 master duy nhất (dễ mất khóa khi master crash trước khi replicate), Redisson acquire lock trên đa số ($N/2 + 1$) nodes độc lập với timeout nghiêm ngặt.<br>2. **Redis Hash Tags `{...}`:** Ép các key liên quan cùng một suất chiếu (`{st_101}:seats`, `{st_101}:lock:A5`) hoặc voucher (`{voucher_code}:count`) luôn được băm vào cùng một Hash Slot trên 1 Node, loại bỏ hoàn toàn lỗi Cross-slot trong Redis Cluster. |
 
 ---
 
