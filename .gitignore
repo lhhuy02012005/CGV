@@ -1,0 +1,78 @@
+# ==========================================
+# Operating System Files
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==========================================
+# IDE & Editor Files
+# ==========================================
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache
+
+# VS Code
+.vscode/
+
+# NetBeans
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# ==========================================
+# Build Artifacts & Compiled Files
+# ==========================================
+target/
+**/target/
+build/
+**/build/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# ==========================================
+# Environment, Secrets & Local Configs
+# ==========================================
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# ==========================================
+# Logs & Runtime Dumps
+# ==========================================
+logs/
+**/logs/
+*.log
+*.dump
+*.hprof
+hs_err_pid*
+
+# ==========================================
+# Maven / Gradle Wrappers & Caches
+# ==========================================
+.mvn/timing.properties
+.gradle/

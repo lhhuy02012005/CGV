@@ -1,0 +1,44 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: identity-service
+    url: http://host.docker.internal:8081
+    routes:
+      - name: identity-route
+        paths:
+          - /api/v1/auth
+          - /api/v1/users
+        strip_path: false
+
+  - name: booking-service
+    url: http://host.docker.internal:8082
+    routes:
+      - name: booking-route
+        paths:
+          - /api/v1/bookings
+        strip_path: false
+
+  - name: catalog-service
+    url: http://host.docker.internal:8083
+    routes:
+      - name: catalog-route
+        paths:
+          - /api/v1/catalogs
+        strip_path: false
+
+  - name: marketing-service
+    url: http://host.docker.internal:8084
+    routes:
+      - name: marketing-route
+        paths:
+            - /api/v1/marketings
+        strip_path: false
+
+  - name: payment-service
+    url: http://host.docker.internal:8085
+    routes:
+      - name: payment-route
+        paths:
+          - /api/v1/payment
+        strip_path: false
