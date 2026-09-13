@@ -1,0 +1,46 @@
+Tiêu chuẩn phổ biến nhất trong các dự án thực tế hiện nay là Conventional Commits.
+
+Cấu trúc cơ bản
+<type>(<scope>): <subject>
+
+Phân loại (Type) bắt buộc
+
+feat: Thêm tính năng mới (feature).
+
+fix: Sửa lỗi (bug fix).
+
+refactor: Tái cấu trúc code nhưng không làm thay đổi logic đầu ra (ví dụ: tách hàm, đổi tên biến).
+
+chore: Cập nhật các thành phần phụ trợ không thuộc source code chính (ví dụ: cấu hình pom.xml, Dockerfile, .gitignore).
+
+docs: Thêm hoặc sửa tài liệu (README.md, Swagger).
+
+style: Chỉnh sửa định dạng code (format, khoảng trắng, dấu phẩy) - hoàn toàn không ảnh hưởng logic.
+
+perf: Tối ưu hóa hiệu năng xử lý.
+
+test: Bổ sung hoặc chỉnh sửa các test case.
+
+Quy tắc viết nội dung (Subject)
+
+Luôn viết bằng tiếng Anh.
+
+Sử dụng động từ nguyên thể mang tính ra lệnh (Imperative mood). Đúng: add, fix, update. Sai: added, fixing, updates.
+
+Không viết hoa chữ cái đầu của subject.
+
+Không dùng dấu chấm ở cuối câu.
+
+Giữ độ dài dưới 50 ký tự để dễ đọc trên các công cụ quản lý.
+
+Ví dụ áp dụng ngay vào dự án hiện tại của bạn
+
+feat(identity): integrate keycloak token exchange
+
+fix(auth): resolve null constraint violation for membership_tier
+
+chore(maven): downgrade spring-boot-starter-parent to 3.3.2
+
+refactor(feign): switch to SpringQueryMap for token request
+
+docs(readme): add docker-compose setup instructions
