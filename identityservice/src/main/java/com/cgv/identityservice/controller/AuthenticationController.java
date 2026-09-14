@@ -49,6 +49,18 @@ public class AuthenticationController {
                 .build();
     }
 
+    @PostMapping(value = "/social-sync")
+    public ApiResponse<Void> socialSync(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            authenticationService.syncUserFromAccessToken(token);
+        }
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Đồng bộ user social thành công!")
+                .build();
+    }
+
     @PostMapping("/refresh")
     public ApiResponse<AuthenticationResponse> refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
         return ApiResponse.<AuthenticationResponse>builder()

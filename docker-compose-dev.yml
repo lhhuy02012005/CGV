@@ -39,13 +39,24 @@ services:
       KC_DB_PASSWORD: postgrespassword
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      # Tắt bắt buộc HTTPS → cho phép truy cập HTTP trên môi trường dev/local
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      # Tắt strict hostname check → truy cập được qua localhost, 127.0.0.1
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY: edge
     ports:
       - "8180:8080"
-    command: start-dev
+    # --import-realm: tự động đọc file *.json trong /opt/keycloak/data/import/
+    # tạo realm nếu chưa tồn tại, idempotent khi restart
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak/cgv-realm-export.json:/opt/keycloak/data/import/cgv-realm-export.json
     depends_on:
       - postgres
     networks:
       - cgv-net
+    restart: unless-stopped
 
   kong:
     image: kong:3.4
@@ -258,47 +269,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-
-  # kafka-init: chạy 1 lần duy nhất để tạo tất cả topic với đúng partition + replication
-  # Dùng --if-not-exists → idempotent, restart lại không bị lỗi "topic đã tồn tại"
-  kafka-init:
-    image: apache/kafka:latest
-    container_name: cgv-kafka-init
-    depends_on:
-      kafka-1:
-        condition: service_healthy
-      kafka-2:
-        condition: service_healthy
-      kafka-3:
-        condition: service_healthy
-    networks:
-      - cgv-net
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        echo ">>> Waiting for Kafka to be fully ready..."
-        sleep 5
-
-        BOOTSTRAP=cgv-kafka-1:19092
-
-        # Tạo topic chính (3 partition, replication-factor=3)
-        # partitions=3 → song song 3 consumer tối đa, data phân tán đều 3 broker
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic user.registered   --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic booking.created   --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic booking.cancelled --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic payment.completed --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic payment.failed    --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic notification.send --partitions 3 --replication-factor 3
-
-        # Dead Letter Topics (DLT): message bị lỗi sau N lần retry sẽ đẩy vào đây
-        # → không mất message, có thể debug/replay sau
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic user.registered.DLT   --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic booking.created.DLT   --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic payment.completed.DLT --partitions 3 --replication-factor 3
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic notification.send.DLT --partitions 3 --replication-factor 3
-
-        echo ">>> All Kafka topics created successfully!"
-        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --list
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

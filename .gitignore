@@ -1,5 +1,5 @@
 # ==========================================
-# Operating System Files
+# OS Files
 # ==========================================
 .DS_Store
 .DS_Store?
@@ -10,16 +10,14 @@ ehthumbs.db
 Thumbs.db
 
 # ==========================================
-# IDE & Editor Files
+# IDE & Editor
 # ==========================================
-# IntelliJ IDEA
 .idea/
 *.iws
 *.iml
 *.ipr
 out/
-
-# Eclipse / STS
+.vscode/
 .apt_generated
 .classpath
 .factorypath
@@ -27,20 +25,13 @@ out/
 .settings/
 .springBeans
 .sts4-cache
-
-# VS Code
-.vscode/
-
-# NetBeans
 nbproject/private/
-build/
 nbbuild/
-dist/
 nbdist/
 .nb-gradle/
 
 # ==========================================
-# Build Artifacts & Compiled Files
+# Build Artifacts
 # ==========================================
 target/
 **/target/
@@ -53,16 +44,27 @@ build/
 *.nar
 
 # ==========================================
-# Environment, Secrets & Local Configs
+# SECRETS & ENV — KHÔNG BAO GIỜ COMMIT
 # ==========================================
 .env
 .env.local
 .env.*.local
 *.key
 *.pem
+*.p12
+*.jks
+*.keystore
+*.truststore
+application-prod.yml
+**/application-prod.yml
+application-secret.yml
+**/application-secret.yml
+
+# Keycloak prod realm (có secret thật)
+keycloak/cgv-realm-export.prod.json
 
 # ==========================================
-# Logs & Runtime Dumps
+# Logs & Dumps
 # ==========================================
 logs/
 **/logs/
@@ -72,7 +74,15 @@ logs/
 hs_err_pid*
 
 # ==========================================
-# Maven / Gradle Wrappers & Caches
+# Maven / Gradle
 # ==========================================
 .mvn/timing.properties
 .gradle/
+
+# ==========================================
+# Docker volumes / data
+# ==========================================
+docker-data/
+postgres-data/
+redis-data/
+kafka-data/
