@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CGV Cinemas Vietnam | Thông tin - Lịch chiếu - Hệ thống rạp chiếu phim CGV</title>
+  <meta name="description" content="Hệ thống rạp chiếu phim CGV Cinemas Vietnam - Chuẩn điện ảnh quốc tế với các định dạng IMAX, 4DX, ScreenX, Gold Class và lịch chiếu phim mới nhất.">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Khung nội dung chính 980px chuẩn CGV -->
+  <div class="site-wrapper">
+
+    <!-- 1. Top Ad Banner (Trắng sạch chuẩn CGV) -->
+    <div class="top-ad-banner" style="background: #ffffff; padding: 6px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e0ded4;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="font-weight: 900; color: #005baa; font-size: 16px; letter-spacing: -0.5px;">VNPAY<span style="color: #e71a0f;">PHIM</span></span>
+        <span style="font-size: 12px; color: #555; font-weight: bold;">| VÀO APP NGÂN HÀNG ĐẶT VÉ CGV</span>
+      </div>
+      <div style="font-size: 14px; font-weight: 900; color: #e71a0f; letter-spacing: 0.5px;">
+        🎟️ ĐẶT VÉ XEM PHIM CGV — MUA 1 TẶNG 1
+      </div>
+    </div>
+
+    <!-- 2. Top Utility Bar (Tin mới, Vé của tôi, Đăng nhập / Đăng ký, Cờ VN/EN) -->
+    <div class="top-utility-bar">
+      <a href="#promotions" class="top-utility-item">
+        <span class="top-utility-icon">📰</span> TIN MỚI & ƯU ĐÃI
+      </a>
+      <span>|</span>
+      <a href="#my-tickets" class="top-utility-item">
+        <span class="top-utility-icon">🎟️</span> VÉ CỦA TÔI
+      </a>
+      <span>|</span>
+      <div class="top-utility-item" id="top-auth-actions">
+        <span class="top-utility-icon">👤</span>
+        <a href="#" id="btn-open-login">ĐĂNG NHẬP</a> / 
+        <a href="#" id="btn-open-register">ĐĂNG KÝ</a>
+      </div>
+      <div class="top-lang-switch">
+        <button class="btn-lang active">VN</button>
+        <button class="btn-lang">EN</button>
+      </div>
+    </div>
+
+    <!-- 3. Dải viền cuộn phim trên (Film Strip) -->
+    <div class="film-strip-border"></div>
+
+    <!-- 4. Header chính (Logo CGV*, Menu, Tấm vé đỏ nghiêng) -->
+    <header class="main-header">
+      <div class="cgv-logo-wrap">
+        <div class="cgv-logo" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+          <span class="cgv-logo-text">CGV</span>
+          <span class="cgv-logo-star">✱</span>
+        </div>
+      </div>
+
+      <nav class="main-nav">
+        <a href="#movies" class="nav-link" onclick="document.getElementById('tab-now-showing').click()">PHIM</a>
+        <a href="#cinemas" class="nav-link">RẠP CGV</a>
+        <a href="#membership" class="nav-link" onclick="AuthModal.open('login')">THÀNH VIÊN</a>
+        <a href="#cultureplex" class="nav-link">CULTUREPLEX</a>
+      </nav>
+
+      <div class="header-ticket-wrap" id="btn-header-buy-ticket">
+        <div class="header-ticket-btn">
+          <span class="header-ticket-logo">CGV✱</span>
+          <span class="header-ticket-text">MUA VÉ NGAY</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 5. Dải viền cuộn phim dưới (Film Strip) -->
+    <div class="film-strip-border"></div>
+
+    <!-- 6. Thanh 7 Icon Lối Tắt Huyền Thoại của CGV -->
+    <section class="shortcut-bar" aria-label="Lối tắt tính năng">
+      <a href="#cinemas" class="shortcut-item">
+        <div class="shortcut-icon-wrap">🏢</div>
+        <div class="shortcut-title-en">CGV CINEMAS</div>
+        <div class="shortcut-title-vn">RẠP CGV</div>
+      </a>
+      <a href="#movies" class="shortcut-item" onclick="document.getElementById('tab-now-showing').click()">
+        <div class="shortcut-icon-wrap">🎞️</div>
+        <div class="shortcut-title-en">NOW SHOWING</div>
+        <div class="shortcut-title-vn">PHIM ĐANG CHIẾU</div>
+      </a>
+      <a href="#special-formats" class="shortcut-item">
+        <div class="shortcut-icon-wrap">👓</div>
+        <div class="shortcut-title-en">CGV SPECIAL</div>
+        <div class="shortcut-title-vn">ĐẶC TRƯNG CGV</div>
+      </a>
+      <a href="#rental" class="shortcut-item">
+        <div class="shortcut-icon-wrap">📽️</div>
+        <div class="shortcut-title-en">HALL RENTAL</div>
+        <div class="shortcut-title-vn">THUÊ RẠP & SỰ KIỆN</div>
+      </a>
+      <a href="#contact" class="shortcut-item">
+        <div class="shortcut-icon-wrap">📞</div>
+        <div class="shortcut-title-en">CONTACT CGV</div>
+        <div class="shortcut-title-vn">LIÊN HỆ CGV</div>
+      </a>
+      <a href="#promotions" class="shortcut-item">
+        <div class="shortcut-icon-wrap">🍿</div>
+        <div class="shortcut-title-en">NEWS & OFFERS</div>
+        <div class="shortcut-title-vn">TIN MỚI & ƯU ĐÃI</div>
+      </a>
+      <a href="#register" class="shortcut-item" onclick="AuthModal.open('register')">
+        <div class="shortcut-icon-wrap">💳</div>
+        <div class="shortcut-title-en">REGISTER NOW</div>
+        <div class="shortcut-title-vn">ĐĂNG KÝ NGAY</div>
+      </a>
+    </section>
+
+    <!-- 7. Hero Banner Slider (Phim bom tấn 980px) -->
+    <section class="hero-slider-wrap" aria-label="Phim nổi bật">
+      <div class="hero-slider-track" id="slider-track">
+        <!-- Render tự động bởi app.js -->
+      </div>
+      <button class="slider-arrow-btn prev" id="slider-prev" aria-label="Trước">‹</button>
+      <button class="slider-arrow-btn next" id="slider-next" aria-label="Tiếp theo">›</button>
+      <div class="slider-dots-wrap" id="slider-dots"></div>
+    </section>
+
+    <!-- 8. MOVIE SELECTION SECTION -->
+    <section id="movies">
+      <div class="cgv-section-heading">
+        <div class="heading-line"></div>
+        <h2 class="heading-marquee-title">MOVIE SELECTION</h2>
+        <div class="heading-line"></div>
+      </div>
+
+      <div class="movie-tabs-wrap">
+        <button class="movie-tab-btn active" id="tab-now-showing">PHIM ĐANG CHIẾU</button>
+        <button class="movie-tab-btn" id="tab-coming-soon">PHIM SẮP CHIẾU</button>
+      </div>
+
+      <div class="movie-selection-grid" id="movie-grid">
+        <!-- Render danh sách card phim bởi app.js -->
+      </div>
+    </section>
+
+    <!-- 9. EVENT SECTION -->
+    <section id="promotions">
+      <div class="cgv-section-heading">
+        <div class="heading-line"></div>
+        <h2 class="heading-marquee-title">EVENT</h2>
+        <div class="heading-line"></div>
+      </div>
+
+      <div class="event-ribbon-wrap">
+        <div class="event-ribbon">
+          🎟️ Thành Viên CGV | Tin Mới & Ưu Đãi
+        </div>
+      </div>
+
+      <div class="events-row" id="events-grid">
+        <!-- Render 4 banners sự kiện bởi app.js -->
+      </div>
+
+      <!-- 3 Khung Quảng Cáo Nổi Bật Dưới Event (Keo-lì, Fan C U23, Thuê rạp) -->
+      <div class="featured-promos-row">
+        <div class="featured-promo-box">
+          <img src="https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=600&q=80" alt="Quà tặng keo-lì CGV">
+        </div>
+        <div class="featured-promo-box">
+          <img src="https://images.unsplash.com/photo-1517604931442-7e0c8ed2963c?w=900&q=80" alt="Fan C Ưu đãi độc quyền U23">
+        </div>
+        <div class="featured-promo-box">
+          <img src="https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=600&q=80" alt="Thuê rạp & Vé nhóm">
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. DẢI THƯƠNG HIỆU PHÒNG CHIẾU ĐẶC BIỆT CGV -->
+    <section class="special-formats-strip" id="special-formats">
+      <span class="format-brand-logo">4DX</span>
+      <span class="format-brand-logo imax">IMAX</span>
+      <span class="format-brand-logo">STARIUM</span>
+      <span class="format-brand-logo goldclass">GOLD CLASS</span>
+      <span class="format-brand-logo">L'AMOUR</span>
+      <span class="format-brand-logo sweetbox">SWEETBOX</span>
+      <span class="format-brand-logo">PREMIUM CINEMA</span>
+      <span class="format-brand-logo">SCREENX</span>
+      <span class="format-brand-logo">CINE & FORÊT</span>
+      <span class="format-brand-logo">CINE & LIVING ROOM</span>
+      <span class="format-brand-logo">CINE & SUITE</span>
+    </section>
+
+    <!-- 11. FOOTER CHUẨN CGV VIỆT NAM -->
+    <footer class="cgv-footer">
+      <div class="footer-columns">
+        <div class="footer-col">
+          <h4>CGV Việt Nam</h4>
+          <ul>
+            <li><a href="#">Giới Thiệu</a></li>
+            <li><a href="#">Tiện Ích Online</a></li>
+            <li><a href="#">Thẻ Quà Tặng CGV</a></li>
+            <li><a href="#">Tuyển Dụng</a></li>
+            <li><a href="#">Liên Hệ Quảng Cáo CGV</a></li>
+            <li><a href="#">Dành cho đối tác</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Điều khoản sử dụng</h4>
+          <ul>
+            <li><a href="#">Điều Khoản Chung</a></li>
+            <li><a href="#">Điều Khoản Giao Dịch</a></li>
+            <li><a href="#">Chính Sách Thanh Toán</a></li>
+            <li><a href="#">Chính Sách Bảo Mật</a></li>
+            <li><a href="#">Những Quy Định Tại Rạp</a></li>
+            <li><a href="#">Câu Hỏi Thường Gặp</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>Kết nối với chúng tôi</h4>
+          <div class="footer-social-icons">
+            <a href="#" class="social-btn social-fb">f</a>
+            <a href="#" class="social-btn social-yt">▶</a>
+            <a href="#" class="social-btn social-ig">📷</a>
+            <a href="#" class="social-btn social-zalo">Z</a>
+          </div>
+          <div class="bocongthuong-badge">
+            ✓ ĐÃ THÔNG BÁO BỘ CÔNG THƯƠNG
+          </div>
+        </div>
+
+        <div class="footer-col">
+          <h4>Chăm sóc khách hàng</h4>
+          <div class="footer-hotline">
+            Hotline: <strong>1900 6017</strong>
+          </div>
+          <div style="font-size: 11px; color: #666; margin-top: 4px;">
+            Giờ làm việc: 8:00 - 22:00 (Tất cả các ngày bao gồm cả Lễ Tết)
+          </div>
+          <div style="font-size: 11px; color: #666; margin-top: 4px;">
+            Email hỗ trợ: hoidap@cgv.vn
+          </div>
+        </div>
+      </div>
+
+      <div class="footer-copyright">
+        <div class="footer-cj-logo">CJ CGV</div>
+        <div>
+          <strong>CÔNG TY TNHH CJ CGV VIỆT NAM</strong><br>
+          Giấy Chứng nhận đăng ký doanh nghiệp: 0303675393 đăng ký lần đầu ngày 31/7/2008, được cấp bởi Sở Kế hoạch và Đầu tư Thành phố Hồ Chí Minh.<br>
+          Địa chỉ: Lầu 2, số 7/28, đường Thành Thái, phường Diên Hồng, Thành phố Hồ Chí Minh, Việt Nam.<br>
+          Đường dây nóng (Hotline): 1900 6017<br>
+          COPYRIGHT 2017 CJ CGV VIETNAM CO., LTD. ALL RIGHTS RESERVED
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: SƠ ĐỒ GHẾ & ĐẶT VÉ (SEAT MAP)
+       ========================================================================== -->
+  <div class="modal-overlay" id="booking-modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button class="modal-close-btn" id="close-booking-modal">&times;</button>
+      
+      <div class="modal-header">
+        <h3 id="booking-movie-title">TÊN PHIM</h3>
+        <div id="booking-movie-meta" style="font-size: 12px; color: #555; margin-top: 2px;"></div>
+        <div id="booking-showtime-info" style="font-size: 12px; color: var(--cgv-red); font-weight: bold; margin-top: 4px;"></div>
+      </div>
+
+      <div class="modal-body">
+        <div class="seat-map-wrap">
+          <div class="screen-indicator"></div>
+          <div class="screen-text">MÀN HÌNH CHIẾU (SCREEN)</div>
+
+          <!-- Lưới ghế -->
+          <div class="seat-rows-container" id="seat-grid-container"></div>
+
+          <!-- Chú thích ghế -->
+          <div class="seat-legend-bar">
+            <div class="legend-chip">
+              <div class="legend-color" style="background: var(--seat-standard);"></div>
+              <span>Ghế Thường</span>
+            </div>
+            <div class="legend-chip">
+              <div class="legend-color" style="background: var(--seat-vip);"></div>
+              <span>Ghế VIP</span>
+            </div>
+            <div class="legend-chip">
+              <div class="legend-color" style="background: var(--seat-sweetbox);"></div>
+              <span>Sweetbox (Đôi)</span>
+            </div>
+            <div class="legend-chip">
+              <div class="legend-color" style="background: var(--seat-selected);"></div>
+              <span>Đang Chọn</span>
+            </div>
+            <div class="legend-chip">
+              <div class="legend-color" style="background: var(--seat-occupied);"></div>
+              <span>Đã Bán</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="booking-summary-box">
+          <div>
+            <div style="font-size: 12px; color: #666;">Ghế đã chọn: <strong id="selected-seats-text" style="color: var(--cgv-red);">Chưa chọn</strong></div>
+            <div style="font-size: 12px; color: #666; margin-top: 2px;">Tổng tiền: <span class="summary-total-price" id="total-price-text">0 đ</span></div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 14px;">
+            <div style="font-size: 12px; font-weight: bold; background: #222; color: #ffda79; padding: 4px 10px; border-radius: 12px;">
+              ⏱ <span id="holding-timer">10:00</span>
+            </div>
+            <button class="btn-confirm-checkout" id="btn-checkout" disabled>Tiến Hành Thanh Toán</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: ĐĂNG NHẬP / ĐĂNG KÝ
+       ========================================================================== -->
+  <div class="modal-overlay" id="auth-modal" role="dialog" aria-modal="true">
+    <div class="modal-card auth-modal-card">
+      <button class="modal-close-btn" id="close-auth-modal">&times;</button>
+      
+      <div class="auth-tab-row">
+        <button class="auth-tab-btn active" id="tab-auth-login">Đăng Nhập</button>
+        <button class="auth-tab-btn" id="tab-auth-register">Đăng Ký</button>
+      </div>
+
+      <div class="modal-body">
+        <form class="auth-form-body" id="form-login">
+          <div class="form-field">
+            <label for="login-username">Số Điện Thoại hoặc Email</label>
+            <input type="text" id="login-username" required placeholder="Nhập số điện thoại hoặc email">
+          </div>
+          <div class="form-field">
+            <label for="login-password">Mật Khẩu</label>
+            <input type="password" id="login-password" required placeholder="Nhập mật khẩu">
+          </div>
+          <button type="submit" class="btn-auth-submit">Đăng Nhập</button>
+        </form>
+
+        <form class="auth-form-body" id="form-register" style="display: none;">
+          <div class="form-field">
+            <label for="reg-fullname">Họ và Tên</label>
+            <input type="text" id="reg-fullname" required placeholder="Nhập họ và tên đầy đủ">
+          </div>
+          <div class="form-field">
+            <label for="reg-phone">Số Điện Thoại</label>
+            <input type="tel" id="reg-phone" required placeholder="Nhập số điện thoại">
+          </div>
+          <div class="form-field">
+            <label for="reg-email">Email</label>
+            <input type="email" id="reg-email" required placeholder="Nhập email">
+          </div>
+          <div class="form-field">
+            <label for="reg-password">Mật Khẩu</label>
+            <input type="password" id="reg-password" required placeholder="Tối thiểu 8 ký tự">
+          </div>
+          <button type="submit" class="btn-auth-submit">Tạo Tài Khoản</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: TRAILER
+       ========================================================================== -->
+  <div class="modal-overlay" id="trailer-modal" role="dialog" aria-modal="true">
+    <div class="modal-card" style="max-width: 860px; background: #000; border-color: #000;">
+      <button class="modal-close-btn" id="close-trailer-modal" style="color: #fff; font-size: 28px;">&times;</button>
+      <div style="aspect-ratio: 16/9; width: 100%;">
+        <iframe id="trailer-iframe" src="" style="width: 100%; height: 100%; border: none;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/mock-data.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/booking-modal.js"></script>
+  <script src="js/auth-modal.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

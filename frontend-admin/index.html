@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CGV Cinemas Enterprise — Quản Trị Hệ Thống Rạp</title>
+  <meta name="description" content="Cổng quản trị hệ thống rạp chiếu phim CGV Cinemas: Quản lý phim, lịch chiếu, phòng rạp, voucher và báo cáo doanh thu.">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       SIDEBAR NAVIGATION
+       ========================================================================== -->
+  <aside class="admin-sidebar" role="navigation" aria-label="Menu quản trị">
+    <div class="sidebar-brand">
+      <div class="brand-badge">CGV</div>
+      <div>
+        <div class="brand-title">CineMatrix</div>
+        <div class="brand-subtitle">Enterprise Admin</div>
+      </div>
+    </div>
+
+    <ul class="sidebar-menu">
+      <li class="menu-item active" data-tab="dashboard">
+        <a href="#dashboard">
+          <span class="menu-icon">
+            <svg class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="7" height="9" x="3" y="3" rx="1"/>
+              <rect width="7" height="5" x="14" y="3" rx="1"/>
+              <rect width="7" height="9" x="14" y="12" rx="1"/>
+              <rect width="7" height="5" x="3" y="16" rx="1"/>
+            </svg>
+          </span>
+          <span>Bảng Điều Khiển</span>
+        </a>
+      </li>
+      <li class="menu-item" data-tab="movies">
+        <a href="#movies">
+          <span class="menu-icon">
+            <svg class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="20" x="2" y="2" rx="2.5"/>
+              <path d="M7 2v20"/>
+              <path d="M17 2v20"/>
+              <path d="M2 12h20"/>
+              <path d="M2 7h5"/>
+              <path d="M2 17h5"/>
+              <path d="M17 7h5"/>
+              <path d="M17 17h5"/>
+            </svg>
+          </span>
+          <span>Quản Lý Phim</span>
+        </a>
+      </li>
+      <li class="menu-item" data-tab="cinemas">
+        <a href="#cinemas">
+          <span class="menu-icon">
+            <svg class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="3" y1="21" x2="21" y2="21"/>
+              <line x1="6" y1="8" x2="6" y2="18"/>
+              <line x1="10" y1="8" x2="10" y2="18"/>
+              <line x1="14" y1="8" x2="14" y2="18"/>
+              <line x1="18" y1="8" x2="18" y2="18"/>
+              <polygon points="12 2 3 7 21 7 12 2"/>
+            </svg>
+          </span>
+          <span>Cụm Rạp & Phòng</span>
+        </a>
+      </li>
+      <li class="menu-item" data-tab="showtimes">
+        <a href="#showtimes">
+          <span class="menu-icon">
+            <svg class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 2v4"/>
+              <path d="M16 2v4"/>
+              <rect width="18" height="18" x="3" y="4" rx="2"/>
+              <path d="M3 10h18"/>
+              <circle cx="12" cy="15" r="3"/>
+              <path d="M12 14v1l1 .5"/>
+            </svg>
+          </span>
+          <span>Lịch Suất Chiếu</span>
+        </a>
+      </li>
+      <li class="menu-item" data-tab="bookings">
+        <a href="#bookings">
+          <span class="menu-icon">
+            <svg class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
+              <path d="M13 5v2"/>
+              <path d="M13 17v2"/>
+              <path d="M13 11v2"/>
+            </svg>
+          </span>
+          <span>Quản Lý Đơn Vé</span>
+        </a>
+      </li>
+      <li class="menu-item" data-tab="vouchers">
+        <a href="#vouchers">
+          <span class="menu-icon">
+            <svg class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/>
+              <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
+            </svg>
+          </span>
+          <span>Voucher Khuyến Mãi</span>
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <span>CGV Ops v2.4</span>
+      <span style="color: var(--success); font-weight: bold;">● Online</span>
+    </div>
+  </aside>
+
+  <!-- ==========================================================================
+       MAIN CONTENT CONTAINER
+       ========================================================================== -->
+  <main class="admin-main">
+    <!-- Topbar -->
+    <header class="admin-topbar">
+      <div class="topbar-left">
+        <h2 id="topbar-title">Bảng Điều Khiển Tổng Quan (Dashboard)</h2>
+      </div>
+
+      <div class="topbar-right">
+        <div class="admin-profile-chip">
+          <div class="profile-avatar">AD</div>
+          <div class="profile-info">
+            <span class="profile-name">Quản Trị Viên Hệ Thống</span>
+            <span class="profile-role">ROLE_ADMIN (Super Admin)</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Dynamic View Container -->
+    <section class="admin-content-view" id="view-container">
+      <!-- Render tự động bởi admin-app.js -->
+    </section>
+  </main>
+
+  <!-- ==========================================================================
+       MODAL: THÊM / SỬA PHIM
+       ========================================================================== -->
+  <div class="admin-modal-backdrop" id="modal-movie" role="dialog" aria-modal="true">
+    <div class="admin-modal-box">
+      <div class="modal-header-bar">
+        <h3 id="movie-modal-title">Thêm Phim Mới Vào Hệ Thống</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <form class="admin-form" id="form-movie">
+        <input type="hidden" id="movie-id">
+
+        <div class="admin-form-group">
+          <label for="movie-title">Tên Phim (Tiếng Việt)</label>
+          <input type="text" id="movie-title" required placeholder="Ví dụ: DUNE: HÀNH TINH CÁT - PHẦN HAI">
+        </div>
+
+        <div class="admin-form-group">
+          <label for="movie-original-title">Tên Gốc (Tiếng Anh / Quốc Tế)</label>
+          <input type="text" id="movie-original-title" placeholder="Ví dụ: Dune: Part Two">
+        </div>
+
+        <div class="form-row-2">
+          <div class="admin-form-group">
+            <label for="movie-genre">Thể Loại</label>
+            <input type="text" id="movie-genre" required placeholder="Khoa Học Viễn Tưởng, Hành Động">
+          </div>
+          <div class="admin-form-group">
+            <label for="movie-duration">Thời Lượng (Phút)</label>
+            <input type="number" id="movie-duration" required min="30" max="300" value="120">
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="admin-form-group">
+            <label for="movie-age-rating">Phân Loại Độ Tuổi</label>
+            <select id="movie-age-rating">
+              <option value="P">P - Phổ biến mọi lứa tuổi</option>
+              <option value="K">K - Dưới 13 tuổi xem cùng phụ huynh</option>
+              <option value="T13">T13 - Khán giả từ 13 tuổi trở lên</option>
+              <option value="T16">T16 - Khán giả từ 16 tuổi trở lên</option>
+              <option value="T18">T18 - Khán giả từ 18 tuổi trở lên</option>
+            </select>
+          </div>
+          <div class="admin-form-group">
+            <label for="movie-status">Trạng Thái Chiếu</label>
+            <select id="movie-status">
+              <option value="NOW_SHOWING">ĐANG CHIẾU (NOW SHOWING)</option>
+              <option value="COMING_SOON">SẮP CHIẾU (COMING SOON)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="movie-formats">Định Dạng Chiếu (Ngăn cách bằng dấu phẩy)</label>
+          <input type="text" id="movie-formats" value="2D Phụ Đề, IMAX 2D, 4DX" placeholder="2D, IMAX, 4DX">
+        </div>
+
+        <div class="admin-form-group">
+          <label for="movie-poster">Link Ảnh Poster</label>
+          <input type="url" id="movie-poster" placeholder="https://images.unsplash.com/photo-...">
+        </div>
+
+        <div class="modal-footer-bar">
+          <button type="button" class="btn-cancel">Hủy Bỏ</button>
+          <button type="submit" class="btn-save">Lưu Dữ Liệu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: XẾP LỊCH SUẤT CHIẾU
+       ========================================================================== -->
+  <div class="admin-modal-backdrop" id="modal-showtime" role="dialog" aria-modal="true">
+    <div class="admin-modal-box">
+      <div class="modal-header-bar">
+        <h3>Xếp Lịch Suất Chiếu Mới</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <form class="admin-form" id="form-showtime">
+        <div class="admin-form-group">
+          <label for="st-movie-select">Chọn Phim</label>
+          <select id="st-movie-select" required></select>
+        </div>
+
+        <div class="form-row-2">
+          <div class="admin-form-group">
+            <label for="st-cinema-select">Cụm Rạp CGV</label>
+            <select id="st-cinema-select" required></select>
+          </div>
+          <div class="admin-form-group">
+            <label for="st-room">Phòng Chiếu</label>
+            <input type="text" id="st-room" required value="Phòng chiếu 1 (IMAX)">
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="admin-form-group">
+            <label for="st-format">Định Dạng Suất</label>
+            <select id="st-format">
+              <option value="2D Phụ Đề">2D Phụ Đề</option>
+              <option value="2D Lồng Tiếng">2D Lồng Tiếng</option>
+              <option value="IMAX 2D">IMAX 2D</option>
+              <option value="4DX 3D">4DX 3D</option>
+              <option value="ScreenX">ScreenX</option>
+            </select>
+          </div>
+          <div class="admin-form-group">
+            <label for="st-date">Ngày Chiếu</label>
+            <input type="date" id="st-date" required>
+          </div>
+        </div>
+
+        <div class="form-row-2">
+          <div class="admin-form-group">
+            <label for="st-time">Giờ Bắt Đầu</label>
+            <input type="time" id="st-time" required value="19:30">
+          </div>
+          <div class="admin-form-group">
+            <label for="st-price-regular">Giá Ghế Thường (VNĐ)</label>
+            <input type="number" id="st-price-regular" required value="110000" step="5000">
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="st-price-vip">Giá Ghế VIP (VNĐ)</label>
+          <input type="number" id="st-price-vip" required value="130000" step="5000">
+        </div>
+
+        <div class="modal-footer-bar">
+          <button type="button" class="btn-cancel">Hủy Bỏ</button>
+          <button type="submit" class="btn-save">Xác Nhận Xếp Lịch</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MODAL: TẠO VOUCHER KHUYẾN MÃI
+       ========================================================================== -->
+  <div class="admin-modal-backdrop" id="modal-voucher" role="dialog" aria-modal="true">
+    <div class="admin-modal-box">
+      <div class="modal-header-bar">
+        <h3>Tạo Mã Khuyến Mãi / Voucher Mới</h3>
+        <button class="modal-close-btn">&times;</button>
+      </div>
+
+      <form class="admin-form" id="form-voucher">
+        <div class="admin-form-group">
+          <label for="v-code">Mã Voucher (Code In Hoa)</label>
+          <input type="text" id="v-code" required placeholder="Ví dụ: CGVSUMMER30" style="text-transform: uppercase;">
+        </div>
+
+        <div class="admin-form-group">
+          <label for="v-name">Tên Chương Trình Ưu Đãi</label>
+          <input type="text" id="v-name" required placeholder="Ví dụ: Ưu đãi chào hè giảm 30K mọi vé">
+        </div>
+
+        <div class="form-row-2">
+          <div class="admin-form-group">
+            <label for="v-value">Mức Giảm Giá (VNĐ)</label>
+            <input type="number" id="v-value" required value="30000" step="5000">
+          </div>
+          <div class="admin-form-group">
+            <label for="v-limit">Giới Hạn Lượt Dùng (Usage Limit)</label>
+            <input type="number" id="v-limit" required value="5000" step="100">
+          </div>
+        </div>
+
+        <div class="admin-form-group">
+          <label for="v-expiry">Ngày Hết Hạn</label>
+          <input type="date" id="v-expiry" required value="2024-12-31">
+        </div>
+
+        <div class="modal-footer-bar">
+          <button type="button" class="btn-cancel">Hủy Bỏ</button>
+          <button type="submit" class="btn-save">Phát Hành Voucher</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/admin-data.js"></script>
+  <script src="js/admin-api.js"></script>
+  <script src="js/admin-app.js"></script>
+</body>
+</html>

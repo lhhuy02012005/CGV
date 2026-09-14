@@ -1,0 +1,1112 @@
+/* ==========================================================================
+   CGV CINEMAS VIETNAM — PIXEL-PERFECT CLONE STYLESHEET
+   Dựa trên nguyên mẫu chính thức: cgv.vn
+   - Font: Verdana, Arial, Helvetica, sans-serif
+   - Nền: Tường gạch nung cổ điển (#a33827) + Khung trang 980px (#fdfcf0)
+   - Header: Viền dải phim (film sprocket holes) màu đỏ
+   - Tiêu đề: Marquee cinema rạp chiếu bóng
+   ========================================================================== */
+
+:root {
+  --cgv-red: #e71a0f;
+  --cgv-red-dark: #b8140a;
+  --cgv-red-light: #ff473a;
+  --cgv-cream: #fdfcf0;
+  --cgv-cream-dark: #f3efe0;
+  --cgv-gray-border: #d4d0c2;
+  --cgv-text-dark: #222222;
+  --cgv-text-gray: #666666;
+  --cgv-font: Verdana, Arial, Helvetica, sans-serif;
+  --site-width: 980px;
+
+  /* Seat Colors */
+  --seat-standard: #4b6584;
+  --seat-vip: #e71a0f;
+  --seat-sweetbox: #d81b60;
+  --seat-selected: #00b894;
+  --seat-occupied: #57606f;
+}
+
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-family: var(--cgv-font);
+  color: var(--cgv-text-dark);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Nền chuẩn CGV Việt Nam (màu kem #fdfcf0) */
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #fdfcf0;
+  color: #222222;
+  font-family: Verdana, Arial, Helvetica, sans-serif;
+  font-size: 14px;
+  line-height: 18px;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--cgv-red);
+}
+
+ul {
+  list-style: none;
+}
+
+button, input, select {
+  font-family: var(--cgv-font);
+}
+
+/* Khung nội dung trung tâm 980px chuẩn CGV */
+.site-wrapper {
+  width: var(--site-width);
+  margin: 0 auto;
+  background-color: #fdfcf0;
+  position: relative;
+}
+
+/* ==========================================================================
+   TOP BANNER & TOP UTILITY BAR
+   ========================================================================== */
+.top-ad-banner {
+  width: 100%;
+  background: #fff;
+  border-bottom: 1px solid var(--cgv-gray-border);
+}
+
+.top-ad-banner img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.top-utility-bar {
+  background-color: var(--cgv-cream);
+  padding: 6px 14px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 1px solid #e8e4d3;
+}
+
+.top-utility-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.top-utility-item:hover {
+  color: var(--cgv-red);
+}
+
+.top-utility-icon {
+  font-size: 13px;
+}
+
+.top-lang-switch {
+  display: flex;
+  align-items: center;
+  margin-left: 6px;
+}
+
+.top-lang-switch .btn-lang {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 900;
+  border: none;
+  cursor: pointer;
+}
+
+.top-lang-switch .btn-lang.active {
+  background-color: var(--cgv-red);
+  color: #fff;
+}
+
+.top-lang-switch .btn-lang:not(.active) {
+  background-color: #888;
+  color: #fff;
+}
+
+/* ==========================================================================
+   FILM STRIP BORDER & MAIN HEADER
+   ========================================================================== */
+.film-strip-border {
+  height: 14px;
+  background-color: #c01309;
+  background-image: radial-gradient(#ffffff 24%, transparent 28%);
+  background-size: 14px 14px;
+  background-position: 0 0;
+  border-top: 1px solid #700b05;
+  border-bottom: 1px solid #700b05;
+}
+
+.main-header {
+  background-color: var(--cgv-cream);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Logo CGV đỏ chính hiệu */
+.cgv-logo-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.cgv-logo {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.cgv-logo-text {
+  font-family: 'Arial Black', Impact, sans-serif;
+  font-size: 42px;
+  font-weight: 900;
+  color: var(--cgv-red);
+  letter-spacing: -2px;
+  line-height: 1;
+  text-shadow: 2px 2px 0px rgba(0,0,0,0.1);
+}
+
+.cgv-logo-star {
+  font-size: 26px;
+  color: var(--cgv-red);
+  margin-bottom: 14px;
+  margin-left: 2px;
+}
+
+/* Navigation Menu */
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.nav-link {
+  font-size: 15px;
+  font-weight: 800;
+  color: #222222;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  position: relative;
+  padding: 10px 0;
+}
+
+.nav-link:hover {
+  color: var(--cgv-red);
+}
+
+/* Tilted Red Ticket "MUA VÉ NGAY" */
+.header-ticket-wrap {
+  transform: rotate(-4deg);
+  transition: transform 0.2s ease;
+}
+
+.header-ticket-wrap:hover {
+  transform: rotate(0deg) scale(1.05);
+}
+
+.header-ticket-btn {
+  background: linear-gradient(135deg, #e71a0f 0%, #b8140a 100%);
+  color: #ffffff;
+  padding: 8px 14px;
+  border-radius: 4px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 1px dashed rgba(255,255,255,0.7);
+  cursor: pointer;
+}
+
+.header-ticket-logo {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 1px;
+}
+
+.header-ticket-text {
+  font-size: 13px;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   ICON SHORTCUT BAR (7 VINTAGE CINEMA ICONS)
+   ========================================================================== */
+.shortcut-bar {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background-color: var(--cgv-cream);
+  border-top: 1px solid var(--cgv-gray-border);
+  border-bottom: 2px solid #222;
+}
+
+.shortcut-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 6px 10px;
+  border-right: 1px solid var(--cgv-gray-border);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  text-align: center;
+}
+
+.shortcut-item:last-child {
+  border-right: none;
+}
+
+.shortcut-item:hover {
+  background-color: #f7f2df;
+}
+
+.shortcut-icon-wrap {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+
+.shortcut-title-en {
+  font-family: 'Arial Narrow', Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 900;
+  color: #222;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1.1;
+  margin-bottom: 2px;
+}
+
+.shortcut-title-vn {
+  font-size: 10px;
+  font-weight: 600;
+  color: #555;
+  line-height: 1.1;
+}
+
+/* ==========================================================================
+   MAIN HERO BANNER SLIDER
+   ========================================================================== */
+.hero-slider-wrap {
+  position: relative;
+  width: 100%;
+  height: 420px;
+  overflow: hidden;
+  background-color: #000;
+}
+
+.hero-slider-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.5s ease-in-out;
+}
+
+.hero-slide {
+  min-width: 100%;
+  height: 100%;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
+
+.slider-arrow-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 60px;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  border: none;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.2s ease;
+}
+
+.slider-arrow-btn:hover {
+  background: var(--cgv-red);
+}
+
+.slider-arrow-btn.prev { left: 0; }
+.slider-arrow-btn.next { right: 0; }
+
+.slider-dots-wrap {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 10;
+}
+
+.slider-dot-btn {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(0,0,0,0.3);
+  cursor: pointer;
+}
+
+.slider-dot-btn.active {
+  background: var(--cgv-red);
+  transform: scale(1.2);
+}
+
+/* ==========================================================================
+   CGV SECTION HEADINGS (MARQUEE WITH DOUBLE LINES)
+   ========================================================================== */
+.cgv-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px 20px;
+}
+
+.heading-line {
+  flex: 1;
+  height: 3px;
+  border-top: 1px solid #222;
+  border-bottom: 1px solid #222;
+}
+
+.heading-marquee-title {
+  padding: 0 20px;
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-size: 34px;
+  font-weight: 900;
+  color: #222222;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0px #fff;
+  position: relative;
+}
+
+/* Dấu chấm bóng đèn cinema bóng nháy */
+.heading-marquee-title::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+/* Movie Tabs */
+.movie-tabs-wrap {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.movie-tab-btn {
+  background: none;
+  border: none;
+  font-size: 16px;
+  font-weight: 800;
+  color: #888;
+  padding: 6px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  text-transform: uppercase;
+}
+
+.movie-tab-btn.active {
+  color: var(--cgv-red);
+  border-bottom-color: var(--cgv-red);
+}
+
+/* ==========================================================================
+   MOVIE SELECTION CARDS (CGV CAROUSEL/GRID)
+   ========================================================================== */
+.movie-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  padding: 0 16px 40px;
+}
+
+.cgv-movie-card {
+  background: #fff;
+  border: 1px solid #e0ded4;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.cgv-movie-card:hover {
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+  transform: translateY(-4px);
+}
+
+.poster-box {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  position: relative;
+  overflow: hidden;
+  background-color: #111;
+}
+
+.poster-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Nhãn độ tuổi chuẩn CGV góc trên bên trái */
+.age-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  z-index: 2;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+}
+
+.age-badge.t18 { background-color: #e71a0f; }
+.age-badge.t16 { background-color: #d35400; }
+.age-badge.t13 { background-color: #f39c12; }
+.age-badge.p   { background-color: #27ae60; }
+.age-badge.k   { background-color: #2980b9; }
+
+/* Nhãn giá vé khuyến mãi góc trên bên phải */
+.promo-ribbon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #0088cc;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  padding: 3px 6px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  z-index: 2;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.movie-card-body {
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.movie-card-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #222;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  min-height: 34px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.movie-card-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.btn-card-detail {
+  flex: 1;
+  background: #eae6d9;
+  color: #333;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 0;
+  border: 1px solid #ccc7b6;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.btn-card-detail:hover {
+  background: #dfdac9;
+}
+
+.btn-card-buy {
+  flex: 1.2;
+  background: var(--cgv-red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 8px 0;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.btn-card-buy:hover {
+  background: var(--cgv-red-dark);
+}
+
+/* ==========================================================================
+   EVENT SECTION & RIBBON
+   ========================================================================== */
+.event-ribbon-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+.event-ribbon {
+  background-color: var(--cgv-red);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 30px;
+  position: relative;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* Tai nơ dải ruy băng hai bên */
+.event-ribbon::before, .event-ribbon::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.event-ribbon::before {
+  left: -12px;
+  border-width: 17px 12px 17px 0;
+  border-color: transparent var(--cgv-red) transparent transparent;
+}
+
+.event-ribbon::after {
+  right: -12px;
+  border-width: 17px 0 17px 12px;
+  border-color: transparent transparent transparent var(--cgv-red);
+}
+
+.events-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  padding: 0 16px 30px;
+}
+
+.event-banner-card {
+  border: 1px solid var(--cgv-gray-border);
+  background: #fff;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.event-banner-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.12);
+}
+
+.event-banner-card img {
+  width: 100%;
+  height: 150px;
+  object-fit: cover;
+  display: block;
+}
+
+/* 3 Khung Khuyến Mãi Nổi Bật Dưới Event */
+.featured-promos-row {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr 1fr;
+  gap: 12px;
+  padding: 0 16px 40px;
+}
+
+.featured-promo-box {
+  border: 2px solid #222;
+  background: #fff;
+  overflow: hidden;
+  height: 240px;
+  position: relative;
+  cursor: pointer;
+}
+
+.featured-promo-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ==========================================================================
+   CGV SPECIAL FORMATS LOGO STRIP
+   ========================================================================== */
+.special-formats-strip {
+  border-top: 1px solid #222;
+  border-bottom: 1px solid #222;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: #fff;
+  overflow-x: auto;
+}
+
+.format-brand-logo {
+  font-family: 'Arial Black', Impact, sans-serif;
+  font-size: 13px;
+  color: #333;
+  text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.format-brand-logo:hover {
+  color: var(--cgv-red);
+}
+
+.format-brand-logo.imax { color: #0072c6; }
+.format-brand-logo.sweetbox { color: #d81b60; }
+.format-brand-logo.goldclass { color: #8a6d3b; }
+
+/* ==========================================================================
+   MAIN FOOTER
+   ========================================================================== */
+.cgv-footer {
+  background-color: var(--cgv-cream);
+  padding: 30px 16px 20px;
+  border-top: 1px solid var(--cgv-gray-border);
+}
+
+.footer-columns {
+  display: grid;
+  grid-template-columns: 1.2fr 1.2fr 1.3fr 1.3fr;
+  gap: 20px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--cgv-gray-border);
+}
+
+.footer-col h4 {
+  font-size: 13px;
+  font-weight: 800;
+  color: #222;
+  margin-bottom: 12px;
+}
+
+.footer-col ul li {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #555;
+}
+
+.footer-col ul li a:hover {
+  color: var(--cgv-red);
+}
+
+.footer-social-icons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.social-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.social-fb { background: #3b5998; }
+.social-yt { background: #c4302b; }
+.social-ig { background: #e4405f; }
+.social-zalo { background: #0068ff; }
+
+.bocongthuong-badge {
+  display: inline-block;
+  background: #0077c8;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 3px;
+  margin-top: 6px;
+}
+
+.footer-hotline {
+  font-size: 13px;
+  color: #333;
+  margin-top: 4px;
+}
+
+.footer-hotline strong {
+  color: var(--cgv-red);
+  font-size: 15px;
+}
+
+.footer-copyright {
+  padding-top: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  font-size: 11px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.footer-cj-logo {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 22px;
+  color: #666;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   MODAL DIALOGS (SEAT MAP, AUTH, TRAILER)
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(3px);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-card {
+  background: #ffffff;
+  border-radius: 4px;
+  width: 100%;
+  max-width: 900px;
+  max-height: 92vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  border: 2px solid var(--cgv-red);
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  font-size: 24px;
+  color: #777;
+  cursor: pointer;
+  z-index: 10;
+  border: none;
+}
+
+.modal-close-btn:hover {
+  color: var(--cgv-red);
+}
+
+.modal-header {
+  padding: 16px 20px;
+  background: #f7f4ea;
+  border-bottom: 1px solid var(--cgv-gray-border);
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--cgv-red);
+  text-transform: uppercase;
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+/* Sơ đồ ghế */
+.seat-map-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.screen-indicator {
+  width: 80%;
+  max-width: 500px;
+  height: 6px;
+  background: #999;
+  border-radius: 50% / 100% 100% 0 0;
+  margin: 0 auto 6px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+.screen-text {
+  font-size: 11px;
+  font-weight: 800;
+  color: #888;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.seat-rows-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+
+.seat-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.row-label {
+  width: 20px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #777;
+  text-align: center;
+}
+
+.seat-btn, .seat-item {
+  width: 30px;
+  height: 26px;
+  font-size: 10px;
+  font-weight: bold;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.15s ease;
+}
+
+.seat-btn:hover:not(.occupied), .seat-item:hover:not(.occupied) {
+  transform: scale(1.15);
+}
+
+.seat-btn.standard, .seat-item.standard { background-color: var(--seat-standard); }
+.seat-btn.vip, .seat-item.vip { background-color: var(--seat-vip); }
+.seat-btn.sweetbox, .seat-item.sweetbox { background-color: var(--seat-sweetbox); width: 64px; }
+.seat-btn.selected, .seat-item.selected { background-color: var(--seat-selected) !important; box-shadow: 0 0 8px rgba(0, 184, 148, 0.8); }
+.seat-btn.occupied, .seat-item.occupied { background-color: var(--seat-occupied); cursor: not-allowed; opacity: 0.4; text-decoration: line-through; }
+
+.seat-row-label, .row-label {
+  width: 24px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #777;
+  text-align: center;
+}
+
+.seat-legend-bar {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  background: #faf8f0;
+  border: 1px solid #e0dccc;
+  padding: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 16px;
+}
+
+.legend-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+}
+
+/* Booking summary bar */
+.booking-summary-box {
+  margin-top: 16px;
+  padding: 14px 18px;
+  background: #fdf5f5;
+  border: 1px solid #ffd4d4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary-total-price {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--cgv-red);
+}
+
+.btn-confirm-checkout {
+  background: var(--cgv-red);
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 900;
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.btn-confirm-checkout:hover {
+  background: var(--cgv-red-dark);
+}
+
+/* Auth Modal */
+.auth-modal-card {
+  max-width: 420px;
+}
+
+.auth-tab-row {
+  display: flex;
+  border-bottom: 2px solid var(--cgv-gray-border);
+}
+
+.auth-tab-btn {
+  flex: 1;
+  padding: 12px;
+  background: none;
+  border: none;
+  font-size: 14px;
+  font-weight: 800;
+  color: #777;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+
+.auth-tab-btn.active {
+  color: var(--cgv-red);
+  border-bottom: 2px solid var(--cgv-red);
+  margin-bottom: -2px;
+}
+
+.auth-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 0 0;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-field label {
+  font-size: 11px;
+  font-weight: 800;
+  color: #333;
+}
+
+.form-field input {
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+.btn-auth-submit {
+  background: var(--cgv-red);
+  color: #fff;
+  border: none;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: 900;
+  border-radius: 3px;
+  cursor: pointer;
+  text-transform: uppercase;
+  margin-top: 8px;
+}
+
+/* Toast */
+.cgv-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: #222;
+  color: #fff;
+  padding: 12px 20px;
+  border-left: 4px solid var(--cgv-red);
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  z-index: 2000;
+}
