@@ -122,14 +122,60 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@cgv-kafka-1:9093,2@cgv-kafka-2:9093,3@cgv-kafka-3:9093'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_KRAFT_CLUSTER_ID: "AbCdEfGhIjKlMnOpQrStUv"
+      # --- Replication & Durability ---
+      # offsets.topic.replication.factor=3: topic lưu offset của consumer group phải có 3 replica
+      # → nếu 1 broker chết, consumer vẫn biết mình đang đọc đến đâu
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+      # transaction.state.log.replication.factor=3: topic quản lý Kafka transaction phải có 3 replica
+      # → đảm bảo transactional producer không mất trạng thái khi broker chết
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
+      # transaction.state.log.min.isr=2: transaction chỉ được commit khi ≥2 ISR xác nhận
+      # → tránh "split-brain" — 2 broker đồng ý là đủ quorum với cluster 3 node
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # group.initial.rebalance.delay.ms=3000: chờ 3s trước khi rebalance consumer group khi khởi động
+      # → tránh rebalance liên tục khi nhiều consumer cùng start lúc deploy
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+      # --- Topic Defaults (áp dụng khi tạo topic không chỉ định tường minh) ---
+      # num.partitions=3: mỗi topic mặc định 3 partition = 3 broker → data phân tán đều
+      # consumer group có thể scale tối đa 3 consumer chạy song song
+      KAFKA_NUM_PARTITIONS: 3
+      # default.replication.factor=3: mỗi partition có 3 bản sao trên 3 broker khác nhau
+      # → chịu được 1 broker chết mà không mất data
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      # min.insync.replicas=2: producer acks=all chỉ thành công khi ≥2 replica đã ghi xong
+      # → đảm bảo data không bị mất dù 1 broker crash ngay sau khi ghi
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      # --- Log Retention ---
+      # log.retention.hours=168: giữ message 7 ngày → có thể replay event khi service bị down
+      KAFKA_LOG_RETENTION_HOURS: 168
+      # log.segment.bytes=1073741824: mỗi segment file tối đa 1GB → Kafka rotate file đều đặn
+      # → tránh 1 file quá to, giúp xóa data cũ nhanh hơn
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      # log.retention.check.interval.ms=300000: kiểm tra và xóa segment hết hạn mỗi 5 phút
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      # --- Message Size ---
+      # message.max.bytes=10485760: cho phép message tối đa 10MB
+      # → đủ cho payload JSON phức tạp (booking, payment), tránh bị reject
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      # --- Network Buffers ---
+      # socket.send.buffer.bytes=102400: buffer gửi TCP = 100KB
+      # socket.receive.buffer.bytes=102400: buffer nhận TCP = 100KB
+      # → tăng throughput network giữa broker ↔ producer/consumer
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      # socket.request.max.bytes=104857600: request tối đa từ client = 100MB
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
     volumes:
       - kafka_1_data:/var/lib/kafka/data
     networks:
       - cgv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:19092 --list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   kafka-2:
     image: apache/kafka:latest
@@ -149,11 +195,28 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
     volumes:
       - kafka_2_data:/var/lib/kafka/data
     networks:
       - cgv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:19092 --list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   kafka-3:
     image: apache/kafka:latest
@@ -173,11 +236,69 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 3
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 2
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 3000
+      KAFKA_NUM_PARTITIONS: 3
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+      KAFKA_MIN_INSYNC_REPLICAS: 2
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
+      KAFKA_MESSAGE_MAX_BYTES: 10485760
+      KAFKA_SOCKET_SEND_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_RECEIVE_BUFFER_BYTES: 102400
+      KAFKA_SOCKET_REQUEST_MAX_BYTES: 104857600
     volumes:
       - kafka_3_data:/var/lib/kafka/data
     networks:
       - cgv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:19092 --list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # kafka-init: chạy 1 lần duy nhất để tạo tất cả topic với đúng partition + replication
+  # Dùng --if-not-exists → idempotent, restart lại không bị lỗi "topic đã tồn tại"
+  kafka-init:
+    image: apache/kafka:latest
+    container_name: cgv-kafka-init
+    depends_on:
+      kafka-1:
+        condition: service_healthy
+      kafka-2:
+        condition: service_healthy
+      kafka-3:
+        condition: service_healthy
+    networks:
+      - cgv-net
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo ">>> Waiting for Kafka to be fully ready..."
+        sleep 5
+
+        BOOTSTRAP=cgv-kafka-1:19092
+
+        # Tạo topic chính (3 partition, replication-factor=3)
+        # partitions=3 → song song 3 consumer tối đa, data phân tán đều 3 broker
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic user.registered   --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic booking.created   --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic booking.cancelled --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic payment.completed --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic payment.failed    --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic notification.send --partitions 3 --replication-factor 3
+
+        # Dead Letter Topics (DLT): message bị lỗi sau N lần retry sẽ đẩy vào đây
+        # → không mất message, có thể debug/replay sau
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic user.registered.DLT   --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic booking.created.DLT   --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic payment.completed.DLT --partitions 3 --replication-factor 3
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --create --if-not-exists --topic notification.send.DLT --partitions 3 --replication-factor 3
+
+        echo ">>> All Kafka topics created successfully!"
+        kafka-topics.sh --bootstrap-server $$BOOTSTRAP --list
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -186,10 +307,11 @@ services:
       - "8080:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: 3-broker-cluster
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka-1:19092,kafka-2:19092,kafka-3:19092
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
     depends_on:
       - kafka-1
       - kafka-2
       - kafka-3
     networks:
       - cgv-net
+    restart: unless-stopped

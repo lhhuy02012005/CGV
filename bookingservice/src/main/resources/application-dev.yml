@@ -1,0 +1,108 @@
+server:
+  port: ${SERVER_PORT:8083}
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: booking-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cgv}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgrespassword}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # maximum-pool-size=10: tối đa 10 connection đến DB
+      # → đủ cho concurrency=3 consumer + HTTP handlers, không overload DB
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      # idle-timeout=600000: connection idle 10 phút → đóng để giải phóng tài nguyên DB
+      idle-timeout: 600000
+      # max-lifetime=1800000: mỗi connection sống tối đa 30 phút rồi tạo mới
+      # → tránh "stale connection" bị firewall/DB server đóng ngầm
+      max-lifetime: 1800000
+
+  flyway:
+    enabled: false
+    baseline-on-migrate: true
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  kafka:
+    # Khai báo đủ 3 broker → client tự failover khi 1 broker down
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # acks=all: chờ tất cả ISR replica xác nhận → zero data loss cho booking event
+        acks: all
+        retries: 3
+        retry.backoff.ms: 1000
+        # enable.idempotence=true: retry không tạo duplicate booking event
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        batch.size: 16384
+        linger.ms: 5
+        compression.type: snappy
+        buffer.memory: 33554432
+        request.timeout.ms: 30000
+        delivery.timeout.ms: 120000
+        # transaction.id.prefix=booking-tx-: đăng ký Kafka Transactions
+        # → "ghi booking vào DB + publish booking.created event" là 1 atomic operation
+        # → nếu service crash giữa chừng → Kafka rollback → consumer không thấy event
+        # Dùng với: @Transactional trên service method + KafkaTemplate tự động participate
+        transaction.id.prefix: ${KAFKA_TRANSACTION_ID_PREFIX:booking-tx-}
+
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:booking-service-group}
+      # earliest: không bỏ sót payment.completed event khi service restart
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer: message corrupt không crash cả consumer thread
+      value-deserializer: org.apache.kafka.common.serialization.ErrorHandlingDeserializer
+      # Manual commit: chỉ commit sau khi cập nhật trạng thái booking thành công
+      enable-auto-commit: false
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+        max.poll.records: 100
+        max.poll.interval.ms: 300000
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        fetch.min.bytes: 1
+        fetch.max.wait.ms: 500
+        # read_committed: chỉ đọc payment event đã commit
+        # → không cập nhật booking dựa trên payment event chưa hoàn thành
+        isolation.level: read_committed
+
+    listener:
+      # concurrency=3: 3 thread xử lý 3 partition song song → throughput x3
+      concurrency: 3
+      ack-mode: MANUAL_IMMEDIATE
+      poll-timeout: 3000
+      missing-topics-fatal: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}/protocol/openid-connect/certs
+          issuer-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}
+
+logging:
+  level:
+    com.cgv.bookingservice: INFO
+    org.springframework.kafka: INFO
+    org.apache.kafka: WARN

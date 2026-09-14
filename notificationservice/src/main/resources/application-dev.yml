@@ -1,0 +1,52 @@
+server:
+  port: 8086
+  servlet:
+    context-path: /api/v1
+spring:
+  application:
+    name: notification-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-group}
+      # earliest: khi service restart, đọc lại từ offset cuối đã commit
+      # → không bỏ sót notification nào dù service bị down tạm thời
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      # ErrorHandlingDeserializer: wrap deserializer thực bên trong
+      # → nếu message bị corrupt/sai format, không crash cả consumer
+      # → message lỗi sẽ được xử lý bởi error handler (DLT) thay vì crash
+      value-deserializer: org.apache.kafka.common.serialization.ErrorHandlingDeserializer
+      # KHÔNG auto-commit: chỉ commit sau khi email/notification gửi thành công
+      # → tránh mất notification khi Brevo API timeout hoặc service crash
+      enable-auto-commit: false
+      properties:
+        # Delegate thực sự xử lý deserialization JSON
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+        # 50 records/poll: notification service có thể call Brevo API,
+        # giữ batch nhỏ hơn identity-service để tránh timeout bên ngoài
+        max.poll.records: 50
+        # 300s: đủ thời gian gọi Brevo API x50 record (dù mỗi call 5s)
+        max.poll.interval.ms: 300000
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        fetch.min.bytes: 1
+        fetch.max.wait.ms: 500
+        isolation.level: read_committed
+
+    listener:
+      # concurrency=3: 3 thread song song cho 3 partition của notification.send topic
+      concurrency: 3
+      ack-mode: MANUAL_IMMEDIATE
+      poll-timeout: 3000
+      missing-topics-fatal: false
+
+brevo:
+  expiry-time: ${EXPIRY_TIME:5}
+  template-id: 2
+  api-key: ${BREVO_API_KEY}
+  sender:
+    name: "CGV Cinemas"
+    email: ${EMAIL}

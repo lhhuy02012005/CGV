@@ -27,17 +27,94 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   kafka:
-    bootstrap-servers: localhost:9092,localhost:9094,localhost:9096
+    # Khai báo đủ 3 broker → nếu 1 broker down, client tự failover sang broker còn lại
+    # Không hardcode 1 broker duy nhất → đó là single point of failure
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # acks=all (-1): producer chờ TẤT CẢ ISR replica xác nhận mới coi là ghi thành công
+        # → đây là chế độ an toàn nhất, tránh mất message khi broker chết ngay sau khi ghi
+        acks: all
+        # retries=3: tự retry 3 lần khi gặp lỗi transient (network timeout, leader election)
+        retries: 3
+        # retry.backoff.ms=1000: chờ 1s giữa các lần retry
+        # → tránh retry quá nhanh làm quá tải broker đang recover
+        retry.backoff.ms: 1000
+        # enable.idempotence=true: đảm bảo mỗi message chỉ ghi đúng 1 lần dù có retry
+        # → kết hợp với retries: không bao giờ bị duplicate message
+        # (Kafka sẽ tự detect và bỏ qua message trùng dựa trên sequence number)
+        enable.idempotence: true
+        # max.in.flight.requests.per.connection=5: tối đa 5 request chưa được ack đồng thời
+        # → kết hợp idempotent: vẫn giữ ordering đúng với throughput tốt
+        max.in.flight.requests.per.connection: 5
+        # batch.size=16384: gom tối đa 16KB message vào 1 batch rồi mới gửi
+        # → giảm số lần round-trip mạng, tăng throughput đáng kể
+        batch.size: 16384
+        # linger.ms=5: chờ thêm 5ms để gom message vào batch
+        # → trade-off nhỏ về latency (~5ms) để đổi lấy throughput tốt hơn
+        linger.ms: 5
+        # compression.type=snappy: nén message bằng Snappy trước khi gửi
+        # → tiết kiệm ~40-60% bandwidth, Snappy cân bằng tốt giữa tốc độ và tỷ lệ nén
+        compression.type: snappy
+        # buffer.memory=33554432 (32MB): tổng bộ nhớ producer dùng để buffer message chờ gửi
+        # → nếu Kafka slow, producer vẫn nhận được request, buffer giúp tránh block caller
+        buffer.memory: 33554432
+        # request.timeout.ms=30000: chờ tối đa 30s cho 1 request đến broker
+        request.timeout.ms: 30000
+        # delivery.timeout.ms=120000: tổng thời gian tối đa (retry + wait) để deliver 1 message
+        delivery.timeout.ms: 120000
+
     consumer:
-      group-id: identity-service-group
+      # Khai báo đủ 3 broker cho consumer cũng như producer
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:identity-service-group}
+      # auto-offset-reset=earliest: consumer mới hoặc offset bị mất → đọc lại từ đầu
+      # → đảm bảo không bỏ sót event nào khi service restart
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # enable-auto-commit=false: KHÔNG tự động commit offset
+      # → chỉ commit sau khi xử lý thành công → at-least-once delivery
+      # (nếu auto-commit, message có thể bị mất khi service crash giữa chừng)
+      enable-auto-commit: false
       properties:
-        spring.json.trusted.packages: "*"
+        spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+        # max.poll.records=100: mỗi lần poll lấy tối đa 100 record
+        # → kiểm soát batch size, tránh consumer bị timeout khi xử lý quá nhiều record
+        max.poll.records: 100
+        # max.poll.interval.ms=300000: consumer phải poll ít nhất mỗi 5 phút
+        # → nếu xử lý 1 batch quá lâu (>5 phút) → broker coi là dead → rebalance
+        max.poll.interval.ms: 300000
+        # session.timeout.ms=30000: nếu không nhận heartbeat trong 30s → coi consumer dead
+        session.timeout.ms: 30000
+        # heartbeat.interval.ms=10000: gửi heartbeat mỗi 10s (phải < session.timeout / 3)
+        # → broker biết consumer vẫn alive
+        heartbeat.interval.ms: 10000
+        # fetch.min.bytes=1: Kafka gửi response ngay khi có ít nhất 1 byte
+        # → latency thấp, phù hợp với event-driven
+        fetch.min.bytes: 1
+        # fetch.max.wait.ms=500: nếu chưa đủ fetch.min.bytes, chờ tối đa 500ms rồi gửi luôn
+        fetch.max.wait.ms: 500
+        # isolation.level=read_committed: chỉ đọc message của transactional producer đã commit
+        # → tránh đọc message "nửa chừng" của booking/payment transaction chưa hoàn thành
+        isolation.level: read_committed
+
+    listener:
+      # concurrency=3: chạy 3 thread consumer song song (= số partition của topic)
+      # → tăng throughput x3, mỗi thread xử lý 1 partition
+      # Không đặt > số partition (thread dư sẽ idle)
+      concurrency: 3
+      # ack-mode=MANUAL_IMMEDIATE: commit offset ngay sau khi listener method return
+      # → kết hợp enable-auto-commit=false → kiểm soát hoàn toàn khi nào offset được commit
+      ack-mode: MANUAL_IMMEDIATE
+      # poll-timeout=3000: timeout mỗi lần poll từ Kafka = 3s
+      poll-timeout: 3000
+      # missing-topics-fatal=false: không crash khi topic chưa tồn tại lúc startup
+      # → kafka-init container tạo topic sau → service không cần đợi
+      missing-topics-fatal: false
 
   security:
     oauth2:
@@ -50,7 +127,7 @@ keycloak:
   auth-server-url: ${KEYCLOAK_URL:http://localhost:8180}
   realm: ${REALM:cgv-realm}
   client-id: ${CLIENT_ID:CGV_App}
-  client-secret: ${CLIENT_SERECT:to8aYat3P2uBhSnNOagNoedehTF5Ovhi}
+  client-secret: ${CLIENT_SERECT:2doTmSyizJFxCmngTmi0XrJQ6ksr4uV5}
 
 logging:
   level:
