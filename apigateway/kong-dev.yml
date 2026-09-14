@@ -9,6 +9,7 @@ services:
         paths:
           - /api/v1/auth
           - /api/v1/users
+          - /api/v1/roles
         strip_path: false
 
   - name: booking-service
@@ -41,4 +42,12 @@ services:
       - name: payment-route
         paths:
           - /api/v1/payment
+        strip_path: false
+
+  - name: notification-service
+    url: http://host.docker.internal:8086
+    routes:
+      - name: notification-route
+        paths:
+          - /api/v1/notification
         strip_path: false

@@ -18,8 +18,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class User extends BaseEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
-    UUID id;
+    String id;
 
     @Column(unique = true , nullable = false)
     String email;
@@ -27,22 +26,14 @@ public class User extends BaseEntity {
     @Column
     String fullName;
 
-    @Column
-    String password;
-
-    @Column(name = "keycloak_id", unique = true, nullable = false)
-    String keycloakId;
-
-    @Builder.Default
-    @Enumerated(EnumType.STRING)
-    Role role = Role.USER;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "membership_tier", nullable = false)
     MemberShipTier membershipTier;
 
-    @Column(name = "total_spend_ytd")
-    BigDecimal total_spend_ytd;
+    @Builder.Default
+    @Column(name = "total_spend_ytd", nullable = false)
+    BigDecimal total_spend_ytd = BigDecimal.ZERO;
 
     @Builder.Default
     @Version

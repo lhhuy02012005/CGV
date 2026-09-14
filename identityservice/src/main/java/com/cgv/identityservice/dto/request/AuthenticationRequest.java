@@ -1,5 +1,6 @@
 package com.cgv.identityservice.dto.request;
 
+import jakarta.validation.constraints.NotBlank;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -11,6 +12,8 @@ import lombok.experimental.FieldDefaults;
 @NoArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class AuthenticationRequest {
+    @NotBlank(message = "Email không được để trống")
     String username;
+    @NotBlank(message = "Mật khẩu không được để trống")
     String password;
 }

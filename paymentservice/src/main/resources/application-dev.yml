@@ -1,0 +1,103 @@
+server:
+  port: ${SERVER_PORT:8084}
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: payment-service
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cgv}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgrespassword}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  flyway:
+    enabled: false
+    baseline-on-migrate: true
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        # acks=all: payment là business-critical nhất
+        # → không được mất payment.completed event dù bất kỳ lý do gì
+        acks: all
+        retries: 3
+        retry.backoff.ms: 1000
+        # idempotence: chống duplicate payment event khi retry
+        # → tránh scenario: thanh toán thành công 1 lần nhưng event bị gửi 2 lần
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        batch.size: 16384
+        linger.ms: 5
+        compression.type: snappy
+        buffer.memory: 33554432
+        request.timeout.ms: 30000
+        delivery.timeout.ms: 120000
+        # transaction.id.prefix=payment-tx-: Payment transaction là critical nhất
+        # → "cập nhật trạng thái payment + publish payment.completed event" là atomic
+        # → booking service chỉ confirm booking khi payment event thực sự committed
+        transaction.id.prefix: ${KAFKA_TRANSACTION_ID_PREFIX:payment-tx-}
+
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:payment-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ErrorHandlingDeserializer
+      enable-auto-commit: false
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+        # 50 records/poll: payment cần xử lý cẩn thận từng record
+        # → batch nhỏ hơn để kiểm soát chặt, tránh xử lý quá nhiều payment cùng lúc
+        max.poll.records: 50
+        # 600s: payment có thể call VNPay/Momo/VNPT API
+        # → tăng interval để tránh rebalance khi đang chờ external payment gateway
+        max.poll.interval.ms: 600000
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        fetch.min.bytes: 1
+        fetch.max.wait.ms: 500
+        # read_committed: chỉ xử lý booking event đã commit hoàn toàn
+        # → không khởi tạo thanh toán cho booking đang bị rollback
+        isolation.level: read_committed
+
+    listener:
+      concurrency: 3
+      ack-mode: MANUAL_IMMEDIATE
+      poll-timeout: 3000
+      missing-topics-fatal: false
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}/protocol/openid-connect/certs
+          issuer-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}
+
+logging:
+  level:
+    com.cgv.paymentservice: INFO
+    org.springframework.kafka: INFO
+    org.apache.kafka: WARN
