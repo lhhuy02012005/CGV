@@ -23,7 +23,6 @@ import com.cgv.identityservice.repository.MemberShipTierRepository;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
@@ -32,10 +31,9 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.*;
 
-
 @Service
 @RequiredArgsConstructor
-@FieldDefaults(level = AccessLevel.PRIVATE , makeFinal = true)
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 @Slf4j(topic = "AUTHENTICATION-SERVICE")
 public class AuthenticationServiceImpl implements AuthenticationService {
     UserRepository userRepository;
@@ -46,11 +44,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     RedisTemplate<String, Object> redisTemplate;
     KafkaTemplate<String, Object> kafkaTemplate;
 
-    //Redis
-    String OTP_KEY = "OTP:";
-
-    //Kafka
-    String NOTIFICATIONSENDTOPIC = "notification.send";
+    // Constants
+    static final String OTP_KEY_PREFIX = "OTP:";
+    static final String NOTIFICATION_SEND_TOPIC = "notification.send";
 
     @NonFinal
     @Value("${keycloak.realm:cgv-realm}")
@@ -66,13 +62,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
-        Map<String, String> body = new HashMap<>();
-        body.put("grant_type", "password");
-        body.put("client_id", clientId);
-        body.put("client_secret", clientSecret);
-        body.put("username", request.getUsername());
-        body.put("password", request.getPassword());
-        body.put("scope" , "openid");
+        Map<String, String> body = createTokenRequestBody("password", Map.of(
+                "username", request.getUsername(),
+                "password", request.getPassword()
+        ));
 
         try {
             JsonNode responseNode = keycloakClient.exchangeToken(realm, body);
@@ -91,24 +84,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     .authenticated(true)
                     .build();
 
-        }catch (Exception e) {
-            log.error(e.getMessage());
-            throw new BusinessException(ErrorCode.BAD_REQUEST,"Đăng nhập thất bại: Sai tài khoản hoặc mật khẩu!");
+        } catch (Exception e) {
+            log.error("Login failed: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Đăng nhập thất bại: Sai tài khoản hoặc mật khẩu!");
         }
     }
 
     @Override
     public AuthenticationResponse refreshToken(RefreshTokenRequest request) {
-        Map<String, String> body = new HashMap<>();
-        body.put("grant_type", "refresh_token");
-        body.put("client_id", clientId);
-        body.put("client_secret", clientSecret);
-        body.put("refresh_token", request.getRefreshToken());
-
+        Map<String, String> body = createTokenRequestBody("refresh_token", Map.of(
+                "refresh_token", request.getRefreshToken()
+        ));
 
         try {
             JsonNode responseNode = keycloakClient.exchangeToken(realm, body);
-
             assert responseNode != null;
             return AuthenticationResponse.builder()
                     .accessToken(responseNode.get("access_token").asText())
@@ -133,122 +122,108 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
-    public void initiateRegistration(UserRegistrationRequest request){
+    public void initiateRegistration(UserRegistrationRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Email đã tồn tại trong hệ thống!");
         }
-        String otp = generateOTP();
-        Map<String, Object> registrationData = new HashMap<>();
-        registrationData.put("email", request.getEmail());
-        registrationData.put("otp", otp);
 
-        redisTemplate.opsForValue().set(OTP_KEY+request.getEmail(), registrationData, Duration.ofMinutes(5));
+        String otp = generateOTP();
+        redisTemplate.opsForValue().set(OTP_KEY_PREFIX + request.getEmail(), otp, Duration.ofMinutes(5));
+
         NotificationEvent event = NotificationEvent.builder()
                 .email(request.getEmail())
                 .otp(otp)
                 .build();
-        kafkaTemplate.send(NOTIFICATIONSENDTOPIC, event);
+
+        kafkaTemplate.send(NOTIFICATION_SEND_TOPIC, event);
         log.info("Đã khởi tạo đăng ký và gửi OTP tới Kafka cho email: {}", request.getEmail());
     }
 
     @Override
     public UserResponse verifyAndRegister(VerifyOtpRequest request) {
-        String redisKey = OTP_KEY+request.getEmail();
-        Map<String,Object> registrationData = (Map<String, Object>) redisTemplate.opsForValue().get(redisKey);
-        if (registrationData == null) {
+        String redisKey = OTP_KEY_PREFIX + request.getEmail();
+        String storedOtp = (String) redisTemplate.opsForValue().get(redisKey);
+
+        if (storedOtp == null) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Mã OTP đã hết hạn hoặc không tồn tại!");
         }
 
-        String storedOtp = (String) registrationData.get("otp");
         if (!storedOtp.equals(request.getOtp())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Mã OTP không chính xác!");
         }
-        return register(request);
+
+        UserResponse response = registerOnKeycloakAndLocal(request.getEmail(), request.getPassword(), request.getFullName());
+        redisTemplate.delete(redisKey);
+        return response;
     }
 
-    private String generateOTP(){
-        return String.format("%06d", new Random().nextInt(999999));
+    @Override
+    public void syncUserFromAccessToken(String accessToken) {
+        syncUserToLocalDatabase(accessToken);
     }
 
+    private UserResponse registerOnKeycloakAndLocal(String email, String password, String fullName) {
+        if (userRepository.existsByEmail(email)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Tài khoản đã tồn tại !");
+        }
 
-    private UserResponse register(VerifyOtpRequest request){
-       if(userRepository.existsByEmail(request.getEmail())){
-           throw new BusinessException(ErrorCode.BAD_REQUEST, "Tài khoản đã tồn tại !");
-       }
-        MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
-                .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
-                        .code("MEMBER")
-                        .name("Member")
-                        .minSpend(BigDecimal.ZERO)
-                        .description("Hạng thành viên tiêu chuẩn")
-                        .build()));
-
-        Map<String, String> tokenBody = new HashMap<>();
-        tokenBody.put("grant_type", "client_credentials");
-        tokenBody.put("client_id", clientId);
-        tokenBody.put("client_secret", clientSecret);
-        tokenBody.put("scope" , "openid");
-
+        Map<String, String> tokenBody = createTokenRequestBody("client_credentials", Collections.emptyMap());
         JsonNode tokenResponse = keycloakClient.exchangeToken(realm, tokenBody);
         String adminToken = "Bearer " + tokenResponse.get("access_token").asText();
 
-        String fullName = request.getFullName().trim();
-        String firstName = fullName;
-        String lastName = fullName;
+        String trimmedName = fullName != null ? fullName.trim() : email;
+        String firstName = trimmedName;
+        String lastName = trimmedName;
 
-        int lastSpaceIndex = fullName.lastIndexOf(" ");
+        int lastSpaceIndex = trimmedName.lastIndexOf(" ");
         if (lastSpaceIndex > 0) {
-            firstName = fullName.substring(lastSpaceIndex + 1);
-            lastName = fullName.substring(0, lastSpaceIndex);
+            firstName = trimmedName.substring(lastSpaceIndex + 1);
+            lastName = trimmedName.substring(0, lastSpaceIndex);
         }
 
         UserCreationParam creationParam = UserCreationParam.builder()
-                .username(request.getEmail())
-                .email(request.getEmail())
+                .username(email)
+                .email(email)
                 .firstName(firstName)
                 .lastName(lastName)
                 .enabled(true)
                 .emailVerified(true)
                 .credentials(List.of(UserCreationParam.Credential.builder()
                         .type("password")
-                        .value(request.getPassword())
+                        .value(password)
                         .temporary(false)
                         .build()))
                 .build();
 
         try {
-            var response = keycloakClient.createUser(adminToken,realm, creationParam);
-
+            var response = keycloakClient.createUser(adminToken, realm, creationParam);
             String userId = extractUserIdKeyCloak(response);
-            User newUser = User.builder()
-                    .id(userId)
-                    .email(request.getEmail())
-                    .fullName(request.getFullName())
-                    .membershipTier(defaultTier)
-                    .build();
-            userRepository.save(newUser);
-            redisTemplate.delete(OTP_KEY+request.getEmail());
+
+            User newUser = saveOrGetUser(userId, email, trimmedName);
             return userMapper.toUserResponse(newUser);
 
         } catch (Exception e) {
-            log.info(e.getMessage());
+            log.error("Tạo tài khoản thất bại: {}", e.getMessage());
             throw new RuntimeException("Tạo tài khoản thất bại!", e);
         }
-    }
-
-    private String extractUserIdKeyCloak(ResponseEntity<?> response) {
-        String location = response.getHeaders().getFirst("Location");
-        String[] sliptedStr =  location.split("/");
-        return sliptedStr[sliptedStr.length - 1];
     }
 
     private void syncUserToLocalDatabase(String accessToken) {
         Jwt jwt = jwtDecoder.decode(accessToken);
         String email = jwt.getClaimAsString("email");
         String name = jwt.getClaimAsString("name");
+        if (name == null) name = jwt.getClaimAsString("preferred_username");
+        if (name == null) name = email;
+
         String sub = jwt.getSubject();
 
-        if (email != null && !userRepository.existsById(sub)) {
+        if (email != null) {
+            saveOrGetUser(sub, email, name);
+        }
+    }
+
+    private User saveOrGetUser(String id, String email, String fullName) {
+        return userRepository.findById(id).orElseGet(() -> {
             MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
                     .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
                             .code("MEMBER")
@@ -258,13 +233,33 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                             .build()));
 
             User newUser = User.builder()
+                    .id(id)
                     .email(email)
-                    .fullName(name)
-                    .id(sub)
+                    .fullName(fullName)
                     .membershipTier(defaultTier)
                     .total_spend_ytd(BigDecimal.ZERO)
                     .build();
-            userRepository.save(newUser);
-        }
+            return userRepository.save(newUser);
+        });
+    }
+
+    private Map<String, String> createTokenRequestBody(String grantType, Map<String, String> extraParams) {
+        Map<String, String> body = new HashMap<>();
+        body.put("grant_type", grantType);
+        body.put("client_id", clientId);
+        body.put("client_secret", clientSecret);
+        body.put("scope", "openid");
+        body.putAll(extraParams);
+        return body;
+    }
+
+    private String generateOTP() {
+        return String.format("%06d", new Random().nextInt(999999));
+    }
+
+    private String extractUserIdKeyCloak(ResponseEntity<?> response) {
+        String location = response.getHeaders().getFirst("Location");
+        String[] splittedStr = location.split("/");
+        return splittedStr[splittedStr.length - 1];
     }
 }

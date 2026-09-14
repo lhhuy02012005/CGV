@@ -1,0 +1,209 @@
+{
+  "id": "cgv-realm",
+  "realm": "cgv-realm",
+  "displayName": "CGV Cinemas",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 43200,
+  "accessTokenLifespan": 300,
+  "refreshTokenMaxReuse": 0,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "roles": {
+    "realm": [
+      { "name": "movie:manage",    "description": "Them, sua, xoa thong tin Phim",             "composite": false, "clientRole": false },
+      { "name": "showtime:manage", "description": "Tao va xep lich chieu phim",                 "composite": false, "clientRole": false },
+      { "name": "ticket:book",     "description": "Dat ve, thanh toan",                          "composite": false, "clientRole": false },
+      { "name": "ticket:refund",   "description": "Huy ve, hoan tien",                           "composite": false, "clientRole": false },
+      { "name": "ticket:view",     "description": "Xem danh sach ve da dat",                     "composite": false, "clientRole": false },
+      { "name": "promotion:manage","description": "Tao ma giam gia, chien dich marketing",       "composite": false, "clientRole": false },
+      { "name": "report:view",     "description": "Xem thong ke doanh thu",                      "composite": false, "clientRole": false },
+      { "name": "user:manage",     "description": "Khoa/mo khoa/phan quyen tai khoan",           "composite": false, "clientRole": false },
+      {
+        "name": "SUPER_ADMIN",
+        "description": "Ban giam doc, CTO, System Admin - toan quyen",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": ["movie:manage","showtime:manage","ticket:book","ticket:refund","ticket:view","promotion:manage","report:view","user:manage"]
+        }
+      },
+      {
+        "name": "CONTENT_MANAGER",
+        "description": "Doi ngu quan ly noi dung web va app",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": ["movie:manage","showtime:manage","promotion:manage"]
+        }
+      },
+      {
+        "name": "CINEMA_MANAGER",
+        "description": "Quan ly chi nhanh rap",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": ["report:view","ticket:refund","user:manage","ticket:view"]
+        }
+      },
+      {
+        "name": "TICKET_STAFF",
+        "description": "Nhan vien ban ve va soat ve",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": ["ticket:book","ticket:view"]
+        }
+      },
+      {
+        "name": "MEMBER_USER",
+        "description": "Thanh vien - role mac dinh khi dang ky",
+        "composite": true,
+        "clientRole": false,
+        "composites": {
+          "realm": ["ticket:book","ticket:view"]
+        }
+      }
+    ]
+  },
+  "defaultRole": {
+    "name": "MEMBER_USER",
+    "description": "Thanh vien - role mac dinh khi dang ky"
+  },
+  "groups": [
+    {
+      "name": "CGV_BoardOfDirectors",
+      "path": "/CGV_BoardOfDirectors",
+      "realmRoles": ["SUPER_ADMIN"],
+      "clientRoles": {},
+      "subGroups": []
+    },
+    {
+      "name": "CGV_MarketingTeam",
+      "path": "/CGV_MarketingTeam",
+      "realmRoles": ["CONTENT_MANAGER"],
+      "clientRoles": {},
+      "subGroups": []
+    },
+    {
+      "name": "CGV_Vincom_DongKhoi_Managers",
+      "path": "/CGV_Vincom_DongKhoi_Managers",
+      "realmRoles": ["CINEMA_MANAGER"],
+      "clientRoles": {},
+      "subGroups": []
+    },
+    {
+      "name": "CGV_Vincom_DongKhoi_Staffs",
+      "path": "/CGV_Vincom_DongKhoi_Staffs",
+      "realmRoles": ["TICKET_STAFF"],
+      "clientRoles": {},
+      "subGroups": []
+    }
+  ],
+  "users": [
+    {
+      "username": "admin_test",
+      "email": "admin@cgv.vn",
+      "firstName": "CGV",
+      "lastName": "SuperAdmin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["SUPER_ADMIN"],
+      "groups": ["/CGV_BoardOfDirectors"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "CGV_App",
+      "name": "CGV Application",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "2doTmSyizJFxCmngTmi0XrJQ6ksr4uV5",
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300",
+        "use.refresh.tokens": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "groups mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "email mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "email",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "full name mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "smtpServer": {},
+  "eventsEnabled": false,
+  "adminEventsEnabled": false
+}
