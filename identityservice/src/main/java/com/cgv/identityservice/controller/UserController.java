@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
     UserService userService;
 
-//    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping()
     public ApiResponse<PageResponse<UserResponse>> findAll(
             @RequestParam(required = false) String keyword ,
