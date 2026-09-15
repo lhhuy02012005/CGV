@@ -10,7 +10,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.nio.file.AccessDeniedException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -44,9 +45,22 @@ public class GlobalExceptionHandler {
                 .status(errorCode.getHttpStatus().value())
                 .path(request.getRequestURI())
                 .error(errorCode.getHttpStatus().getReasonPhrase())
-                .message("Unauthorized")
+                .message("Bạn không có quyền truy cập tài nguyên này!")
                 .build();
         return new ResponseEntity<>(errorResponse, errorCode.getHttpStatus());
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMediaTypeNotSupported(HttpMediaTypeNotSupportedException ex, HttpServletRequest request) {
+        log.warn("Http Media Type Not Supported: {}", ex.getMessage());
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value())
+                .path(request.getRequestURI())
+                .error(HttpStatus.UNSUPPORTED_MEDIA_TYPE.getReasonPhrase())
+                .message("Định dạng dữ liệu không được hỗ trợ. Vui lòng gửi Header 'Content-Type: application/json'!")
+                .build();
+        return new ResponseEntity<>(errorResponse, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -84,18 +98,18 @@ public class GlobalExceptionHandler {
                 .build();
     }
 
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex, HttpServletRequest request) {
-        log.error("Runtime exception occurred: {}", ex.getMessage());
-        ErrorResponse errorResponse = ErrorResponse.builder()
-                .timestamp(new Date())
-                .status(HttpStatus.BAD_REQUEST.value())
-                .path(request.getRequestURI())
-                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
-                .message(ex.getMessage())
-                .build();
-        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
-    }
+//    @ExceptionHandler(RuntimeException.class)
+//    public ResponseEntity<ErrorResponse> handleRuntimeException(RuntimeException ex, HttpServletRequest request) {
+//        log.error("Runtime exception occurred: {}", ex.getMessage());
+//        ErrorResponse errorResponse = ErrorResponse.builder()
+//                .timestamp(new Date())
+//                .status(HttpStatus.BAD_REQUEST.value())
+//                .path(request.getRequestURI())
+//                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+//                .message(ex.getMessage())
+//                .build();
+//        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
+//    }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
