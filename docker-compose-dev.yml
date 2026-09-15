@@ -6,9 +6,7 @@ networks:
 
 volumes:
   postgres_data:
-  redis_1_data:
-  redis_2_data:
-  redis_3_data:
+  redis_data:
   kafka_1_data:
   kafka_2_data:
   kafka_3_data:
@@ -85,38 +83,21 @@ services:
     depends_on:
       - keycloak
 
-  redis-1:
+  redis:
     image: redis:7-alpine
-    container_name: redis-1
-    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7001
+    container_name: cgv-redis
     ports:
-      - "7001:7001"
+      - "6379:6379"
     volumes:
-      - redis_1_data:/data
+      - redis_data:/data
     networks:
       - cgv-net
-
-  redis-2:
-    image: redis:7-alpine
-    container_name: redis-2
-    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7002
-    ports:
-      - "7002:7002"
-    volumes:
-      - redis_2_data:/data
-    networks:
-      - cgv-net
-
-  redis-3:
-    image: redis:7-alpine
-    container_name: redis-3
-    command: redis-server --cluster-enabled yes --cluster-config-file nodes.conf --cluster-node-timeout 5000 --appendonly yes --port 7003
-    ports:
-      - "7003:7003"
-    volumes:
-      - redis_3_data:/data
-    networks:
-      - cgv-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   kafka-1:
     image: apache/kafka:latest

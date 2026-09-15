@@ -20,91 +20,186 @@
   "ssoSessionMaxLifespan": 36000,
   "roles": {
     "realm": [
-      { "name": "movie:manage",    "description": "Them, sua, xoa thong tin Phim",             "composite": false, "clientRole": false },
-      { "name": "showtime:manage", "description": "Tao va xep lich chieu phim",                 "composite": false, "clientRole": false },
-      { "name": "ticket:book",     "description": "Dat ve, thanh toan",                          "composite": false, "clientRole": false },
-      { "name": "ticket:refund",   "description": "Huy ve, hoan tien",                           "composite": false, "clientRole": false },
-      { "name": "ticket:view",     "description": "Xem danh sach ve da dat",                     "composite": false, "clientRole": false },
-      { "name": "promotion:manage","description": "Tao ma giam gia, chien dich marketing",       "composite": false, "clientRole": false },
-      { "name": "report:view",     "description": "Xem thong ke doanh thu",                      "composite": false, "clientRole": false },
-      { "name": "user:manage",     "description": "Khoa/mo khoa/phan quyen tai khoan",           "composite": false, "clientRole": false },
+      {
+        "name": "movie:manage",
+        "description": "Them, sua, xoa thong tin Phim, the loai, dien vien",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "cinema:manage",
+        "description": "Quan ly cum rap, phong chieu, ma tran ghe va tien ich rap",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "showtime:manage",
+        "description": "Tao va xep lich chieu phim, dieu phoi gio chieu",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "ticket:book",
+        "description": "Dat ve, giu ghe va thanh toan ve xem phim",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "ticket:view",
+        "description": "Xem danh sach va chi tiet ve da dat, soat ve QR",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "ticket:refund",
+        "description": "Huy ve va xu ly hoan tien cho khach hang",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "rental:manage",
+        "description": "Tiep nhan, bao gia va duyet don thue tron rap su kien",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "promotion:manage",
+        "description": "Quan ly ma giam gia, voucher va chien dich marketing",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "content:manage",
+        "description": "Quan ly hero banner, quang cao sidebar, tin tuc va su kien",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "report:view",
+        "description": "Xem bao cao thong ke doanh thu va ty le lap day rap",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "user:manage",
+        "description": "Khoa, mo khoa va quan ly tai khoan nguoi dung",
+        "composite": false,
+        "clientRole": false
+      },
       {
         "name": "SUPER_ADMIN",
-        "description": "Ban giam doc, CTO, System Admin - toan quyen",
+        "description": "Ban giam doc, CTO, System Admin - toan quyen he thong",
         "composite": true,
         "clientRole": false,
         "composites": {
-          "realm": ["movie:manage","showtime:manage","ticket:book","ticket:refund","ticket:view","promotion:manage","report:view","user:manage"]
+          "realm": [
+            "movie:manage",
+            "cinema:manage",
+            "showtime:manage",
+            "ticket:book",
+            "ticket:view",
+            "ticket:refund",
+            "rental:manage",
+            "promotion:manage",
+            "content:manage",
+            "report:view",
+            "user:manage"
+          ]
         }
       },
       {
         "name": "CONTENT_MANAGER",
-        "description": "Doi ngu quan ly noi dung web va app",
+        "description": "Doi ngu quan ly noi dung truyen thong, marketing, banner va tin tuc",
         "composite": true,
         "clientRole": false,
         "composites": {
-          "realm": ["movie:manage","showtime:manage","promotion:manage"]
+          "realm": [
+            "content:manage",
+            "promotion:manage",
+            "movie:manage"
+          ]
         }
       },
       {
         "name": "CINEMA_MANAGER",
-        "description": "Quan ly chi nhanh rap",
+        "description": "Quan ly cum rap chi nhanh, phong chieu, suat chieu va don thue rap",
         "composite": true,
         "clientRole": false,
         "composites": {
-          "realm": ["report:view","ticket:refund","user:manage","ticket:view"]
+          "realm": [
+            "cinema:manage",
+            "showtime:manage",
+            "rental:manage",
+            "ticket:refund",
+            "ticket:view",
+            "report:view"
+          ]
         }
       },
       {
         "name": "TICKET_STAFF",
-        "description": "Nhan vien ban ve va soat ve",
+        "description": "Nhan vien ban ve tai quay va soat ve QR cua rap",
         "composite": true,
         "clientRole": false,
         "composites": {
-          "realm": ["ticket:book","ticket:view"]
+          "realm": [
+            "ticket:book",
+            "ticket:view"
+          ]
         }
       },
       {
         "name": "MEMBER_USER",
-        "description": "Thanh vien - role mac dinh khi dang ky",
+        "description": "Thanh vien CGV - role mac dinh khi dang ky tai khoan",
         "composite": true,
         "clientRole": false,
         "composites": {
-          "realm": ["ticket:book","ticket:view"]
+          "realm": [
+            "ticket:book",
+            "ticket:view"
+          ]
         }
       }
     ]
   },
   "defaultRole": {
     "name": "MEMBER_USER",
-    "description": "Thanh vien - role mac dinh khi dang ky"
+    "description": "Thanh vien CGV - role mac dinh khi dang ky tai khoan"
   },
   "groups": [
     {
       "name": "CGV_BoardOfDirectors",
       "path": "/CGV_BoardOfDirectors",
-      "realmRoles": ["SUPER_ADMIN"],
+      "realmRoles": [
+        "SUPER_ADMIN"
+      ],
       "clientRoles": {},
       "subGroups": []
     },
     {
       "name": "CGV_MarketingTeam",
       "path": "/CGV_MarketingTeam",
-      "realmRoles": ["CONTENT_MANAGER"],
+      "realmRoles": [
+        "CONTENT_MANAGER"
+      ],
       "clientRoles": {},
       "subGroups": []
     },
     {
       "name": "CGV_Vincom_DongKhoi_Managers",
       "path": "/CGV_Vincom_DongKhoi_Managers",
-      "realmRoles": ["CINEMA_MANAGER"],
+      "realmRoles": [
+        "CINEMA_MANAGER"
+      ],
       "clientRoles": {},
       "subGroups": []
     },
     {
       "name": "CGV_Vincom_DongKhoi_Staffs",
       "path": "/CGV_Vincom_DongKhoi_Staffs",
-      "realmRoles": ["TICKET_STAFF"],
+      "realmRoles": [
+        "TICKET_STAFF"
+      ],
       "clientRoles": {},
       "subGroups": []
     }
@@ -124,8 +219,23 @@
           "temporary": false
         }
       ],
-      "realmRoles": ["SUPER_ADMIN"],
-      "groups": ["/CGV_BoardOfDirectors"]
+      "realmRoles": [
+        "SUPER_ADMIN"
+      ],
+      "groups": [
+        "/CGV_BoardOfDirectors"
+      ]
+    },
+    {
+      "username": "service-account-cgv_app",
+      "enabled": true,
+      "serviceAccountClientId": "CGV_App",
+      "credentials": [],
+      "clientRoles": {
+        "realm-management": [
+          "realm-admin"
+        ]
+      }
     }
   ],
   "clients": [
@@ -135,8 +245,12 @@
       "enabled": true,
       "clientAuthenticatorType": "client-secret",
       "secret": "2doTmSyizJFxCmngTmi0XrJQ6ksr4uV5",
-      "redirectUris": ["*"],
-      "webOrigins": ["*"],
+      "redirectUris": [
+        "*"
+      ],
+      "webOrigins": [
+        "*"
+      ],
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": true,

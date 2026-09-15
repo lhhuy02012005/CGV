@@ -242,6 +242,87 @@ Hai bài toán có bản chất nghiệp vụ và yêu cầu hiệu năng hoàn 
 
 ---
 
+#### ⚡ Xử lý Bùng nổ Đồng thời bằng Tầng Đệm (Concurrency Buffering — Redis & Rate Limiting)
+
+Trong các hệ thống cấp doanh nghiệp (CGV, Ticketbox), **1 triệu request không được phép đập thẳng vào PostgreSQL cùng lúc**. Hệ thống dựng 3 tầng đệm theo chiều sâu:
+
+```
+1 triệu request
+      │
+      ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TẦNG 1 — API Gateway / Load Balancer                           │
+│  Công nghệ: Spring Cloud Gateway + Kong / Nginx                 │
+│  Nhiệm vụ: Phân tải đều ra các pod Spring Boot (Horizontal      │
+│            Scaling). Rate Limiting chặn IP bắn quá nhiều        │
+│            request/giây (VD: >100 req/s/IP → 429 Too Many).    │
+│  Keywords: Round-Robin LB, Rate Limiter, Circuit Breaker        │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ ~request hợp lệ lọt qua
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TẦNG 2 — Redis + Lua Script (Tầng đệm In-Memory)              │
+│  Công nghệ: Redis Cluster + Lua Atomic Script / Redisson        │
+│  Nhiệm vụ: Trước khi cho request chạm DB, Redis kiểm tra       │
+│            trạng thái ghế/voucher trực tiếp trên RAM            │
+│            (hàng trăm ngàn req/giây). Nếu ghế đã bị khóa       │
+│            → chặn ngay, không tốn 1 DB connection.             │
+│  Keywords: SETNX, EXPIRE, Lua atomicity, Hash Tags,            │
+│            Redisson RLock, Watchdog, Keyspace Notification      │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │ ~chỉ request chưa bị khóa lọt qua
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  TẦNG 3 — Database UNIQUE Constraint (Chốt chặn cuối cùng)     │
+│  Công nghệ: PostgreSQL UNIQUE INDEX + SELECT ... FOR UPDATE     │
+│  Nhiệm vụ: "Tòa án tối cao" — dù hàng ngàn request đồng thời  │
+│            lọt qua cả 2 tầng trên và INSERT cùng 1 mili-giây,  │
+│            DB chỉ cho 1 request thành công, phần còn lại nhận  │
+│            DuplicateKeyException ngay lập tức mà KHÔNG cần     │
+│            khóa bảng, KHÔNG treo thread.                       │
+│  Keywords: UNIQUE(showtime_id, seat_id), DuplicateKeyException, │
+│            ACID, FOR UPDATE NOWAIT, HikariCP timeout            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Luồng hoàn chỉnh khi User click chọn ghế:**
+
+```
+[User click ghế H5]
+        │
+        ├─► [WebSocket STOMP] ──► Broadcast "H5 HOLDING" tới mọi client
+        │                         → UI người khác tự disable ghế H5 (giảm 95% va chạm)
+        │
+        ├─► [API POST /seats/lock]
+        │       │
+        │       ├─► Rate Limiter check: IP có bị throttle không? → 429 nếu spam
+        │       │
+        │       ├─► Redis check: key lock:showtime:{id}:seat:H5 tồn tại?
+        │       │       ├─ CÓ → return 409 Conflict ngay (không xuống DB)
+        │       │       └─ KHÔNG → SET lock:showtime:{id}:seat:H5 EX 900 (15 phút)
+        │       │                   (Lua script: atomic SET + check trong 1 lệnh)
+        │       │
+        │       └─► PostgreSQL INSERT INTO seat_locks (showtime_id, seat_id, ...)
+        │               ├─ Thành công → return 200, bắt đầu đếm ngược 15 phút
+        │               └─ DuplicateKeyException → return 409 (UNIQUE constraint)
+        │
+        └─► [WebSocket STOMP] ──► Broadcast "H5 LOCKED" confirmed tới mọi client
+```
+
+| Tầng | Công nghệ | Chặn được bao nhiêu % |
+|---|---|---|
+| API Gateway Rate Limit | Spring Cloud Gateway / Kong | ~60% (bot, spam, ddos) |
+| Redis In-Memory Check | Lua Script / Redisson | ~39% (ghế đã lock) |
+| DB UNIQUE Constraint | PostgreSQL | ~1% (race condition cuối) |
+| **Tổng** | **3 tầng kết hợp** | **~100% Double-Booking** |
+
+> **Keywords để implement:** `RedisTemplate`, `SETNX`, `Lua script`, `RLock` (Redisson),  
+> `@Version` (Optimistic Lock), `LockModeType.PESSIMISTIC_WRITE` (Pessimistic Lock),  
+> `DataIntegrityViolationException` (bắt DuplicateKey), `StompSession`, `SimpMessagingTemplate`,  
+> `RequestRateLimiterGatewayFilterFactory`, `HikariCP.connectionTimeout`
+
+---
+
 ## 3. Thiết kế Cơ sở Dữ liệu Chi tiết (Database Architecture - DBML Standard)
 
 Hệ thống tuân thủ nghiêm ngặt mô hình **Database per Service**. Dưới đây là đặc tả chi tiết toàn bộ các bảng trong hệ thống:

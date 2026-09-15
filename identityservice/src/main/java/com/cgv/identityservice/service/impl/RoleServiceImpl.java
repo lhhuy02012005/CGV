@@ -53,7 +53,7 @@ public class RoleServiceImpl implements RoleService {
         return "Bearer " + resposne.get("access_token").asText();
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public void createRole(RoleRepresentation request) {
         try {
@@ -66,7 +66,7 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public RoleRepresentation getRole(String roleName) {
         try {
@@ -78,7 +78,7 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public List<RoleRepresentation> getAllRoles() {
         try {
@@ -91,7 +91,7 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public void updateRole(String roleName, RoleRepresentation request) {
         try {
@@ -103,7 +103,7 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public void deleteRole(String roleName) {
         try {
@@ -116,7 +116,7 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public void assignRoleToUser(String userId, String roleName) {
         try {
@@ -137,7 +137,7 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
-    @PreAuthorize("hasAuthority('ADMIN')")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     public void addAssociatedRoles(String parentRoleName, List<String> childRoleNames) {
         try {

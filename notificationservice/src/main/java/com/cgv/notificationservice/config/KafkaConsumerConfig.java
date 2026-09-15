@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
-import tools.jackson.databind.deser.jdk.StringDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -39,6 +39,7 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JacksonJsonDeserializer.class.getName());
+        props.put(JacksonJsonDeserializer.TRUSTED_PACKAGES, "com.cgv.commondto.event,com.cgv.*");
 
         return new DefaultKafkaConsumerFactory<>(props);
     }
