@@ -37,19 +37,23 @@ services:
       KC_DB_PASSWORD: postgrespassword
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
-      # Tắt bắt buộc HTTPS → cho phép truy cập HTTP trên môi trường dev/local
-      KC_HOSTNAME_STRICT_HTTPS: "false"
-      KC_HTTP_ENABLED: "true"
-      # Tắt strict hostname check → truy cập được qua localhost, 127.0.0.1
-      KC_HOSTNAME_STRICT: "false"
-      KC_PROXY: edge
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/demo/certs/localhost.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/demo/certs/localhost.key
+#      # Tắt bắt buộc HTTPS → cho phép truy cập HTTP trên môi trường dev/local
+#      KC_HOSTNAME_STRICT_HTTPS: "false"
+#      KC_HTTP_ENABLED: "true"
+#      # Tắt strict hostname check → truy cập được qua localhost, 127.0.0.1
+#      KC_HOSTNAME_STRICT: "false"
+#      KC_PROXY: edge
     ports:
       - "8180:8080"
+      - "8443:8443"   # Mở thêm cổng 8443 để chạy HTTPS
     # --import-realm: tự động đọc file *.json trong /opt/keycloak/data/import/
     # tạo realm nếu chưa tồn tại, idempotent khi restart
     command: start-dev --import-realm
     volumes:
       - ./keycloak/cgv-realm-export.json:/opt/keycloak/data/import/cgv-realm-export.json
+      - ./certs:/opt/keycloak/demo/certs
     depends_on:
       - postgres
     networks:
@@ -73,9 +77,6 @@ services:
       KONG_PROXY_LISTEN: "0.0.0.0:8000"
     ports:
       - "8000:8000"
-      - "8443:8443"
-      - "8001:8001"
-      - "8444:8444"
     volumes:
       - ./apigateway/kong-dev.yml:/usr/local/kong/declarative/kong-dev.yml
     networks:
