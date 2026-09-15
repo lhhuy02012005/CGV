@@ -19,6 +19,7 @@ import org.springframework.stereotype.Component;
 public class NotificationConsumer {
     EmailService emailService;
 
+
     @KafkaListener(topics = "notification.send", groupId = "${spring.kafka.consumer.group-id}")
     public void handleNotification(NotificationEvent event , Acknowledgment ack) {
         log.info("Nhận được event gửi OTP tới email: {}", event.getEmail());
