@@ -45,8 +45,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     KafkaTemplate<String, Object> kafkaTemplate;
 
     // Constants
-    static final String OTP_KEY_PREFIX = "OTP:";
-    static final String NOTIFICATION_SEND_TOPIC = "notification.send";
+    final String OTP_KEY_PREFIX = "OTP:";
+    final String NOTIFICATION_SEND_TOPIC = "notification.send";
 
     @NonFinal
     @Value("${keycloak.realm:cgv-realm}")
