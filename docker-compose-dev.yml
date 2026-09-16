@@ -44,7 +44,11 @@ services:
       KC_HTTP_ENABLED: true
 #      # Tắt strict hostname check → truy cập được qua localhost, 127.0.0.1
       KC_HOSTNAME_STRICT: false
-      KC_PROXY: edge
+      KC_PROXY: none
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-1023925941045-c3c0da69qc828785k6se9djnsgg1t7dh.apps.googleusercontent.com}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-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}
+      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-4653700278248738}
+      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-38484a046eb77916fa63d616defd230a}
     ports:
       - "8180:8080"
 #      - "8443:8443"   # Mở thêm cổng 8443 để chạy HTTPS
