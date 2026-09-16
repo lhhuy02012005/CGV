@@ -60,6 +60,8 @@ public class UserServiceImpl implements UserService {
         PageResponse<UserResponse> response = new PageResponse<>();
         response.setPageNumber(pageNo + 1);
         response.setData(userResponses);
+
+
         response.setPageSize(size);
         response.setTotalElements(users.getTotalElements());
         response.setTotalPages(users.getTotalPages());
