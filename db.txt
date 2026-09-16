@@ -115,11 +115,11 @@ Table regions {
 Table cinemas {
   id uuid [pk]
   region_id int [ref: > regions.id, not null]
-  name varchar [not null, note: 'CGV Vincom Đồng Khởi, CGV Crescent Mall...']
+  name varchar [unique, not null, note: 'CGV Vincom Đồng Khởi, CGV Crescent Mall...']
   address varchar
   phone varchar(20)
-  latitude decimal(10,7) [note: 'Tọa độ GPS để tính khoảng cách "rạp gần bạn"']
-  longitude decimal(10,7)
+  // latitude decimal(10,7) [note: 'Tọa độ GPS để tính khoảng cách "rạp gần bạn"']
+  // longitude decimal(10,7)
   opening_hours varchar [note: 'VD: 08:00 - 23:30']
   status varchar [default: 'ACTIVE', note: 'ACTIVE, TEMPORARILY_CLOSED, PERMANENTLY_CLOSED']
   created_at timestamp [default: `now()`]
@@ -133,7 +133,7 @@ Table cinemas {
 
 Table cinema_amenities {
   cinema_id uuid [ref: > cinemas.id, not null]
-  amenity varchar [not null, note: 'IMAX, 4DX, DOLBY_ATMOS, SWEETBOX, PARKING, ONLINE_BOOKING, FOOD_COURT']
+  amenity varchar [not null, note: 'IMAX, 4D, DOLBY_ATMOS, SWEETBOX, PARKING, ONLINE_BOOKING, FOOD_COURT']
 
   indexes {
     (cinema_id, amenity) [pk]
@@ -145,24 +145,24 @@ Table rooms {
   id uuid [pk]
   cinema_id uuid [ref: > cinemas.id, not null]
   name varchar [not null, note: 'Phòng 1, Phòng IMAX, Hall A...']
-  format varchar [default: '2D', note: '2D, 3D, IMAX, 4DX, SCREENX']
+  format varchar [default: '2D', note: '2D, 3D, IMAX, 4D, SCREENX']
   total_seats int [note: 'Denormalized — tính từ bảng seats để query nhanh']
-  row_count int
-  column_count int
+  row_count int [not null]
+  column_count int [not null]
   status varchar [default: 'ACTIVE', note: 'ACTIVE, MAINTENANCE']
 }
 
 Table seat_types {
   name varchar [pk, note: 'NORMAL, VIP, SWEETBOX — đóng vai trò ID']
-  surcharge decimal [default: 0, note: 'Phí phụ thu thêm vào base_price: NORMAL=0đ, VIP=15000đ, SWEETBOX=30000đ']
+  surcharge decimal(12,2) [not null, default: 0, note: 'Phí phụ thu thêm vào base_price: NORMAL=0đ, VIP=15000đ, SWEETBOX=30000đ']
   description text [note: 'Mô tả hiển thị lên UI khi chọn ghế']
 }
 
 Table seats {
   id uuid [pk]
   room_id uuid [ref: > rooms.id, not null]
-  row_char varchar(2) [note: 'A, B, C... hoặc AA, AB (cho rạp lớn)']
-  seat_number int
+  row_char varchar(2) [not null, note: 'A, B, C... hoặc AA, AB (cho rạp lớn)']
+  seat_number int [not null]
   seat_type_name varchar [ref: > seat_types.name, not null, default: 'NORMAL']
   is_active boolean [default: true, note: 'Ghế bị hỏng/bảo trì thì false']
 
@@ -175,7 +175,7 @@ Table seats {
 Table genres {
   id int [pk, increment]
   name varchar [unique, not null, note: 'Hành động, Phiêu lưu, Kinh dị, Tâm lý, Hài hước, Hoạt hình, Gia đình...']
-  slug varchar [unique, note: 'hanh-dong, phieu-luu (dùng cho filter URL)']
+  slug varchar [unique, not null, note: 'hanh-dong, phieu-luu (dùng cho filter URL)']
 }
 
 Table movies {
@@ -259,11 +259,12 @@ Table showtimes {
   end_time timestamp [not null]
   language varchar [note: 'Có thể khác ngôn ngữ gốc của phim (VD: lồng tiếng Việt)']
   subtitle_language varchar [note: 'Phụ đề: Tiếng Việt, Không có']
-  format varchar [note: 'Override format của phòng: 2D, 3D, IMAX, 4DX']
-  base_price decimal [not null, note: 'Giá sàn của suất chiếu — giá cuối = base_price + seat_type.surcharge']
+  format varchar [note: 'Override format của phòng: 2D, 3D, IMAX, 4D']
+  base_price decimal(12,2) [not null, note: 'Giá sàn của suất chiếu — giá cuối = base_price + seat_type.surcharge']
   available_seats int [note: 'Denormalized counter — giảm dần khi booking. Dùng để hiển thị còn vé không']
-  status varchar [default: 'SCHEDULED', note: 'SCHEDULED, CANCELLED, COMPLETED']
+  status varchar [not null, default: 'SCHEDULED', note: 'SCHEDULED, CANCELLED, COMPLETED']
   created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
   indexes {
     movie_id
@@ -313,8 +314,9 @@ Table events {
   registration_url varchar [note: 'Link đăng ký — có thể là form ngoài hoặc API nội bộ']
   max_attendees int
   current_attendees int [default: 0]
-  status varchar [default: 'UPCOMING', note: 'UPCOMING, ONGOING, ENDED, CANCELLED']
+  status varchar [not null, default: 'UPCOMING', note: 'UPCOMING, ONGOING, ENDED, CANCELLED']
   created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
   indexes {
     event_date
