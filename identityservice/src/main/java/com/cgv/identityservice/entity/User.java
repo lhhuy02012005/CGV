@@ -11,9 +11,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users" , indexes = {
-        @Index(name = "idx_user_email" , columnList = "email")
+        @Index(name = "idx_cgv_user_email" , columnList = "email")
 })
 @Getter
+@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -22,7 +23,7 @@ public class User extends BaseEntity {
     @Id
     String id;
 
-    @Column(unique = true , nullable = false)
+    @Column(nullable = false)
     String email;
 
     @Column

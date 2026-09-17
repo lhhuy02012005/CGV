@@ -3,6 +3,9 @@
 // Updated: Production-grade redesign
 // ================================================================
 
+// Redis -> Cache
+// elasticsearch
+// indexes
 
 // ================================================================
 // IdentityService
@@ -77,6 +80,9 @@ Table notifications {
     created_at
   }
 }
+
+
+
 
 
 // ================================================================
@@ -329,6 +335,9 @@ TableGroup BookingService {
   cinema_rentals
   outbox_events_booking
 }
+// redis + lua scrip
+// permistic locking
+
 
 Table seat_locks {
   id uuid [pk]
@@ -501,7 +510,13 @@ Table outbox_events_payment {
 // ================================================================
 // MarketingService
 // ================================================================
+// Redis + lua script + optimistic locking
+// trong môi trường đa luồng , sau này deploy scale nhiều pod , chia sẻ tài nguyên như nào
+// Cơ chế Giữ chỗ tạm thời (TTL Reservation): Thay vì cộng dồn vĩnh viễn ngay lập tức trong Redis, hãy dùng Redis để giữ chỗ (Hold) trong 5-10 phút.
 
+// Nếu trong 5 phút đó user hoàn tất tạo đơn hàng, chuyển trạng thái thành chính thức.
+
+// Nếu hết 5 phút mà user không thanh toán/tạo đơn, Redis tự động giải phóng (expire) trả lại lượt cho mã giảm giá.
 TableGroup MarketingService {
   promotions
   promotion_usages
@@ -512,7 +527,7 @@ Table promotions {
   code varchar [unique, not null, note: 'Mã nhập: VVIPBIRTHDAY, MEGASALE55K — uppercase']
   name varchar [not null, note: 'Tên hiển thị: "Mega Sale Thứ 4"']
   description text [note: 'Mô tả đầy đủ điều kiện áp dụng']
-  banner_url varchar [note: 'Ảnh banner hiển thị trên trang Ưu đãi']
+  // banner_url varchar [note: 'Ảnh banner hiển thị trên trang Ưu đãi']
   discount_type varchar [default: 'FIXED', note: 'FIXED (Giảm tiền mặt: 55000đ) hoặc PERCENT (Giảm %: 30%)']
   discount_value decimal [not null, note: 'Giá trị giảm: 55000 (nếu FIXED) hoặc 30 (nếu PERCENT = 30%)']
   max_discount_amount decimal [note: 'Trần giảm tối đa khi dùng PERCENT — VD: giảm 30% nhưng tối đa 100K']
@@ -550,154 +565,156 @@ Table promotion_usages {
   }
 }
 
-// ================================================================
-// ContentService (hoặc gộp vào MarketingService)
-// Quản lý Banner & Quảng cáo linh động
-// ================================================================
 
-TableGroup ContentService {
-  banners
-  banner_targets
-  advertisements
-}
 
-// ----------------------------------------------------------------
-// BANNERS — Hero banner carousel trên từng trang
-// Admin tạo/sửa/xóa/sắp xếp banner không cần deploy lại code
-// ----------------------------------------------------------------
-Table banners {
-  id uuid [pk]
+// // ================================================================
+// // ContentService (hoặc gộp vào MarketingService)
+// // Quản lý Banner & Quảng cáo linh động
+// // ================================================================
 
-  // Vị trí hiển thị
-  placement varchar [not null
-    // HOME_HERO: Carousel chính trang chủ
-    // MOVIES_HERO: Carousel trang Phim
-    // CINEMAS_HERO: Carousel trang Rạp chiếu
-    // PROMOTIONS_HERO: Carousel trang Ưu đãi
-    // NEWS_HERO: Carousel trang Tin tức
-  ]
+// TableGroup ContentService {
+//   banners
+//   banner_targets
+//   advertisements
+// }
 
-  // Nội dung hiển thị
-  title varchar [not null, note: 'Tiêu đề lớn trên banner — VD: MEGA SALE THỨ 4']
-  subtitle varchar [note: 'Phụ đề — VD: Đồng giá vé từ 55K trên toàn hệ thống']
-  description text [note: 'Mô tả ngắn hiện bên dưới subtitle']
-  badge_text varchar [note: 'Label nhỏ góc trên — VD: 🔥 Hot deal, ⭐ Nổi bật']
-  badge_color varchar [note: 'Màu badge: #e91e8c, #ffd700 — hex code']
+// // ----------------------------------------------------------------
+// // BANNERS — Hero banner carousel trên từng trang
+// // Admin tạo/sửa/xóa/sắp xếp banner không cần deploy lại code
+// // ----------------------------------------------------------------
+// Table banners {
+//   id uuid [pk]
 
-  // Media
-  image_url varchar [note: 'Ảnh background banner — upload S3/MinIO']
-  image_mobile_url varchar [note: 'Ảnh riêng cho mobile (tỷ lệ dọc hơn)']
-  gradient_css varchar [note: 'Gradient CSS fallback khi không có ảnh — VD: linear-gradient(135deg,#1a0535,#6200ea)']
-  accent_color varchar [note: 'Màu accent text/button — VD: #bb86fc']
+//   // Vị trí hiển thị
+//   placement varchar [not null
+//     // HOME_HERO: Carousel chính trang chủ
+//     // MOVIES_HERO: Carousel trang Phim
+//     // CINEMAS_HERO: Carousel trang Rạp chiếu
+//     // PROMOTIONS_HERO: Carousel trang Ưu đãi
+//     // NEWS_HERO: Carousel trang Tin tức
+//   ]
 
-  // Call to Action buttons (tối đa 2 nút)
-  cta_primary_text varchar [note: 'Text nút chính — VD: Đặt vé ngay, Nhận ưu đãi']
-  cta_primary_url varchar [note: 'Link nút chính — có thể là deeplink: /movies/123']
-  cta_secondary_text varchar [note: 'Text nút phụ — VD: Xem trailer, Xem thể lệ']
-  cta_secondary_url varchar
+//   // Nội dung hiển thị
+//   title varchar [not null, note: 'Tiêu đề lớn trên banner — VD: MEGA SALE THỨ 4']
+//   subtitle varchar [note: 'Phụ đề — VD: Đồng giá vé từ 55K trên toàn hệ thống']
+//   description text [note: 'Mô tả ngắn hiện bên dưới subtitle']
+//   badge_text varchar [note: 'Label nhỏ góc trên — VD: 🔥 Hot deal, ⭐ Nổi bật']
+//   badge_color varchar [note: 'Màu badge: #e91e8c, #ffd700 — hex code']
 
-  // Liên kết tới entity (tùy chọn — để deeplink)
-  link_type varchar [note: 'MOVIE, CINEMA, PROMOTION, ARTICLE, EXTERNAL, NONE']
-  movie_id uuid [ref: > movies.id, note: 'Nếu banner quảng bá phim — click vào trang phim']
-  promotion_id uuid [ref: > promotions.id, note: 'Nếu banner quảng bá mã giảm giá']
-  article_id uuid [ref: > articles.id, note: 'Nếu banner dẫn vào bài tin tức']
-  external_url varchar [note: 'Link ngoài nếu link_type = EXTERNAL']
+//   // Media
+//   image_url varchar [note: 'Ảnh background banner — upload S3/MinIO']
+//   image_mobile_url varchar [note: 'Ảnh riêng cho mobile (tỷ lệ dọc hơn)']
+//   gradient_css varchar [note: 'Gradient CSS fallback khi không có ảnh — VD: linear-gradient(135deg,#1a0535,#6200ea)']
+//   accent_color varchar [note: 'Màu accent text/button — VD: #bb86fc']
 
-  // Scheduling — Tự động hiện/ẩn theo thời gian
-  starts_at timestamp [note: 'Thời điểm bắt đầu hiển thị — NULL = hiện ngay']
-  ends_at timestamp [note: 'Thời điểm kết thúc — NULL = không hết hạn']
+//   // Call to Action buttons (tối đa 2 nút)
+//   cta_primary_text varchar [note: 'Text nút chính — VD: Đặt vé ngay, Nhận ưu đãi']
+//   cta_primary_url varchar [note: 'Link nút chính — có thể là deeplink: /movies/123']
+//   cta_secondary_text varchar [note: 'Text nút phụ — VD: Xem trailer, Xem thể lệ']
+//   cta_secondary_url varchar
 
-  // Hiển thị
-  display_order int [default: 0, note: 'Thứ tự trong carousel — số nhỏ hiện trước']
-  is_active boolean [default: true, note: 'Admin bật/tắt nhanh không cần xóa']
+//   // Liên kết tới entity (tùy chọn — để deeplink)
+//   link_type varchar [note: 'MOVIE, CINEMA, PROMOTION, ARTICLE, EXTERNAL, NONE']
+//   movie_id uuid [ref: > movies.id, note: 'Nếu banner quảng bá phim — click vào trang phim']
+//   promotion_id uuid [ref: > promotions.id, note: 'Nếu banner quảng bá mã giảm giá']
+//   article_id uuid [ref: > articles.id, note: 'Nếu banner dẫn vào bài tin tức']
+//   external_url varchar [note: 'Link ngoài nếu link_type = EXTERNAL']
 
-  created_at timestamp [default: `now()`]
-  updated_at timestamp [default: `now()`]
+//   // Scheduling — Tự động hiện/ẩn theo thời gian
+//   starts_at timestamp [note: 'Thời điểm bắt đầu hiển thị — NULL = hiện ngay']
+//   ends_at timestamp [note: 'Thời điểm kết thúc — NULL = không hết hạn']
 
-  indexes {
-    placement
-    (placement, is_active, display_order) [note: 'Query banner đang active theo vị trí, sắp xếp thứ tự']
-    (starts_at, ends_at) [note: 'Filter banner theo thời gian hiệu lực']
-    is_active
-  }
-}
+//   // Hiển thị
+//   display_order int [default: 0, note: 'Thứ tự trong carousel — số nhỏ hiện trước']
+//   is_active boolean [default: true, note: 'Admin bật/tắt nhanh không cần xóa']
 
-// ----------------------------------------------------------------
-// BANNER_TARGETS — Nhắm banner tới đối tượng cụ thể
-// VD: Banner "Ưu đãi PLATINUM" chỉ hiện với user PLATINUM
-// ----------------------------------------------------------------
-Table banner_targets {
-  banner_id uuid [ref: > banners.id, not null]
-  target_type varchar [not null, note: 'ALL, MEMBERSHIP_TIER, REGION, LOGGED_IN, GUEST']
-  target_value varchar [
-    // Nếu target_type=MEMBERSHIP_TIER → SILVER, GOLD, PLATINUM
-    // Nếu target_type=REGION → ID hoặc slug của region
-    // Nếu target_type=ALL/LOGGED_IN/GUEST → để NULL
-  ]
+//   created_at timestamp [default: `now()`]
+//   updated_at timestamp [default: `now()`]
 
-  indexes {
-    (banner_id, target_type, target_value) [pk]
-    (target_type, target_value) [note: 'Lookup nhanh banner theo đối tượng user']
-  }
-}
+//   indexes {
+//     placement
+//     (placement, is_active, display_order) [note: 'Query banner đang active theo vị trí, sắp xếp thứ tự']
+//     (starts_at, ends_at) [note: 'Filter banner theo thời gian hiệu lực']
+//     is_active
+//   }
+// }
 
-// ----------------------------------------------------------------
-// ADVERTISEMENTS — Quảng cáo sidebar & inline
-// Linh động hơn banner: có thể đặt ở sidebar, giữa danh sách, footer
-// ----------------------------------------------------------------
-Table advertisements {
-  id uuid [pk]
+// // ----------------------------------------------------------------
+// // BANNER_TARGETS — Nhắm banner tới đối tượng cụ thể
+// // VD: Banner "Ưu đãi PLATINUM" chỉ hiện với user PLATINUM
+// // ----------------------------------------------------------------
+// Table banner_targets {
+//   banner_id uuid [ref: > banners.id, not null]
+//   target_type varchar [not null, note: 'ALL, MEMBERSHIP_TIER, REGION, LOGGED_IN, GUEST']
+//   target_value varchar [
+//     // Nếu target_type=MEMBERSHIP_TIER → SILVER, GOLD, PLATINUM
+//     // Nếu target_type=REGION → ID hoặc slug của region
+//     // Nếu target_type=ALL/LOGGED_IN/GUEST → để NULL
+//   ]
 
-  // Vị trí đặt quảng cáo
-  slot varchar [not null
-    // SIDEBAR_MOVIES: Sidebar trang Phim
-    // SIDEBAR_CINEMAS: Sidebar trang Rạp chiếu
-    // SIDEBAR_NEWS: Sidebar trang Tin tức
-    // INLINE_PROMOTIONS: Quảng cáo xen giữa danh sách ưu đãi
-    // POPUP: Popup khi vào trang
-    // FOOTER_BANNER: Banner nằm cuối trang
-  ]
+//   indexes {
+//     (banner_id, target_type, target_value) [pk]
+//     (target_type, target_value) [note: 'Lookup nhanh banner theo đối tượng user']
+//   }
+// }
 
-  // Nội dung
-  title varchar [not null, note: 'VD: ƯU ĐÃI TẠI RẠP']
-  body_text varchar [note: 'VD: Combo bắp nước giảm đến 30%']
-  fine_print varchar [note: 'Chữ nhỏ phía dưới — VD: Cho thành viên CineGo']
-  image_url varchar [note: 'Ảnh quảng cáo — tỷ lệ tùy slot']
-  gradient_css varchar [note: 'Gradient CSS background khi không có ảnh']
-  accent_color varchar [note: 'Màu nhấn — dùng cho border, icon, badge']
-  icon_emoji varchar [note: 'Icon emoji hiển thị — VD: 🎬 🍿 🎟️']
+// // ----------------------------------------------------------------
+// // ADVERTISEMENTS — Quảng cáo sidebar & inline
+// // Linh động hơn banner: có thể đặt ở sidebar, giữa danh sách, footer
+// // ----------------------------------------------------------------
+// Table advertisements {
+//   id uuid [pk]
 
-  // CTA
-  cta_text varchar [note: 'VD: Xem ngay →, Đăng ký →']
-  cta_url varchar [note: 'Link khi click']
+//   // Vị trí đặt quảng cáo
+//   slot varchar [not null
+//     // SIDEBAR_MOVIES: Sidebar trang Phim
+//     // SIDEBAR_CINEMAS: Sidebar trang Rạp chiếu
+//     // SIDEBAR_NEWS: Sidebar trang Tin tức
+//     // INLINE_PROMOTIONS: Quảng cáo xen giữa danh sách ưu đãi
+//     // POPUP: Popup khi vào trang
+//     // FOOTER_BANNER: Banner nằm cuối trang
+//   ]
 
-  // Liên kết entity
-  link_type varchar [note: 'MOVIE, CINEMA, PROMOTION, ARTICLE, EXTERNAL, NONE']
-  movie_id uuid [ref: > movies.id]
-  promotion_id uuid [ref: > promotions.id]
+//   // Nội dung
+//   title varchar [not null, note: 'VD: ƯU ĐÃI TẠI RẠP']
+//   body_text varchar [note: 'VD: Combo bắp nước giảm đến 30%']
+//   fine_print varchar [note: 'Chữ nhỏ phía dưới — VD: Cho thành viên CineGo']
+//   image_url varchar [note: 'Ảnh quảng cáo — tỷ lệ tùy slot']
+//   gradient_css varchar [note: 'Gradient CSS background khi không có ảnh']
+//   accent_color varchar [note: 'Màu nhấn — dùng cho border, icon, badge']
+//   icon_emoji varchar [note: 'Icon emoji hiển thị — VD: 🎬 🍿 🎟️']
 
-  // Scheduling
-  starts_at timestamp
-  ends_at timestamp
+//   // CTA
+//   cta_text varchar [note: 'VD: Xem ngay →, Đăng ký →']
+//   cta_url varchar [note: 'Link khi click']
 
-  // Targeting
-  target_membership_tier varchar [note: 'NULL = tất cả. SILVER/GOLD/PLATINUM = chỉ hạng đó']
-  target_region_id int [ref: > regions.id, note: 'NULL = tất cả khu vực']
+//   // Liên kết entity
+//   link_type varchar [note: 'MOVIE, CINEMA, PROMOTION, ARTICLE, EXTERNAL, NONE']
+//   movie_id uuid [ref: > movies.id]
+//   promotion_id uuid [ref: > promotions.id]
 
-  // Hiển thị
-  display_order int [default: 0]
-  is_active boolean [default: true]
-  click_count int [default: 0, note: 'Đếm số lần click để đo hiệu quả quảng cáo']
-  impression_count int [default: 0, note: 'Đếm số lần hiển thị']
+//   // Scheduling
+//   starts_at timestamp
+//   ends_at timestamp
 
-  created_at timestamp [default: `now()`]
-  updated_at timestamp [default: `now()`]
+//   // Targeting
+//   target_membership_tier varchar [note: 'NULL = tất cả. SILVER/GOLD/PLATINUM = chỉ hạng đó']
+//   target_region_id int [ref: > regions.id, note: 'NULL = tất cả khu vực']
 
-  indexes {
-    slot
-    (slot, is_active, display_order)
-    (starts_at, ends_at)
-    target_membership_tier
-    target_region_id
-  }
-}
+//   // Hiển thị
+//   display_order int [default: 0]
+//   is_active boolean [default: true]
+//   click_count int [default: 0, note: 'Đếm số lần click để đo hiệu quả quảng cáo']
+//   impression_count int [default: 0, note: 'Đếm số lần hiển thị']
+
+//   created_at timestamp [default: `now()`]
+//   updated_at timestamp [default: `now()`]
+
+//   indexes {
+//     slot
+//     (slot, is_active, display_order)
+//     (starts_at, ends_at)
+//     target_membership_tier
+//     target_region_id
+//   }
+// }

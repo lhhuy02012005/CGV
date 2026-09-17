@@ -13,5 +13,5 @@ public interface AuthenticationService {
     void logout(RefreshTokenRequest request);
     void initiateRegistration(UserRegistrationRequest request);
     UserResponse verifyAndRegister(VerifyOtpRequest request);
-    void syncUserFromAccessToken(String accessToken);
+    UserResponse syncUserFromAccessToken(String accessToken, String customFullName);
 }
