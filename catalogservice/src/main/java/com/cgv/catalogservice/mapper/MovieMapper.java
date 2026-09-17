@@ -5,6 +5,7 @@ import com.cgv.catalogservice.dto.request.movie.MovieUpdateRequest;
 import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.catalogservice.entity.Movie;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 @Mapper(config = CatalogMapperConfig.class)
 public interface MovieMapper {
 
+    @Mapping(target = "status", defaultValue = "ACTIVE")
     Movie toEntity(MovieCreateRequest request);
 
     void updateEntity(MovieUpdateRequest request, @MappingTarget Movie movie);

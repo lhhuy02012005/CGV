@@ -1,5 +1,6 @@
 package com.cgv.commondto.exception;
 
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -96,6 +97,27 @@ public class GlobalExceptionHandler {
                 .error("Bad Request")
                 .message("Dữ liệu không hợp lệ hoặc đã tồn tại trên hệ thống!")
                 .build();
+    }
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleEntityNotFoundException(
+            EntityNotFoundException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Entity not found: {}", ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.NOT_FOUND.value())
+                .path(request.getRequestURI())
+                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
+                .message(ex.getMessage())
+                .build();
+
+        return new ResponseEntity<>(
+                errorResponse,
+                HttpStatus.NOT_FOUND
+        );
     }
 
 //    @ExceptionHandler(RuntimeException.class)
