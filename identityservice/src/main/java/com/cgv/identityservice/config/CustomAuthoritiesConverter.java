@@ -15,6 +15,9 @@ public class CustomAuthoritiesConverter implements Converter<Jwt, Collection<Gra
     @Override
     public Collection<GrantedAuthority> convert(Jwt source) {
         Map<String , Object> realmAccessToken = source.getClaimAsMap(REALM_ACCESS);
+        if (realmAccessToken == null) {
+            return List.of();
+        }
         Object roles = realmAccessToken.get("roles");
         if(roles instanceof List stringRoles){
             return ((List<String>) stringRoles).stream().map(SimpleGrantedAuthority::new).collect(Collectors.toList());

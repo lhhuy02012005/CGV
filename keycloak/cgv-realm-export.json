@@ -4,9 +4,12 @@
   "displayName": "CGV Cinemas",
   "enabled": true,
   "sslRequired": "none",
-  "registrationAllowed": false,
-  "loginWithEmailAllowed": true,
-  "duplicateEmailsAllowed": false,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": true,
   "resetPasswordAllowed": true,
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
@@ -334,8 +337,8 @@
       "linkOnly": false,
       "firstBrokerLoginFlowAlias": "first broker login",
       "config": {
-        "clientId": "${env.GOOGLE_CLIENT_ID:}",
-        "clientSecret": "${env.GOOGLE_CLIENT_SECRET:}",
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
         "syncMode": "FORCE",
         "useJwksUrl": "true"
       }
@@ -353,9 +356,31 @@
       "linkOnly": false,
       "firstBrokerLoginFlowAlias": "first broker login",
       "config": {
-        "clientId": "${env.FACEBOOK_CLIENT_ID:}",
-        "clientSecret": "${env.FACEBOOK_CLIENT_SECRET:}",
+        "clientId": "${FACEBOOK_CLIENT_ID}",
+        "clientSecret": "${FACEBOOK_CLIENT_SECRET}",
         "syncMode": "FORCE"
+      }
+    }
+  ],
+  "identityProviderMappers": [
+    {
+      "name": "google-username-mapper",
+      "identityProviderAlias": "google",
+      "identityProviderMapper": "oidc-username-idp-mapper",
+      "config": {
+        "syncMode": "IMPORT",
+        "template": "google.${CLAIM.sub}",
+        "target": "LOCAL"
+      }
+    },
+    {
+      "name": "facebook-username-mapper",
+      "identityProviderAlias": "facebook",
+      "identityProviderMapper": "oidc-username-idp-mapper",
+      "config": {
+        "syncMode": "IMPORT",
+        "template": "facebook.${CLAIM.id}",
+        "target": "LOCAL"
       }
     }
   ],

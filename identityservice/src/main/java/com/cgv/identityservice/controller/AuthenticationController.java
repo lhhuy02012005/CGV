@@ -3,6 +3,7 @@ package com.cgv.identityservice.controller;
 import com.cgv.commondto.dto.ApiResponse;
 import com.cgv.identityservice.dto.request.AuthenticationRequest;
 import com.cgv.identityservice.dto.request.RefreshTokenRequest;
+import com.cgv.identityservice.dto.request.SocialSyncRequest;
 import com.cgv.identityservice.dto.request.UserRegistrationRequest;
 import com.cgv.identityservice.dto.request.VerifyOtpRequest;
 import com.cgv.identityservice.dto.response.AuthenticationResponse;
@@ -49,14 +50,23 @@ public class AuthenticationController {
     }
 
     @PostMapping(value = "/social-sync")
-    public ApiResponse<Void> socialSync(@RequestHeader("Authorization") String authHeader) {
+    public ApiResponse<UserResponse> socialSync(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestBody(required = false) SocialSyncRequest request
+    ) {
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             String token = authHeader.substring(7);
-            authenticationService.syncUserFromAccessToken(token);
+            String customFullName = request != null ? request.getFullName() : null;
+            UserResponse userResponse = authenticationService.syncUserFromAccessToken(token, customFullName);
+            return ApiResponse.<UserResponse>builder()
+                    .status(HttpStatus.OK.value())
+                    .data(userResponse)
+                    .message("Đồng bộ user social thành công!")
+                    .build();
         }
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Đồng bộ user social thành công!")
+        return ApiResponse.<UserResponse>builder()
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .message("Token không hợp lệ hoặc thiếu Authorization header!")
                 .build();
     }
 

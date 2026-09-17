@@ -5,10 +5,15 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_connected_accounts")
+@Table(name = "user_connected_accounts", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_cgv_provider_provider_id", columnNames = {"provider", "provider_id"})
+}, indexes = {
+        @Index(name = "idx_cgv_connected_user_id", columnList = "user_id")
+})
 @Getter
 @Setter
 @Builder
@@ -21,7 +26,7 @@ public class UserConnectAccount extends BaseEntity {
     UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id" , nullable = false)
+    @JoinColumn(name = "user_id", nullable = false)
     User user;
 
     @Column(nullable = false)
@@ -30,4 +35,12 @@ public class UserConnectAccount extends BaseEntity {
     @Column(name = "provider_id", nullable = false)
     String providerId;
 
+    @Column(name = "provider_email")
+    String providerEmail;
+
+    @Column(name = "access_token", columnDefinition = "TEXT")
+    String accessToken;
+
+    @Column(name = "token_expires_at")
+    Instant tokenExpiresAt;
 }

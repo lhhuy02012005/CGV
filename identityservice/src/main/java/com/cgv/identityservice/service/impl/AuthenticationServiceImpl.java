@@ -28,8 +28,10 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.text.Normalizer;
 import java.time.Duration;
 import java.util.*;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -75,7 +77,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             String refreshToken = responseNode.get("refresh_token").asText();
             long expiresIn = responseNode.get("expires_in").asLong();
 
-            syncUserToLocalDatabase(accessToken);
+            syncUserToLocalDatabase(accessToken, null);
 
             return AuthenticationResponse.builder()
                     .accessToken(accessToken)
@@ -158,8 +160,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     @Override
-    public void syncUserFromAccessToken(String accessToken) {
-        syncUserToLocalDatabase(accessToken);
+    public UserResponse syncUserFromAccessToken(String accessToken, String customFullName) {
+        return syncUserToLocalDatabase(accessToken, customFullName);
     }
 
     private UserResponse registerOnKeycloakAndLocal(String email, String password, String fullName) {
@@ -171,7 +173,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         JsonNode tokenResponse = keycloakClient.exchangeToken(realm, tokenBody);
         String adminToken = "Bearer " + tokenResponse.get("access_token").asText();
 
-        String trimmedName = fullName != null ? fullName.trim() : email;
+        String trimmedName = fullName != null ? removeVietnameseDiacritics(fullName.trim()) : email;
         String firstName = trimmedName;
         String lastName = trimmedName;
 
@@ -208,39 +210,57 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
     }
 
-    private void syncUserToLocalDatabase(String accessToken) {
+    private UserResponse syncUserToLocalDatabase(String accessToken, String customFullName) {
         Jwt jwt = jwtDecoder.decode(accessToken);
         String email = jwt.getClaimAsString("email");
-        String name = jwt.getClaimAsString("name");
-        if (name == null) name = jwt.getClaimAsString("preferred_username");
-        if (name == null) name = email;
-
         String sub = jwt.getSubject();
 
-        if (email != null) {
-            saveOrGetUser(sub, email, name);
+        if (email == null || sub == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Token không hợp lệ!");
         }
+
+        User user = saveOrGetUser(sub, email, customFullName);
+        return userMapper.toUserResponse(user);
     }
 
     private User saveOrGetUser(String id, String email, String fullName) {
-        return userRepository.findById(id).orElseGet(() -> {
-            MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
-                    .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
-                            .code("MEMBER")
-                            .name("Member")
-                            .minSpend(BigDecimal.ZERO)
-                            .description("Hạng thành viên tiêu chuẩn")
-                            .build()));
+        String normalizedName = (fullName != null && !fullName.trim().isEmpty())
+                ? removeVietnameseDiacritics(fullName.trim())
+                : null;
 
-            User newUser = User.builder()
-                    .id(id)
-                    .email(email)
-                    .fullName(fullName)
-                    .membershipTier(defaultTier)
-                    .total_spend_ytd(BigDecimal.ZERO)
-                    .build();
-            return userRepository.save(newUser);
-        });
+        return userRepository.findById(id)
+                .map(existingUser -> {
+                    if (normalizedName != null && !normalizedName.equals(existingUser.getFullName())) {
+                        existingUser.setFullName(normalizedName);
+                        return userRepository.save(existingUser);
+                    }
+                    return existingUser;
+                })
+                .orElseGet(() -> {
+                    MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
+                            .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
+                                    .code("MEMBER")
+                                    .name("Member")
+                                    .minSpend(BigDecimal.ZERO)
+                                    .description("Hạng thành viên tiêu chuẩn")
+                                    .build()));
+
+                    User newUser = User.builder()
+                            .id(id)
+                            .email(email)
+                            .fullName(normalizedName)
+                            .membershipTier(defaultTier)
+                            .total_spend_ytd(BigDecimal.ZERO)
+                            .build();
+                    return userRepository.save(newUser);
+                });
+    }
+
+    private String removeVietnameseDiacritics(String str) {
+        if (str == null) return null;
+        String nfd = Normalizer.normalize(str, Normalizer.Form.NFD);
+        Pattern pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+");
+        return pattern.matcher(nfd).replaceAll("").replace('đ', 'd').replace('Đ', 'D').trim();
     }
 
     private Map<String, String> createTokenRequestBody(String grantType, Map<String, String> extraParams) {
