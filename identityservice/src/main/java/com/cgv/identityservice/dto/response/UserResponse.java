@@ -18,7 +18,6 @@ public class UserResponse {
     String id;
     String email;
     String fullName;
-    Role role;
     MemberShipTierResponse membershipTier;
     BigDecimal total_spend_ytd;
 }
