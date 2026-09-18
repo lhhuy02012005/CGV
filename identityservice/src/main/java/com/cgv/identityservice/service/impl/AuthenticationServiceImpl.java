@@ -219,7 +219,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Token không hợp lệ!");
         }
 
-        User user = saveOrGetUser(sub, email, customFullName);
+        String resolvedName = customFullName;
+        if (resolvedName == null || resolvedName.trim().isEmpty()) {
+            resolvedName = jwt.getClaimAsString("name");
+        }
+        if (resolvedName == null || resolvedName.trim().isEmpty()) {
+            resolvedName = jwt.getClaimAsString("preferred_username");
+        }
+
+        User user = saveOrGetUser(sub, email, resolvedName);
         return userMapper.toUserResponse(user);
     }
 
@@ -237,6 +245,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     return existingUser;
                 })
                 .orElseGet(() -> {
+                    Optional<User> userByEmail = userRepository.findByEmail(email);
+                    if (userByEmail.isPresent()) {
+                        User existingUser = userByEmail.get();
+                        if (normalizedName != null && !normalizedName.equals(existingUser.getFullName())) {
+                            existingUser.setFullName(normalizedName);
+                            return userRepository.save(existingUser);
+                        }
+                        return existingUser;
+                    }
+
                     MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
                             .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
                                     .code("MEMBER")

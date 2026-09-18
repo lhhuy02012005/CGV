@@ -48,7 +48,7 @@ services:
         strip_path: false
 
   - name: notification-service
-    url: http://host.docker.internal:8086
+    url: http://notification-service:8086
     routes:
       - name: notification-route
         paths:
