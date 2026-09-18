@@ -14,12 +14,16 @@ services:
           - /api/v1/swagger-ui.html
           - /api/v1/v3/api-docs
         strip_path: false
-    plugins:
-      - name: rate-limiting
-        config:
-          minute: 5
-          policy: local
-          fault_tolerant: true
+      - name: identity-register-init-route
+        paths:
+          - /api/v1/auth/register/init
+        strip_path: false
+        plugins:
+          - name: rate-limiting
+            config:
+              minute: 5          # Giới hạn tối đa 5 request mỗi phút cho API này
+              policy: local
+              fault_tolerant: true
 
   - name: booking-service
     url: http://host.docker.internal:8082
@@ -53,13 +57,13 @@ services:
           - /api/v1/payment
         strip_path: false
 
-  - name: notification-service
-    url: http://notification-service:8086
-    routes:
-      - name: notification-route
-        paths:
-          - /api/v1/notification
-        strip_path: false
+#  - name: notification-service
+#    url: http://notification-service:8086
+#    routes:
+#      - name: notification-route
+#        paths:
+#          - /api/v1/notification
+#        strip_path: false
 
   - name: media-service
     url: http://host.docker.internal:8087

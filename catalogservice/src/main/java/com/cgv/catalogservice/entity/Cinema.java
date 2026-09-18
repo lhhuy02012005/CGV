@@ -1,7 +1,6 @@
 package com.cgv.catalogservice.entity;
 
 import com.cgv.catalogservice.enums.CinemaStatus;
-import com.cgv.commondto.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
