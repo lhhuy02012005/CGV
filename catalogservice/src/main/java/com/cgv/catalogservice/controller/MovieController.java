@@ -105,7 +105,7 @@ public class MovieController {
 
     @GetMapping
     public ApiResponse<PageResponse<MovieResponse>> findAll(
-            @ModelAttribute MovieFilterRequest request,
+            @Valid @ModelAttribute MovieFilterRequest request,
             @PageableDefault Pageable pageable
     ) {
 

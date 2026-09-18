@@ -5,6 +5,7 @@ import com.cgv.catalogservice.dto.request.seattype.SeatTypeUpdateRequest;
 import com.cgv.catalogservice.dto.response.SeatTypeResponse;
 import com.cgv.catalogservice.entity.SeatType;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 @Mapper(config = CatalogMapperConfig.class)
 public interface SeatTypeMapper {
 
+    @Mapping(target = "surcharge", defaultValue = "0")
     SeatType toEntity(SeatTypeCreateRequest request);
 
     void updateEntity(SeatTypeUpdateRequest request, @MappingTarget SeatType seatType);

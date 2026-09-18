@@ -15,6 +15,7 @@ public interface SeatMapper {
 
     @Mapping(target = "room", ignore = true)
     @Mapping(target = "seatType", ignore = true)
+    @Mapping(target = "isActive", defaultValue = "true")
     Seat toEntity(SeatCreateRequest request);
 
     @Mapping(target = "room", ignore = true)

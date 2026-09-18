@@ -15,6 +15,8 @@ public interface RoomMapper {
 
     @Mapping(target = "cinema", ignore = true)
     @Mapping(target = "totalSeats", ignore = true)
+    @Mapping(target = "format", defaultValue = "TWO_D")
+    @Mapping(target = "status", defaultValue = "ACTIVE")
     Room toEntity(RoomCreateRequest request);
 
     @Mapping(target = "cinema", ignore = true)

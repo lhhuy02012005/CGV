@@ -14,6 +14,7 @@ import java.util.List;
 public interface MovieCastMapper {
 
     @Mapping(target = "movie", ignore = true)
+    @Mapping(target = "displayOrder", defaultValue = "0")
     MovieCast toEntity(MovieCastCreateRequest request);
 
     @Mapping(target = "movie", ignore = true)

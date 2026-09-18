@@ -15,6 +15,7 @@ public interface EventMapper {
 
     @Mapping(target = "cinema", ignore = true)
     @Mapping(target = "currentAttendees", ignore = true)
+    @Mapping(target = "status", defaultValue = "UPCOMING")
     Event toEntity(EventCreateRequest request);
 
     @Mapping(target = "cinema", ignore = true)
