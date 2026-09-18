@@ -1,0 +1,121 @@
+package com.cgv.catalogservice.service.impl;
+
+import com.cgv.catalogservice.dto.request.cinema.CinemaCreateRequest;
+import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateRequest;
+import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateStatusRequest;
+import com.cgv.catalogservice.dto.response.CinemaResponse;
+import com.cgv.catalogservice.entity.Cinema;
+import com.cgv.catalogservice.entity.Region;
+import com.cgv.catalogservice.mapper.CinemaMapper;
+import com.cgv.catalogservice.repository.CinemaRepository;
+import com.cgv.catalogservice.repository.RegionRepository;
+import com.cgv.catalogservice.service.CinemaService;
+import com.cgv.commondto.dto.PageResponse;
+import jakarta.persistence.EntityNotFoundException;
+import lombok.AccessLevel;
+import lombok.RequiredArgsConstructor;
+import lombok.experimental.FieldDefaults;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+@FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
+public class CinemaServiceImpl implements CinemaService {
+
+    CinemaRepository cinemaRepository;
+    RegionRepository regionRepository;
+    CinemaMapper cinemaMapper;
+
+    @Override
+    @Transactional
+    public CinemaResponse createCinema(CinemaCreateRequest request) {
+        Region region = regionRepository.findById(request.regionId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Không tìm thấy region với id: " + request.regionId()
+                ));
+
+        Cinema cinema = cinemaMapper.toEntity(request);
+        cinema.setRegion(region);
+
+        Cinema savedCinema = cinemaRepository.save(cinema);
+
+        return cinemaMapper.toResponse(savedCinema);
+    }
+
+    @Override
+    @Transactional
+    public CinemaResponse updateCinema(UUID cinemaId, CinemaUpdateRequest request) {
+        Cinema cinema = cinemaRepository.findById(cinemaId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Không tìm thấy cinema với id: " + cinemaId
+                ));
+
+        cinemaMapper.updateEntity(request, cinema);
+
+        if (request.regionId() != null) {
+            Region region = regionRepository.findById(request.regionId())
+                    .orElseThrow(() -> new EntityNotFoundException(
+                            "Không tìm thấy region với id: " + request.regionId()
+                    ));
+            cinema.setRegion(region);
+        }
+
+        return cinemaMapper.toResponse(cinema);
+    }
+
+    @Override
+    @Transactional
+    public CinemaResponse updateCinemaStatus(UUID cinemaId, CinemaUpdateStatusRequest request) {
+        Cinema cinema = cinemaRepository.findById(cinemaId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Không tìm thấy cinema với id: " + cinemaId
+                ));
+
+        cinema.setStatus(request.status());
+
+        return cinemaMapper.toResponse(cinema);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCinema(UUID cinemaId) {
+        Cinema cinema = cinemaRepository.findById(cinemaId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Không tìm thấy cinema với id: " + cinemaId
+                ));
+
+        cinemaRepository.delete(cinema);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CinemaResponse getCinemaById(UUID cinemaId) {
+        Cinema cinema = cinemaRepository.findById(cinemaId)
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Không tìm thấy cinema với id: " + cinemaId
+                ));
+
+        return cinemaMapper.toResponse(cinema);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<CinemaResponse> getAllCinemas(Pageable pageable) {
+        Page<Cinema> cinemaPage = cinemaRepository.findAll(pageable);
+        List<CinemaResponse> cinemaResponses = cinemaMapper.toResponseList(cinemaPage.getContent());
+
+        return PageResponse.<CinemaResponse>builder()
+                .data(cinemaResponses)
+                .pageNumber(cinemaPage.getNumber() + 1)
+                .pageSize(cinemaPage.getSize())
+                .totalPages(cinemaPage.getTotalPages())
+                .totalElements(cinemaPage.getTotalElements())
+                .build();
+    }
+}

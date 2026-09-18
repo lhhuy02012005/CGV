@@ -14,6 +14,7 @@ import java.util.List;
 public interface CinemaMapper {
 
     @Mapping(target = "region", ignore = true)
+    @Mapping(target = "status", defaultValue = "ACTIVE")
     Cinema toEntity(CinemaCreateRequest request);
 
     @Mapping(target = "region", ignore = true)
