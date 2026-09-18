@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication(
-		scanBasePackages = {
-				"com.cgv.marketingservice",
-				"com.cgv.commondto"
-		}
+//		scanBasePackages = {
+//				"com.cgv.marketingservice",
+//				"com.cgv.commondto"
+//		}
 )
 public class MarketingserviceApplication {
 

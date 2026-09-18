@@ -1,6 +1,5 @@
 package com.cgv.marketingservice.entity;
 
-import com.cgv.commondto.entity.BaseEntity;
 import com.cgv.marketingservice.enums.DiscountType;
 import jakarta.persistence.*;
 import lombok.*;
