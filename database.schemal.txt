@@ -15,15 +15,14 @@ TableGroup IdentityService {
   users
   membership_tiers
   user_connected_accounts
-  notifications
 }
 
 Table membership_tiers {
   code varchar [pk, note: 'SILVER, GOLD, PLATINUM']
   name varchar [not null, note: 'Thành viên Bạc, Thành viên Vàng, Thành viên Bạch Kim']
   min_spend decimal [not null, note: 'Tổng chi tiêu tối thiểu trong năm để đạt hạng (VD: 0, 5000000, 15000000)']
-  perks text [note: 'Mô tả quyền lợi hiển thị trên UI']
-  cashback_percent decimal [default: 0, note: '% hoàn tiền: Silver=3%, Gold=5%, Platinum=7%']
+  // perks text [note: 'Mô tả quyền lợi hiển thị trên UI']
+  // cashback_percent decimal [default: 0, note: '% hoàn tiền: Silver=3%, Gold=5%, Platinum=7%']
   description text
 }
 
@@ -32,7 +31,7 @@ Table users {
   keycloak_id varchar [unique, not null, note: 'ID từ Keycloak — dùng để map JWT sub claim. KHÔNG lưu password hay role ở đây']
   email varchar [unique, not null]
   full_name varchar
-  date_of_birth date [note: 'Dùng cho ưu đãi sinh nhật tự động']
+  // date_of_birth date [note: 'Dùng cho ưu đãi sinh nhật tự động']
   membership_tier varchar [ref: > membership_tiers.code, not null, default: 'SILVER', note: 'Khóa ngoại tới membership_tiers']
   total_spend_ytd decimal [default: 0, note: 'Tổng chi tiêu tính từ đầu năm — tự động reset mỗi 1/1. Dùng để xét lên/xuống hạng']
   is_active boolean [default: true, note: 'Admin khóa/mở khóa tài khoản']
@@ -61,6 +60,13 @@ Table user_connected_accounts {
     (provider, provider_id) [unique]
     user_id
   }
+}
+
+// ================================================================
+// NotificationService
+// ================================================================
+TableGroup NotificationService {
+  notifications
 }
 
 Table notifications {

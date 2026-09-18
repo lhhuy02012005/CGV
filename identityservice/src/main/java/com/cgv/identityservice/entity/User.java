@@ -7,11 +7,14 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.util.Date;
 import java.util.UUID;
 
 @Entity
 @Table(name = "users" , indexes = {
-        @Index(name = "idx_cgv_user_email" , columnList = "email")
+        @Index(name = "idx_cgv_user_email" , columnList = "email"),
+        @Index(name = "idx_cgv_user_keycloak_id", columnList = "keycloak_id"),
+        @Index(name = "idx_cgv_user_membership_tier" , columnList = "membership_tier")
 })
 @Getter
 @Setter
@@ -23,7 +26,7 @@ public class User extends BaseEntity {
     @Id
     String id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     String email;
 
     @Column
