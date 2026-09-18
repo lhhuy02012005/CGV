@@ -308,3 +308,71 @@ services:
         aliases:
           - identity-service
     restart: unless-stopped
+
+  notification-service:
+    build:
+      context: ./notificationservice
+      dockerfile: Dockerfile
+    container_name: cgv-notification-service
+    ports:
+      - "8086:8086"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/cgv
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+      BREVO_API_KEY: ${BREVO_API_KEY:-}
+      EMAIL: ${EMAIL:-}
+      EXPIRY_TIME: ${EXPIRY_TIME:-5}
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+    networks:
+      cgv-net:
+        aliases:
+          - notification-service
+    restart: unless-stopped
+
+  media-service:
+    build:
+      context: ./mediaservice
+      dockerfile: Dockerfile
+    container_name: cgv-media-service
+    ports:
+      - "8087:8087"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/cgv
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      AWS_REGION: ${AWS_REGION}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      KEYCLOAK_URL: http://keycloak:8080
+      REALM: ${REALM:-cgv-realm}
+    #        REDIS_HOST: redis
+    #        REDIS_PORT: 6379
+    #        KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+    #        BREVO_API_KEY: ${BREVO_API_KEY:-}
+    #        EMAIL: ${EMAIL:-}
+    #        EXPIRY_TIME: ${EXPIRY_TIME:-5}
+    depends_on:
+      postgres:
+        condition: service_started
+    #        redis:
+    #          condition: service_healthy
+    #        kafka-1:
+    #          condition: service_started
+    networks:
+      cgv-net:
+        aliases:
+          - media-service
+    restart: unless-stopped

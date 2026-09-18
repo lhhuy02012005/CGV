@@ -1,6 +1,10 @@
 docker exec cgv-postgres psql -U postgres -d cgv -c "UPDATE keycloak.realm SET ssl_required = 'NONE' WHERE name = 'master';"
 docker restart keycloak
 
-docker compose -f docker-compose-dev.yml up -d
-docker compose -f docker-compose-dev.yml down
+# 1. Tắt toàn bộ các container cũ và xóa các volume rác (nếu cần reset DB)
 docker compose -f docker-compose-dev.yml down -v
+
+# 2. Build lại toàn bộ image từ source code mới nhất và khởi động ngầm
+docker compose -f docker-compose-dev.yml up -d --build
+docker compose -f docker-compose-d  ev.yml down -v
+mvn clean install -DskipTests

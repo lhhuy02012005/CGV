@@ -1,6 +1,5 @@
 package com.cgv.identityservice.entity;
 
-import com.cgv.commondto.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;

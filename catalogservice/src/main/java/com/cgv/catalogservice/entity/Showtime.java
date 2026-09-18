@@ -3,7 +3,6 @@ package com.cgv.catalogservice.entity;
 import com.cgv.catalogservice.converter.FormatConverter;
 import com.cgv.catalogservice.enums.Format;
 import com.cgv.catalogservice.enums.ShowtimeStatus;
-import com.cgv.commondto.entity.BaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
