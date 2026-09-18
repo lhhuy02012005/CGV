@@ -213,6 +213,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private UserResponse syncUserToLocalDatabase(String accessToken, String customFullName) {
         Jwt jwt = jwtDecoder.decode(accessToken);
         String email = jwt.getClaimAsString("email");
+        log.info("email: {}", email);
         String sub = jwt.getSubject();
 
         if (email == null || sub == null) {
@@ -228,15 +229,16 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 ? removeVietnameseDiacritics(fullName.trim())
                 : null;
 
-        return userRepository.findById(id)
+        return userRepository.findByEmail(email)
                 .map(existingUser -> {
-                    if (normalizedName != null && !normalizedName.equals(existingUser.getFullName())) {
+                    if (normalizedName != null && (existingUser.getFullName() == null || existingUser.getFullName().isEmpty())) {
                         existingUser.setFullName(normalizedName);
                         return userRepository.save(existingUser);
                     }
                     return existingUser;
                 })
                 .orElseGet(() -> {
+                    log.info("not exist email: {}", email);
                     MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
                             .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
                                     .code("MEMBER")
