@@ -3,7 +3,6 @@ package com.cgv.catalogservice.config;
 import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.commondto.exception.ErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.MediaType;
@@ -16,10 +15,16 @@ import java.util.Date;
 
 @Component
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
+    public void commence(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            AuthenticationException authException
+    ) throws IOException {
+
         ErrorCode errorCode = ErrorCode.UNAUTHENTICATED;
 
         response.setStatus(errorCode.getHttpStatus().value());
@@ -33,7 +38,10 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
                 .message("Unauthenticated")
                 .build();
 
-        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+        response.getWriter().write(
+                objectMapper.writeValueAsString(errorResponse)
+        );
+
         response.flushBuffer();
     }
 }

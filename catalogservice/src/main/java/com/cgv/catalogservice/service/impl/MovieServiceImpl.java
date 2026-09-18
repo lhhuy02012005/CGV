@@ -123,16 +123,14 @@ public class MovieServiceImpl implements MovieService {
 
         Page<Movie> moviePage = movieRepository.findAll(specification, pageable);
 
-        List<MovieResponse> movieResponseList = moviePage.stream().map(movieMapper::toResponse).toList();
+        List<MovieResponse> movieResponseList = movieMapper.toResponseList(moviePage.getContent());
 
-        PageResponse<MovieResponse> movieResponsePage = new PageResponse<>();
-
-        movieResponsePage.setData(movieResponseList);
-        movieResponsePage.setPageNumber(moviePage.getNumber() + 1);
-        movieResponsePage.setPageSize(moviePage.getSize());
-        movieResponsePage.setTotalElements(moviePage.getTotalElements());
-        movieResponsePage.setTotalPages(moviePage.getTotalPages());
-
-        return movieResponsePage;
+        return PageResponse.<MovieResponse>builder()
+                .data(movieResponseList)
+                .pageNumber(moviePage.getNumber() + 1)
+                .pageSize(moviePage.getSize())
+                .totalPages(moviePage.getTotalPages())
+                .totalElements(moviePage.getTotalElements())
+                .build();
     }
 }

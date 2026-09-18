@@ -1,7 +1,6 @@
 package com.cgv.catalogservice.mapper;
 
 import com.cgv.catalogservice.dto.request.cinemaamenity.CinemaAmenityCreateRequest;
-import com.cgv.catalogservice.dto.request.cinemaamenity.CinemaAmenityUpdateRequest;
 import com.cgv.catalogservice.dto.response.CinemaAmenityResponse;
 import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.CinemaAmenity;
@@ -31,21 +30,6 @@ public interface CinemaAmenityMapper {
                 .build();
     }
 
-    default CinemaAmenity toEntity(
-            CinemaAmenityUpdateRequest request,
-            Cinema cinema
-    ) {
-        if (request == null) {
-            return null;
-        }
-
-        UUID cinemaId = cinema != null ? cinema.getId() : request.cinemaId();
-
-        return CinemaAmenity.builder()
-                .id(new CinemaAmenityId(cinemaId, request.amenity()))
-                .cinema(cinema)
-                .build();
-    }
 
     @Mapping(target = "cinemaId", source = "id.cinemaId")
     @Mapping(target = "cinemaName", source = "cinema.name")

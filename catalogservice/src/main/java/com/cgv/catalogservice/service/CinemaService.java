@@ -1,6 +1,7 @@
 package com.cgv.catalogservice.service;
 
 import com.cgv.catalogservice.dto.request.cinema.CinemaCreateRequest;
+import com.cgv.catalogservice.dto.request.cinema.CinemaFilterRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.CinemaResponse;
@@ -21,5 +22,8 @@ public interface CinemaService {
 
     CinemaResponse getCinemaById(UUID cinemaId);
 
-    PageResponse<CinemaResponse> getAllCinemas(Pageable pageable);
+    PageResponse<CinemaResponse> getAllCinemas(
+            CinemaFilterRequest filter,
+            Pageable pageable
+    );
 }

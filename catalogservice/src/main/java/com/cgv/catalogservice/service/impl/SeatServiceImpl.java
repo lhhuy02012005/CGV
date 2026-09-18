@@ -39,53 +39,110 @@ public class SeatServiceImpl implements SeatService {
     @Override
     @Transactional
     public SeatResponse createSeat(SeatCreateRequest request) {
+
         Room room = roomRepository.findById(request.roomId())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy room với id: " + request.roomId()
-                ));
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "Không tìm thấy room với id: "
+                                        + request.roomId()
+                        )
+                );
 
-        SeatTypeName seatTypeName = request.seatTypeName() != null
-                ? request.seatTypeName()
-                : SeatTypeName.NORMAL;
+        SeatTypeName seatTypeName =
+                request.seatTypeName() != null
+                        ? request.seatTypeName()
+                        : SeatTypeName.NORMAL;
 
-        SeatType seatType = seatTypeRepository.findById(seatTypeName)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy seat type với name: " + seatTypeName
-                ));
+        SeatType seatType =
+                seatTypeRepository.findById(seatTypeName)
+                        .orElseThrow(() ->
+                                new EntityNotFoundException(
+                                        "Không tìm thấy seat type với name: "
+                                                + seatTypeName
+                                )
+                        );
 
         Seat seat = seatMapper.toEntity(request);
+
         seat.setRoom(room);
         seat.setSeatType(seatType);
 
-        Seat savedSeat = seatRepository.save(seat);
+        Seat savedSeat =
+                seatRepository.saveAndFlush(seat);
+
+        room.setTotalSeats(
+                seatRepository.countByRoom_Id(room.getId())
+        );
 
         return seatMapper.toResponse(savedSeat);
     }
 
     @Override
     @Transactional
-    public SeatResponse updateSeat(UUID seatId, SeatUpdateRequest request) {
+    public SeatResponse updateSeat(
+            UUID seatId,
+            SeatUpdateRequest request
+    ) {
+
         Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy seat với id: " + seatId
-                ));
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "Không tìm thấy seat với id: " + seatId
+                        )
+                );
+
+        Room oldRoom = seat.getRoom();
+        Room newRoom = oldRoom;
+
+        boolean roomChanged = false;
+
+        if (request.roomId() != null) {
+
+            newRoom = roomRepository.findById(request.roomId())
+                    .orElseThrow(() ->
+                            new EntityNotFoundException(
+                                    "Không tìm thấy room với id: "
+                                            + request.roomId()
+                            )
+                    );
+
+            roomChanged =
+                    !oldRoom.getId().equals(newRoom.getId());
+        }
+
+        SeatType seatType = seat.getSeatType();
+
+        if (request.seatTypeName() != null) {
+
+            seatType = seatTypeRepository
+                    .findById(request.seatTypeName())
+                    .orElseThrow(() ->
+                            new EntityNotFoundException(
+                                    "Không tìm thấy seat type với name: "
+                                            + request.seatTypeName()
+                            )
+                    );
+        }
 
         seatMapper.updateEntity(request, seat);
 
-        if (request.roomId() != null) {
-            Room room = roomRepository.findById(request.roomId())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Không tìm thấy room với id: " + request.roomId()
-                    ));
-            seat.setRoom(room);
-        }
+        seat.setRoom(newRoom);
+        seat.setSeatType(seatType);
 
-        if (request.seatTypeName() != null) {
-            SeatType seatType = seatTypeRepository.findById(request.seatTypeName())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Không tìm thấy seat type với name: " + request.seatTypeName()
-                    ));
-            seat.setSeatType(seatType);
+        if (roomChanged) {
+            seatRepository.flush();
+
+            oldRoom.setTotalSeats(
+                    seatRepository.countByRoom_Id(
+                            oldRoom.getId()
+                    )
+            );
+
+            newRoom.setTotalSeats(
+                    seatRepository.countByRoom_Id(
+                            newRoom.getId()
+                    )
+            );
         }
 
         return seatMapper.toResponse(seat);
@@ -107,12 +164,22 @@ public class SeatServiceImpl implements SeatService {
     @Override
     @Transactional
     public void deleteSeat(UUID seatId) {
+
         Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy seat với id: " + seatId
-                ));
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "Không tìm thấy seat với id: " + seatId
+                        )
+                );
+
+        Room room = seat.getRoom();
 
         seatRepository.delete(seat);
+        seatRepository.flush();
+
+        room.setTotalSeats(
+                seatRepository.countByRoom_Id(room.getId())
+        );
     }
 
     @Override
