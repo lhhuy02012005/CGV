@@ -1,4 +1,4 @@
-package com.cgv.commondto.entity;
+package com.cgv.catalogservice.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -39,4 +39,3 @@ public abstract class BaseEntity {
         this.updatedAt = Instant.now();
     }
 }
-

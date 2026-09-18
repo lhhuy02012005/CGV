@@ -7,14 +7,15 @@ spring:
   application:
     name: media-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/cgv
-    username: postgres
-    password: postgrespassword
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/cgv}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgrespassword}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: true
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
   security:
     oauth2:
       resourceserver:
