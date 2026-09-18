@@ -1,0 +1,32 @@
+server:
+  port: 8084
+  servlet:
+    context-path: /api/v1
+
+spring:
+  datasource:
+    url: ${MARKETING_DB_URL:jdbc:postgresql://localhost:5432/cgv}
+    username: ${MARKETING_DB_USERNAME:postgres}
+    password: ${MARKETING_DB_PASSWORD}
+
+  flyway:
+    enabled: false
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # ponytail: dev only; use Flyway migrations before deployment.
+      ddl-auto: update
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8180/realms/cgv-realm}
+          jwk-set-uri: ${KEYCLOAK_JWKS:http://localhost:8180/realms/cgv-realm/protocol/openid-connect/certs}

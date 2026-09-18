@@ -1,0 +1,12 @@
+[req]
+distinguished_name = dn
+x509_extensions = EXT
+prompt = no
+
+[dn]
+CN = localhost
+
+[EXT]
+subjectAltName = DNS:localhost
+keyUsage = digitalSignature
+extendedKeyUsage = serverAuth
