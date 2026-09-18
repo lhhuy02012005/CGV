@@ -131,10 +131,7 @@ public class EventServiceImpl implements EventService {
 
         Page<Event> eventPage = eventRepository.findAll(specification, pageable);
 
-        List<EventResponse> eventResponses = eventPage.getContent()
-                .stream()
-                .map(eventMapper::toResponse)
-                .toList();
+        List<EventResponse> eventResponses = eventMapper.toResponseList(eventPage.getContent());
 
         return PageResponse.<EventResponse>builder()
                 .data(eventResponses)

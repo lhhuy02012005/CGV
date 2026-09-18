@@ -1,7 +1,6 @@
 package com.cgv.catalogservice.mapper;
 
 import com.cgv.catalogservice.dto.request.moviegenre.MovieGenreCreateRequest;
-import com.cgv.catalogservice.dto.request.moviegenre.MovieGenreUpdateRequest;
 import com.cgv.catalogservice.dto.response.MovieGenreResponse;
 import com.cgv.catalogservice.entity.Genre;
 import com.cgv.catalogservice.entity.Movie;
@@ -18,25 +17,6 @@ public interface MovieGenreMapper {
 
     default MovieGenre toEntity(
             MovieGenreCreateRequest request,
-            Movie movie,
-            Genre genre
-    ) {
-        if (request == null) {
-            return null;
-        }
-
-        UUID movieId = movie != null ? movie.getId() : request.movieId();
-        Integer genreId = genre != null ? genre.getId() : request.genreId();
-
-        MovieGenre movieGenre = new MovieGenre();
-        movieGenre.setId(new MovieGenreId(movieId, genreId));
-        movieGenre.setMovie(movie);
-        movieGenre.setGenre(genre);
-        return movieGenre;
-    }
-
-    default MovieGenre toEntity(
-            MovieGenreUpdateRequest request,
             Movie movie,
             Genre genre
     ) {

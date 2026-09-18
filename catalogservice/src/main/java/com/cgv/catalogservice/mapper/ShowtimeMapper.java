@@ -16,6 +16,7 @@ public interface ShowtimeMapper {
     @Mapping(target = "movie", ignore = true)
     @Mapping(target = "room", ignore = true)
     @Mapping(target = "availableSeats", ignore = true)
+    @Mapping(target = "status", defaultValue = "SCHEDULED")
     Showtime toEntity(ShowtimeCreateRequest request);
 
     @Mapping(target = "movie", ignore = true)

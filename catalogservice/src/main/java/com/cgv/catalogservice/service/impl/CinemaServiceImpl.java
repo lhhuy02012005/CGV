@@ -1,6 +1,7 @@
 package com.cgv.catalogservice.service.impl;
 
 import com.cgv.catalogservice.dto.request.cinema.CinemaCreateRequest;
+import com.cgv.catalogservice.dto.request.cinema.CinemaFilterRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.CinemaResponse;
@@ -10,6 +11,7 @@ import com.cgv.catalogservice.mapper.CinemaMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RegionRepository;
 import com.cgv.catalogservice.service.CinemaService;
+import com.cgv.catalogservice.specification.CinemaSpecification;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -106,9 +109,40 @@ public class CinemaServiceImpl implements CinemaService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<CinemaResponse> getAllCinemas(Pageable pageable) {
-        Page<Cinema> cinemaPage = cinemaRepository.findAll(pageable);
-        List<CinemaResponse> cinemaResponses = cinemaMapper.toResponseList(cinemaPage.getContent());
+    public PageResponse<CinemaResponse> getAllCinemas(
+            CinemaFilterRequest filter,
+            Pageable pageable
+    ) {
+
+        Specification<Cinema> specification =
+                Specification.allOf(
+                        CinemaSpecification.containsKeyword(
+                                filter.keyword()
+                        ),
+                        CinemaSpecification.hasRegionId(
+                                filter.regionId()
+                        ),
+                        CinemaSpecification.hasRegionSlug(
+                                filter.regionSlug()
+                        ),
+                        CinemaSpecification.hasStatus(
+                                filter.status()
+                        ),
+                        CinemaSpecification.hasAmenity(
+                                filter.amenity()
+                        )
+                );
+
+        Page<Cinema> cinemaPage =
+                cinemaRepository.findAll(
+                        specification,
+                        pageable
+                );
+
+        List<CinemaResponse> cinemaResponses =
+                cinemaMapper.toResponseList(
+                        cinemaPage.getContent()
+                );
 
         return PageResponse.<CinemaResponse>builder()
                 .data(cinemaResponses)

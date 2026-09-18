@@ -1,6 +1,7 @@
 package com.cgv.catalogservice.controller;
 
 import com.cgv.catalogservice.dto.request.cinema.CinemaCreateRequest;
+import com.cgv.catalogservice.dto.request.cinema.CinemaFilterRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.CinemaResponse;
@@ -91,11 +92,18 @@ public class CinemaController {
 
     @GetMapping
     public ApiResponse<PageResponse<CinemaResponse>> findAll(
+            @Valid @ModelAttribute CinemaFilterRequest filter,
             @PageableDefault Pageable pageable
     ) {
-        PageResponse<CinemaResponse> response = cinemaService.getAllCinemas(pageable);
 
-        return ApiResponse.<PageResponse<CinemaResponse>>builder()
+        PageResponse<CinemaResponse> response =
+                cinemaService.getAllCinemas(
+                        filter,
+                        pageable
+                );
+
+        return ApiResponse
+                .<PageResponse<CinemaResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Danh sách rạp chiếu phim")

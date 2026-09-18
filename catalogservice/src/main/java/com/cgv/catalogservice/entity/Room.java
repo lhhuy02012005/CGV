@@ -35,7 +35,8 @@ public class Room {
     Format format = Format.TWO_D;
 
     @Column(name = "total_seats")
-    Integer totalSeats;
+    @Builder.Default
+    Integer totalSeats = 0;
 
     @Column(name = "row_count", nullable = false)
     Integer rowCount;

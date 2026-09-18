@@ -28,8 +28,6 @@ public record ShowtimeUpdateRequest(
         Format format,
 
         @PositiveOrZero(message = "Giá cơ bản không được âm")
-        BigDecimal basePrice,
-
-        ShowtimeStatus status
+        BigDecimal basePrice
 ) {
 }
