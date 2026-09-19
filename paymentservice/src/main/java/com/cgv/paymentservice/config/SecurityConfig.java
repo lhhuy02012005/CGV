@@ -1,4 +1,4 @@
-package com.cgv.bookingservice.config;
+package com.cgv.paymentservice.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

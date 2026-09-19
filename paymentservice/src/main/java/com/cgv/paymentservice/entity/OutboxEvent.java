@@ -1,4 +1,4 @@
-package com.cgv.bookingservice.entity;
+package com.cgv.paymentservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
@@ -7,7 +7,7 @@ import java.util.UUID;
 
 @Entity
 @Table(
-        name = "outbox_booking_events",
+        name = "outbox_payment_events",
         indexes = {
                 @Index(name = "idx_cgv_outbox_created_at_is_published" , columnList = "is_published , created_at"),
                 @Index(name = "idx_cgv_outbox_aggregate_id" , columnList = "aggregate_id")

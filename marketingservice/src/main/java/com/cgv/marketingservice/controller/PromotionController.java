@@ -24,15 +24,14 @@ public class PromotionController {
     PromotionService promotionService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<PromotionResponse>> create(@RequestBody @Valid PromotionCreateRequest request) {
+    public ApiResponse<PromotionResponse> create(@RequestBody @Valid PromotionCreateRequest request) {
         PromotionResponse respone = promotionService.createPromotion(request);
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.<PromotionResponse>builder()
+        return ApiResponse.<PromotionResponse>builder()
                         .status(HttpStatus.CREATED.value())
                         .message("Promotion created")
                         .data(respone)
-                        .build());
+                        .build();
     }
 
     @GetMapping("/{id}")
