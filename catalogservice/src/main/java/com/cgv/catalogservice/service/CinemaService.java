@@ -18,8 +18,6 @@ public interface CinemaService {
 
     CinemaResponse updateCinemaStatus(UUID cinemaId, CinemaUpdateStatusRequest request);
 
-    void deleteCinema(UUID cinemaId);
-
     CinemaResponse getCinemaById(UUID cinemaId);
 
     PageResponse<CinemaResponse> getAllCinemas(

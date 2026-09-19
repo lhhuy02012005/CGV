@@ -68,16 +68,6 @@ public class RoomController {
                 .build();
     }
 
-    @DeleteMapping("/{roomId}")
-    public ApiResponse<Void> delete(@PathVariable UUID roomId) {
-        roomService.deleteRoom(roomId);
-
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Xoá phòng chiếu thành công")
-                .build();
-    }
-
     @GetMapping("/{roomId}")
     public ApiResponse<RoomResponse> get(@PathVariable UUID roomId) {
         RoomResponse response = roomService.getRoomById(roomId);
@@ -89,11 +79,12 @@ public class RoomController {
                 .build();
     }
 
-    @GetMapping
-    public ApiResponse<PageResponse<RoomResponse>> findAll(
+    @GetMapping("/cinema/{cinemaId}")
+    public ApiResponse<PageResponse<RoomResponse>> findAllByCinemaId(
+            @PathVariable UUID cinemaId,
             @PageableDefault Pageable pageable
     ) {
-        PageResponse<RoomResponse> response = roomService.getAllRooms(pageable);
+        PageResponse<RoomResponse> response = roomService.getAllRoomsByCinemaId(cinemaId, pageable);
 
         return ApiResponse.<PageResponse<RoomResponse>>builder()
                 .status(HttpStatus.OK.value())

@@ -68,16 +68,6 @@ public class SeatController {
                 .build();
     }
 
-    @DeleteMapping("/{seatId}")
-    public ApiResponse<Void> delete(@PathVariable UUID seatId) {
-        seatService.deleteSeat(seatId);
-
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Xoá ghế thành công")
-                .build();
-    }
-
     @GetMapping("/{seatId}")
     public ApiResponse<SeatResponse> get(@PathVariable UUID seatId) {
         SeatResponse response = seatService.getSeatById(seatId);

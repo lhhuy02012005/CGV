@@ -86,17 +86,6 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    @Transactional
-    public void deleteCinema(UUID cinemaId) {
-        Cinema cinema = cinemaRepository.findById(cinemaId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy cinema với id: " + cinemaId
-                ));
-
-        cinemaRepository.delete(cinema);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public CinemaResponse getCinemaById(UUID cinemaId) {
         Cinema cinema = cinemaRepository.findById(cinemaId)

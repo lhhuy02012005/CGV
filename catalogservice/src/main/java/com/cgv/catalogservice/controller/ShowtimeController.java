@@ -78,19 +78,6 @@ public class ShowtimeController {
                 .build();
     }
 
-    @DeleteMapping("/{showtimeId}")
-    public ApiResponse<Void> delete(
-            @PathVariable UUID showtimeId
-    ) {
-
-        showtimeService.deleteShowtime(showtimeId);
-
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Xoá suất chiếu thành công")
-                .build();
-    }
-
     @GetMapping("/{showtimeId}")
     public ApiResponse<ShowtimeResponse> get(
             @PathVariable UUID showtimeId
