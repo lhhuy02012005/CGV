@@ -93,17 +93,6 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    @Transactional
-    public void deleteEvent(UUID eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy event với id: " + eventId
-                ));
-
-        eventRepository.delete(event);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public EventResponse getEventById(UUID eventId) {
         Event event = eventRepository.findById(eventId)

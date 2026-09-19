@@ -75,19 +75,6 @@ public class MovieController {
                 .build();
     }
 
-    @DeleteMapping("/{movieId}")
-    public ApiResponse<Void> delete(
-            @PathVariable UUID movieId
-    ) {
-
-        movieService.deleteMovie(movieId);
-
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Xoá phim thành công")
-                .build();
-    }
-
     @GetMapping("/{movieId}")
     public ApiResponse<MovieResponse> get(
             @PathVariable UUID movieId

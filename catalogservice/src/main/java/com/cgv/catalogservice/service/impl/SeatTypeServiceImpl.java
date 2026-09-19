@@ -6,6 +6,7 @@ import com.cgv.catalogservice.dto.response.SeatTypeResponse;
 import com.cgv.catalogservice.entity.SeatType;
 import com.cgv.catalogservice.enums.SeatTypeName;
 import com.cgv.catalogservice.mapper.SeatTypeMapper;
+import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.SeatTypeRepository;
 import com.cgv.catalogservice.service.SeatTypeService;
 import com.cgv.commondto.dto.PageResponse;
@@ -26,6 +27,8 @@ import java.util.List;
 public class SeatTypeServiceImpl implements SeatTypeService {
 
     SeatTypeRepository seatTypeRepository;
+    SeatRepository seatRepository;
+
     SeatTypeMapper seatTypeMapper;
 
     @Override
@@ -60,6 +63,17 @@ public class SeatTypeServiceImpl implements SeatTypeService {
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy seat type với name: " + seatTypeName
                 ));
+
+        boolean isUsed =
+                seatRepository.existsBySeatType_Name(seatTypeName);
+
+        if (isUsed) {
+            throw new IllegalArgumentException(
+                    "Không thể xoá seat type "
+                            + seatTypeName
+                            + " vì đang có ghế sử dụng loại ghế này"
+            );
+        }
 
         seatTypeRepository.delete(seatType);
     }

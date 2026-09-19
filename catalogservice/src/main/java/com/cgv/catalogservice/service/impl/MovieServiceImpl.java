@@ -66,15 +66,6 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    @Transactional
-    public void deleteMovie(UUID movieId) {
-
-        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
-
-        movieRepository.delete(movie);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public MovieResponse getMovieById(UUID movieId) {
 

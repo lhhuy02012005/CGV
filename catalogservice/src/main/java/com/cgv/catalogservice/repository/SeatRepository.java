@@ -1,6 +1,7 @@
 package com.cgv.catalogservice.repository;
 
 import com.cgv.catalogservice.entity.Seat;
+import com.cgv.catalogservice.enums.SeatTypeName;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -18,4 +19,6 @@ public interface SeatRepository
     );
 
     int countByRoom_Id(UUID roomId);
+
+    boolean existsBySeatType_Name(SeatTypeName seatTypeName);
 }
