@@ -69,16 +69,6 @@ public class CinemaController {
                 .build();
     }
 
-    @DeleteMapping("/{cinemaId}")
-    public ApiResponse<Void> delete(@PathVariable UUID cinemaId) {
-        cinemaService.deleteCinema(cinemaId);
-
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Xoá rạp chiếu phim thành công")
-                .build();
-    }
-
     @GetMapping("/{cinemaId}")
     public ApiResponse<CinemaResponse> get(@PathVariable UUID cinemaId) {
         CinemaResponse response = cinemaService.getCinemaById(cinemaId);

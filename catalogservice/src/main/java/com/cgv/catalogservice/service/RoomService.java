@@ -17,9 +17,7 @@ public interface RoomService {
 
     RoomResponse updateRoomStatus(UUID roomId, RoomUpdateStatusRequest request);
 
-    void deleteRoom(UUID roomId);
-
     RoomResponse getRoomById(UUID roomId);
 
-    PageResponse<RoomResponse> getAllRooms(Pageable pageable);
+    PageResponse<RoomResponse> getAllRoomsByCinemaId(UUID cinemaId, Pageable pageable);
 }

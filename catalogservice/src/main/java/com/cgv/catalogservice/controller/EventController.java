@@ -69,18 +69,6 @@ public class EventController {
                 .build();
     }
 
-    @DeleteMapping("/{eventId}")
-    public ApiResponse<Void> delete(
-            @PathVariable UUID eventId
-    ) {
-        eventService.deleteEvent(eventId);
-
-        return ApiResponse.<Void>builder()
-                .status(HttpStatus.OK.value())
-                .message("Xoá sự kiện thành công")
-                .build();
-    }
-
     @GetMapping("/{eventId}")
     public ApiResponse<EventResponse> get(
             @PathVariable UUID eventId

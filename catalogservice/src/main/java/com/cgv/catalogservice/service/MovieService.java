@@ -24,10 +24,6 @@ public interface MovieService {
             MovieUpdateStatusRequest request
     );
 
-    void deleteMovie(
-            UUID movieId
-    );
-
     MovieResponse getMovieById(UUID movieId);
 
     PageResponse<MovieResponse> getAllMovies(
