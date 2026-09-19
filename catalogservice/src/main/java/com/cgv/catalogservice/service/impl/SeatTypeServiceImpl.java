@@ -5,6 +5,7 @@ import com.cgv.catalogservice.dto.request.seattype.SeatTypeUpdateRequest;
 import com.cgv.catalogservice.dto.response.SeatTypeResponse;
 import com.cgv.catalogservice.entity.SeatType;
 import com.cgv.catalogservice.enums.SeatTypeName;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.SeatTypeMapper;
 import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.SeatTypeRepository;
@@ -68,7 +69,7 @@ public class SeatTypeServiceImpl implements SeatTypeService {
                 seatRepository.existsBySeatType_Name(seatTypeName);
 
         if (isUsed) {
-            throw new IllegalArgumentException(
+            throw new ResourceConflictException(
                     "Không thể xoá seat type "
                             + seatTypeName
                             + " vì đang có ghế sử dụng loại ghế này"

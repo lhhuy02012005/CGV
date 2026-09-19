@@ -9,6 +9,7 @@ import com.cgv.catalogservice.entity.Seat;
 import com.cgv.catalogservice.entity.SeatType;
 import com.cgv.catalogservice.enums.SeatTypeName;
 import com.cgv.catalogservice.enums.ShowtimeStatus;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.SeatMapper;
 import com.cgv.catalogservice.repository.RoomRepository;
 import com.cgv.catalogservice.repository.SeatRepository;
@@ -216,15 +217,17 @@ public class SeatServiceImpl implements SeatService {
 
     private void validateRoomHasNoScheduledShowtime(UUID roomId) {
 
-        boolean hasScheduledShowtime = showtimeRepository.existsByRoom_IdAndStatusAndStartTimeAfter(
-                roomId,
-                ShowtimeStatus.SCHEDULED,
-                LocalDateTime.now()
-        );
+        boolean hasScheduledShowtime =
+                showtimeRepository
+                        .existsByRoom_IdAndStatusAndEndTimeAfter(
+                                roomId,
+                                ShowtimeStatus.SCHEDULED,
+                                LocalDateTime.now()
+                        );
 
         if (hasScheduledShowtime) {
-            throw new IllegalArgumentException(
-                    "Không thể thay đổi ghế vì phòng đang có suất chiếu đã được lên lịch"
+            throw new ResourceConflictException(
+                    "Không thể thay đổi ghế vì phòng đang có suất chiếu đang diễn ra hoặc đã được lên lịch"
             );
         }
     }
