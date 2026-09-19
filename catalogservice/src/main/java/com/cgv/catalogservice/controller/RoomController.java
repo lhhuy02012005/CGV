@@ -79,7 +79,7 @@ public class RoomController {
                 .build();
     }
 
-    @GetMapping("/{cinemaId}")
+    @GetMapping("/cinema/{cinemaId}")
     public ApiResponse<PageResponse<RoomResponse>> findAllByCinemaId(
             @PathVariable UUID cinemaId,
             @PageableDefault Pageable pageable
