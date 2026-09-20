@@ -1,4 +1,4 @@
-package com.cgv.bookingservice.entity;
+package com.cgv.paymentservice.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

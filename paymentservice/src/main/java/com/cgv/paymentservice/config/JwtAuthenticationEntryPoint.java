@@ -1,4 +1,4 @@
-package com.cgv.bookingservice.config;
+package com.cgv.paymentservice.config;
 
 import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.commondto.exception.ErrorResponse;

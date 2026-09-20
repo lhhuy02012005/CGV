@@ -1,4 +1,4 @@
-package com.cgv.identityservice.config;
+package com.cgv.bookingservice.config;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.core.GrantedAuthority;

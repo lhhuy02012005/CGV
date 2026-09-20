@@ -1,4 +1,4 @@
-package com.cgv.bookingservice.exception;
+package com.cgv.paymentservice.exception;
 
 import com.cgv.commondto.exception.BusinessException;
 import com.cgv.commondto.exception.ErrorCode;
