@@ -79,16 +79,17 @@ public class SeatController {
                 .build();
     }
 
-    @GetMapping
-    public ApiResponse<PageResponse<SeatResponse>> findAll(
+    @GetMapping("/room/{roomId}")
+    public ApiResponse<PageResponse<SeatResponse>> findAllByRoomId(
+            @PathVariable UUID roomId,
             @PageableDefault Pageable pageable
     ) {
-        PageResponse<SeatResponse> response = seatService.getAllSeats(pageable);
+        PageResponse<SeatResponse> response = seatService.getAllSeatsByRoomId(roomId, pageable);
 
         return ApiResponse.<PageResponse<SeatResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(response)
-                .message("Danh sách ghế")
+                .message("Danh sách ghế theo phòng chiếu")
                 .build();
     }
 }

@@ -202,8 +202,13 @@ public class SeatServiceImpl implements SeatService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<SeatResponse> getAllSeats(Pageable pageable) {
-        Page<Seat> seatPage = seatRepository.findAll(pageable);
+    public PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable) {
+
+        if (roomRepository.existsById(roomId)) {
+            throw new IllegalArgumentException("Không tồn tại phòng chiếu với id: " + roomId);
+        }
+
+        Page<Seat> seatPage = seatRepository.findAllByRoom_Id(roomId, pageable);
         List<SeatResponse> seatResponses = seatMapper.toResponseList(seatPage.getContent());
 
         return PageResponse.<SeatResponse>builder()

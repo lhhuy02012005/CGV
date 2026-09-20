@@ -1,0 +1,838 @@
+# CatalogService API test suite for IntelliJ IDEA Ultimate HTTP Client
+# Based on the current CatalogService controllers/DTOs.
+#
+# IDE NOTE:
+# IntelliJ may show OpenAPI inspection warnings for dynamic {{...}} UUID variables
+# and LocalDateTime values without a timezone. These are editor inspections, not runtime errors.
+# Run requests from top to bottom so IDs are captured before dependent requests.
+#
+# HOW TO USE
+# 1) Run CatalogService on http://localhost:8083/api/v1
+# 2) Run with Spring profile 'dev' so SecurityConfigDev permits all requests without JWT.
+# 3) Run requests from top to bottom the first time because later requests reuse IDs captured from earlier responses.
+# 4) Click the green Run icon beside any request in IntelliJ.
+#
+# Notes:
+# - Spring Pageable receives page=0 for the first page.
+# - The file automatically captures IDs into IntelliJ global variables.
+# - Use a clean/dev database for the smoothest first run.
+# - Current controllers do NOT expose DELETE for Cinema, Room, Seat, Movie, Event, or Showtime.
+
+@baseUrl = http://localhost:8083/api/v1
+@page = 0
+@size = 10
+
+
+### ============================================================
+### 0. Infrastructure / Swagger check
+### ============================================================
+
+### OpenAPI JSON - public
+GET {{baseUrl}}/v3/api-docs
+Accept: application/json
+
+
+### ============================================================
+### 1. REGION
+### Cinema depends on Region
+### ============================================================
+
+### 1.1 Create Region
+POST {{baseUrl}}/regions
+Content-Type: application/json
+
+{
+  "name": "HTTP Test Ho Chi Minh {{$timestamp}}",
+  "slug": "http-test-hcm-{{$timestamp}}"
+}
+
+> {%
+client.global.set("regionId", String(response.body["data"]["id"]));
+%}
+
+
+### 1.2 Get Region by ID
+GET {{baseUrl}}/regions/{{regionId}}
+Accept: application/json
+
+
+### 1.3 Get all Regions
+GET {{baseUrl}}/regions?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 1.4 Update Region
+PATCH {{baseUrl}}/regions/{{regionId}}
+Content-Type: application/json
+
+{
+  "name": "HTTP Test HCM Updated {{$timestamp}}"
+}
+
+
+### ============================================================
+### 2. CINEMA
+### Depends on Region
+### ============================================================
+
+### 2.1 Create Cinema
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{regionId}},
+  "name": "CineGo HTTP Cinema {{$timestamp}}",
+  "address": "72 Le Thanh Ton, District 1",
+  "phone": "02812345678",
+  "openingHours": "08:00 - 23:30",
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("cinemaId", String(response.body["data"]["id"]));
+%}
+
+
+### 2.2 Get Cinema by ID
+GET {{baseUrl}}/cinemas/{{cinemaId}}
+Accept: application/json
+
+
+### 2.3 Filter Cinemas by Region + Status
+GET {{baseUrl}}/cinemas?regionId={{regionId}}&status=ACTIVE&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 2.4 Filter Cinemas by keyword
+GET {{baseUrl}}/cinemas?keyword=CineGo&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 2.5 Update Cinema
+PATCH {{baseUrl}}/cinemas/{{cinemaId}}
+Content-Type: application/json
+
+{
+  "address": "72A Le Thanh Ton, District 1",
+  "openingHours": "08:30 - 23:45"
+}
+
+
+### 2.6 Update Cinema status -> TEMPORARILY_CLOSED
+PATCH {{baseUrl}}/cinemas/{{cinemaId}}/status
+Content-Type: application/json
+
+{
+  "status": "TEMPORARILY_CLOSED"
+}
+
+
+### 2.7 Restore Cinema status -> ACTIVE
+PATCH {{baseUrl}}/cinemas/{{cinemaId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+
+### ============================================================
+### 3. CINEMA AMENITY
+### Depends on Cinema
+### ============================================================
+
+### 3.1 Add IMAX amenity to Cinema
+POST {{baseUrl}}/cinema-amenities
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "amenity": "IMAX"
+}
+
+
+### 3.2 Add DOLBY_ATMOS amenity to Cinema
+POST {{baseUrl}}/cinema-amenities
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "amenity": "DOLBY_ATMOS"
+}
+
+
+### 3.3 Get amenities by Cinema
+GET {{baseUrl}}/cinema-amenities/cinema/{{cinemaId}}
+Accept: application/json
+
+
+### 3.4 Get Cinemas by amenity - paginated
+GET {{baseUrl}}/cinema-amenities/amenity/IMAX?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 3.5 Cinema filter by amenity
+GET {{baseUrl}}/cinemas?amenity=IMAX&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### ============================================================
+### 4. SEAT TYPES
+### Seats depend on SeatType
+### ============================================================
+
+### 4.1 Create NORMAL SeatType
+POST {{baseUrl}}/seat-types
+Content-Type: application/json
+
+{
+  "name": "NORMAL",
+  "surcharge": 0,
+  "description": "Ghế thường"
+}
+
+
+### 4.2 Create VIP SeatType
+POST {{baseUrl}}/seat-types
+Content-Type: application/json
+
+{
+  "name": "VIP",
+  "surcharge": 15000,
+  "description": "Ghế VIP"
+}
+
+
+### 4.3 Get all SeatTypes
+GET {{baseUrl}}/seat-types?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 4.4 Get VIP SeatType
+GET {{baseUrl}}/seat-types/VIP
+Accept: application/json
+
+
+### 4.5 Update VIP SeatType
+PATCH {{baseUrl}}/seat-types/VIP
+Content-Type: application/json
+
+{
+  "surcharge": 20000,
+  "description": "Ghế VIP - HTTP test"
+}
+
+
+### ============================================================
+### 5. ROOM
+### Depends on Cinema
+### ============================================================
+
+### 5.1 Create Room
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "name": "HTTP IMAX Room {{$timestamp}}",
+  "format": "IMAX",
+  "rowCount": 10,
+  "columnCount": 12,
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("roomId", String(response.body["data"]["id"]));
+%}
+
+
+### 5.2 Get Room by ID
+GET {{baseUrl}}/rooms/{{roomId}}
+Accept: application/json
+
+
+### 5.3 Get Rooms by Cinema
+GET {{baseUrl}}/rooms/cinema/{{cinemaId}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 5.4 Update Room
+PATCH {{baseUrl}}/rooms/{{roomId}}
+Content-Type: application/json
+
+{
+  "name": "HTTP IMAX Room Updated {{$timestamp}}",
+  "rowCount": 11,
+  "columnCount": 12
+}
+
+
+### 5.5 Update Room status -> MAINTENANCE
+PATCH {{baseUrl}}/rooms/{{roomId}}/status
+Content-Type: application/json
+
+{
+  "status": "MAINTENANCE"
+}
+
+
+### 5.6 Restore Room status -> ACTIVE
+PATCH {{baseUrl}}/rooms/{{roomId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+
+### ============================================================
+### 6. SEAT
+### Depends on Room + SeatType
+### IMPORTANT: run Seat mutation tests BEFORE creating Showtime.
+### ============================================================
+
+### 6.1 Create Seat A1
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "A",
+  "seatNumber": 1,
+  "seatTypeName": "NORMAL",
+  "isActive": true
+}
+
+> {%
+client.global.set("seatId", String(response.body["data"]["id"]));
+%}
+
+
+### 6.2 Create Seat A2
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "A",
+  "seatNumber": 2,
+  "seatTypeName": "VIP",
+  "isActive": true
+}
+
+> {%
+client.global.set("seat2Id", String(response.body["data"]["id"]));
+%}
+
+
+### 6.3 Get Seat by ID
+GET {{baseUrl}}/seats/{{seatId}}
+Accept: application/json
+
+
+### 6.4 Get Seats by Room
+GET {{baseUrl}}/seats/room/{{roomId}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 6.5 Update Seat A1 -> VIP
+PATCH {{baseUrl}}/seats/{{seatId}}
+Content-Type: application/json
+
+{
+  "seatTypeName": "VIP"
+}
+
+
+### 6.6 Disable Seat A1
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+
+### 6.7 Enable Seat A1 again
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": true
+}
+
+
+### ============================================================
+### 7. GENRE
+### MovieGenre depends on Genre + Movie
+### ============================================================
+
+### 7.1 Create Genre
+POST {{baseUrl}}/genres
+Content-Type: application/json
+
+{
+  "name": "HTTP Action {{$timestamp}}",
+  "slug": "http-action-{{$timestamp}}"
+}
+
+> {%
+client.global.set("genreId", String(response.body["data"]["id"]));
+%}
+
+
+### 7.2 Get Genre by ID
+GET {{baseUrl}}/genres/{{genreId}}
+Accept: application/json
+
+
+### 7.3 Get all Genres
+GET {{baseUrl}}/genres?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 7.4 Update Genre
+PATCH {{baseUrl}}/genres/{{genreId}}
+Content-Type: application/json
+
+{
+  "name": "HTTP Action Updated {{$timestamp}}"
+}
+
+
+### ============================================================
+### 8. MOVIE
+### Depends on nothing directly; relations added afterward.
+### ============================================================
+
+### 8.1 Create Movie
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": "HTTP Test Movie {{$timestamp}}",
+  "originalTitle": "HTTP Test Movie",
+  "synopsis": "Movie created from IntelliJ HTTP Client.",
+  "director": "Test Director",
+  "language": "English",
+  "subtitle": "Vietnamese",
+  "ageRating": "T13",
+  "durationMinutes": 150,
+  "releaseDate": "2030-01-01",
+  "endDate": "2030-12-31",
+  "showingStatus": "NOW_SHOWING",
+  "posterUrl": "https://example.com/poster.jpg",
+  "backdropUrl": "https://example.com/backdrop.jpg",
+  "trailerYoutubeUrl": "https://www.youtube.com/watch?v=test",
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("movieId", String(response.body["data"]["id"]));
+%}
+
+
+### 8.2 Get Movie by ID
+GET {{baseUrl}}/movies/{{movieId}}
+Accept: application/json
+
+
+### 8.3 Get all / filter Movies
+GET {{baseUrl}}/movies?showingStatus=NOW_SHOWING&status=ACTIVE&language=English&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 8.4 Update Movie
+PATCH {{baseUrl}}/movies/{{movieId}}
+Content-Type: application/json
+
+{
+  "director": "Updated Test Director",
+  "durationMinutes": 155
+}
+
+
+### 8.5 Update Movie status -> DRAFT
+PATCH {{baseUrl}}/movies/{{movieId}}/status
+Content-Type: application/json
+
+{
+  "status": "DRAFT"
+}
+
+
+### 8.6 Restore Movie status -> ACTIVE
+PATCH {{baseUrl}}/movies/{{movieId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+
+### ============================================================
+### 9. MOVIE GENRE
+### Depends on Movie + Genre
+### ============================================================
+
+### 9.1 Link Movie to Genre
+POST {{baseUrl}}/movie-genres
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "genreId": {{genreId}}
+}
+
+
+### 9.2 Get Genres by Movie
+GET {{baseUrl}}/movie-genres/movie/{{movieId}}
+Accept: application/json
+
+
+### 9.3 Get Movies by Genre - paginated
+GET {{baseUrl}}/movie-genres/genre/{{genreId}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 9.4 Filter Movies directly by genreId
+GET {{baseUrl}}/movies?genreId={{genreId}}&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### ============================================================
+### 10. MOVIE CAST
+### Depends on Movie
+### ============================================================
+
+### 10.1 Create MovieCast
+POST {{baseUrl}}/movie-casts
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "actorName": "HTTP Test Actor {{$timestamp}}",
+  "characterName": "Hero",
+  "roleType": "LEAD",
+  "avatarUrl": "https://example.com/actor.jpg",
+  "displayOrder": 1
+}
+
+> {%
+client.global.set("movieCastId", String(response.body["data"]["id"]));
+%}
+
+
+### 10.2 Get MovieCast by ID
+GET {{baseUrl}}/movie-casts/{{movieCastId}}
+Accept: application/json
+
+
+### 10.3 Get all MovieCasts
+GET {{baseUrl}}/movie-casts?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 10.4 Update MovieCast
+PATCH {{baseUrl}}/movie-casts/{{movieCastId}}
+Content-Type: application/json
+
+{
+  "characterName": "Updated Hero",
+  "displayOrder": 0
+}
+
+
+### ============================================================
+### 11. ARTICLE
+### movieId is optional; this test links the article to the Movie.
+### ============================================================
+
+### 11.1 Create Article
+POST {{baseUrl}}/articles
+Content-Type: application/json
+
+{
+  "title": "HTTP Test Article {{$timestamp}}",
+  "slug": "http-test-article-{{$timestamp}}",
+  "thumbnailUrl": "https://example.com/article.jpg",
+  "content": "Full HTTP test article content.",
+  "excerpt": "HTTP Client test article.",
+  "category": "REVIEW",
+  "tags": "[\"HTTP\",\"Movie\",\"Test\"]",
+  "authorName": "Catalog Tester",
+  "featured": true,
+  "trending": false,
+  "movieId": "{{movieId}}",
+  "publishedAt": "2030-01-02T08:00:00"
+}
+
+> {%
+client.global.set("articleId", String(response.body["data"]["id"]));
+%}
+
+
+### 11.2 Get Article by ID
+### If your service increments views on read, inspect response.data.views.
+GET {{baseUrl}}/articles/{{articleId}}
+Accept: application/json
+
+
+### 11.3 Filter Articles
+GET {{baseUrl}}/articles?category=REVIEW&featured=true&movieId={{movieId}}&published=true&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 11.4 Update Article
+PATCH {{baseUrl}}/articles/{{articleId}}
+Content-Type: application/json
+
+{
+  "excerpt": "Updated excerpt from IntelliJ HTTP Client.",
+  "trending": true
+}
+
+
+### ============================================================
+### 12. EVENT
+### cinemaId is optional; this test links Event to Cinema.
+### ============================================================
+
+### 12.1 Create Event
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "HTTP Premiere Event {{$timestamp}}",
+  "description": "CatalogService API test event.",
+  "thumbnailUrl": "https://example.com/event.jpg",
+  "eventDate": "2030-01-20",
+  "eventTime": "18:30:00",
+  "locationName": "HTTP Test Cinema",
+  "cinemaId": "{{cinemaId}}",
+  "registrationUrl": "https://example.com/register",
+  "maxAttendees": 100,
+  "status": "UPCOMING"
+}
+
+> {%
+client.global.set("eventId", String(response.body["data"]["id"]));
+%}
+
+
+### 12.2 Get Event by ID
+GET {{baseUrl}}/events/{{eventId}}
+Accept: application/json
+
+
+### 12.3 Filter Events
+GET {{baseUrl}}/events?status=UPCOMING&cinemaId={{cinemaId}}&eventDateFrom=2030-01-01&eventDateTo=2030-01-31&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 12.4 Update Event
+PATCH {{baseUrl}}/events/{{eventId}}
+Content-Type: application/json
+
+{
+  "locationName": "HTTP Test Cinema - Hall",
+  "maxAttendees": 120
+}
+
+
+### 12.5 Update Event status -> ONGOING
+PATCH {{baseUrl}}/events/{{eventId}}/status
+Content-Type: application/json
+
+{
+  "status": "ONGOING"
+}
+
+
+### 12.6 Restore Event status -> UPCOMING
+PATCH {{baseUrl}}/events/{{eventId}}/status
+Content-Type: application/json
+
+{
+  "status": "UPCOMING"
+}
+
+
+### ============================================================
+### 13. SHOWTIME
+### Depends on Movie + Room + existing active Seats.
+### Run this AFTER Seat mutation tests because scheduled showtimes lock seat changes.
+### ============================================================
+
+### 13.1 Create Showtime
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{roomId}}",
+  "showDate": "2030-01-15",
+  "startTime": "2030-01-15T19:00:00",
+  "endTime": "2030-01-15T21:30:00",
+  "language": "English",
+  "subtitleLanguage": "Vietnamese",
+  "format": "IMAX",
+  "basePrice": 120000,
+  "status": "SCHEDULED"
+}
+
+> {%
+client.global.set("showtimeId", String(response.body["data"]["id"]));
+%}
+
+
+### 13.2 Get Showtime by ID
+GET {{baseUrl}}/showtimes/{{showtimeId}}
+Accept: application/json
+
+
+### 13.3 Showtime by Cinema + date
+### This is the API shape useful for "Lịch chiếu theo rạp".
+GET {{baseUrl}}/showtimes?cinemaId={{cinemaId}}&showDate=2030-01-15&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 13.4 Showtime by Movie + Format + available seats
+GET {{baseUrl}}/showtimes?movieId={{movieId}}&format=IMAX&available=true&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 13.5 Showtime by date/time/price range
+GET {{baseUrl}}/showtimes?showDateFrom=2030-01-01&showDateTo=2030-01-31&startTimeFrom=2030-01-15T00:00:00&startTimeTo=2030-01-15T23:59:59&minPrice=100000&maxPrice=200000&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 13.6 Update Showtime
+PATCH {{baseUrl}}/showtimes/{{showtimeId}}
+Content-Type: application/json
+
+{
+  "basePrice": 130000,
+  "subtitleLanguage": "Vietnamese"
+}
+
+
+### 13.7 Cancel Showtime
+PATCH {{baseUrl}}/showtimes/{{showtimeId}}/status
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+
+### 13.8 Restore Showtime -> SCHEDULED
+PATCH {{baseUrl}}/showtimes/{{showtimeId}}/status
+Content-Type: application/json
+
+{
+  "status": "SCHEDULED"
+}
+
+
+### ============================================================
+### 14. BUSINESS-RULE / NEGATIVE TESTS
+### ============================================================
+
+### 14.1 EXPECT 409:
+### Cannot modify Seat while its Room has a future SCHEDULED Showtime.
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+
+### 14.2 EXPECT 409:
+### VIP is referenced by Seat A1/A2, therefore SeatType deletion must be blocked.
+DELETE {{baseUrl}}/seat-types/VIP
+
+
+### 14.3 EXPECT 400:
+### Invalid Showtime: endTime is before startTime.
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{roomId}}",
+  "showDate": "2030-01-16",
+  "startTime": "2030-01-16T21:00:00",
+  "endTime": "2030-01-16T19:00:00",
+  "language": "English",
+  "subtitleLanguage": "Vietnamese",
+  "format": "IMAX",
+  "basePrice": 120000,
+  "status": "SCHEDULED"
+}
+
+
+### ============================================================
+### 15. DELETE-ENDPOINT TESTS / CLEANUP
+### Only endpoints actually exposed by the current controllers.
+### Do NOT run cleanup until you finish the tests above.
+### ============================================================
+
+### 15.1 Delete Article
+DELETE {{baseUrl}}/articles/{{articleId}}
+
+
+### 15.2 Delete MovieCast
+DELETE {{baseUrl}}/movie-casts/{{movieCastId}}
+
+
+### 15.3 Delete MovieGenre relation
+DELETE {{baseUrl}}/movie-genres/{{movieId}}/{{genreId}}
+
+
+### 15.4 Delete Cinema Amenity relation - IMAX
+DELETE {{baseUrl}}/cinema-amenities/{{cinemaId}}/IMAX
+
+
+### 15.5 Create independent temporary Genre for successful DELETE test
+POST {{baseUrl}}/genres
+Content-Type: application/json
+
+{
+  "name": "HTTP Delete Genre {{$timestamp}}",
+  "slug": "http-delete-genre-{{$timestamp}}"
+}
+
+> {%
+client.global.set("tempGenreId", String(response.body["data"]["id"]));
+%}
+
+
+### 15.6 Delete independent Genre
+DELETE {{baseUrl}}/genres/{{tempGenreId}}
+
+
+### 15.7 Create independent temporary Region for successful DELETE test
+POST {{baseUrl}}/regions
+Content-Type: application/json
+
+{
+  "name": "HTTP Delete Region {{$timestamp}}",
+  "slug": "http-delete-region-{{$timestamp}}"
+}
+
+> {%
+client.global.set("tempRegionId", String(response.body["data"]["id"]));
+%}
+
+
+### 15.8 Delete independent Region
+DELETE {{baseUrl}}/regions/{{tempRegionId}}
+
+
+### ============================================================
+### END
+### Current controller set has no DELETE routes for:
+### Cinema, Room, Seat, Movie, Event, Showtime.
+### ============================================================

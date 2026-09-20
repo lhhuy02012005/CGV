@@ -15,6 +15,7 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Date;
 import java.util.List;
@@ -164,6 +165,25 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(
                 errorResponse,
                 HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFoundException(
+            NoResourceFoundException ex,
+            HttpServletRequest request
+    ) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.NOT_FOUND.value())
+                .path(request.getRequestURI())
+                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
+                .message("Không tìm thấy tài nguyên")
+                .build();
+
+        return new ResponseEntity<>(
+                errorResponse,
+                HttpStatus.NOT_FOUND
         );
     }
 

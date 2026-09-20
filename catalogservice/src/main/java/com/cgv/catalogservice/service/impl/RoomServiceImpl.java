@@ -96,7 +96,12 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<RoomResponse> getAllRoomsByCinemaId(UUID cinemaId, Pageable pageable) {
-        Page<Room> roomPage = roomRepository.findAllByCinema_Id(cinemaId, pageable);
+
+        if (!cinemaRepository.existsById(cinemaId)) {
+            throw new IllegalArgumentException("Không tồn tại rạp chiếu với id: " + cinemaId);
+        }
+
+        Page<Room> roomPage = roomRepository.findAllByCinemaId(cinemaId, pageable);
 
         List<RoomResponse> roomResponses = roomMapper.toResponseList(roomPage.getContent());
 

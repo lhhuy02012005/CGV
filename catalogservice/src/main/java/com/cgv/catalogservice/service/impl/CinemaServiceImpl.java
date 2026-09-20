@@ -69,6 +69,8 @@ public class CinemaServiceImpl implements CinemaService {
             cinema.setRegion(region);
         }
 
+        cinemaRepository.saveAndFlush(cinema);
+
         return cinemaMapper.toResponse(cinema);
     }
 
@@ -81,6 +83,8 @@ public class CinemaServiceImpl implements CinemaService {
                 ));
 
         cinema.setStatus(request.status());
+
+        cinemaRepository.saveAndFlush(cinema);
 
         return cinemaMapper.toResponse(cinema);
     }

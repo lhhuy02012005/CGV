@@ -73,6 +73,8 @@ public class EventServiceImpl implements EventService {
             event.setCinema(cinema);
         }
 
+        eventRepository.saveAndFlush(event);
+
         return eventMapper.toResponse(event);
     }
 
@@ -88,6 +90,8 @@ public class EventServiceImpl implements EventService {
                 ));
 
         event.setStatus(request.status());
+
+        eventRepository.saveAndFlush(event);
 
         return eventMapper.toResponse(event);
     }
