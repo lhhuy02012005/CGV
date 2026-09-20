@@ -58,6 +58,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                         )
                 );
 
+        validateShowDateWithinMoviePeriod(
+                movie,
+                request.showDate()
+        );
+
         Room room = roomRepository.findById(request.roomId())
                 .orElseThrow(() ->
                         new EntityNotFoundException(
@@ -91,7 +96,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         showtime.setRoom(room);
 
         int availableSeats =
-                (int) seatRepository.findByRoom_Id(room.getId())
+                (int) seatRepository.findByRoomId(room.getId())
                         .stream()
                         .filter(seat ->
                                 Boolean.TRUE.equals(
@@ -137,6 +142,13 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     );
         }
 
+        LocalDate showDate =
+                request.showDate() != null
+                        ? request.showDate()
+                        : showtime.getShowDate();
+
+        validateShowDateWithinMoviePeriod(movie, showDate);
+
         boolean roomChanged = false;
 
         if (request.roomId() != null) {
@@ -163,11 +175,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 timeChanged || roomChanged;
 
         if (scheduleChanged) {
-
-            LocalDate showDate =
-                    request.showDate() != null
-                            ? request.showDate()
-                            : showtime.getShowDate();
 
             LocalDateTime startTime =
                     request.startTime() != null
@@ -208,7 +215,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         if (roomChanged) {
             int availableSeats =
                     (int) seatRepository
-                            .findByRoom_Id(room.getId())
+                            .findByRoomId(room.getId())
                             .stream()
                             .filter(seat ->
                                     Boolean.TRUE.equals(
@@ -421,6 +428,25 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 };
 
         return showtimeRepository.exists(overlapSpec);
+    }
+
+    private void validateShowDateWithinMoviePeriod(
+            Movie movie,
+            LocalDate showDate
+    ) {
+        if (movie.getReleaseDate() != null
+                && showDate.isBefore(movie.getReleaseDate())) {
+            throw new IllegalArgumentException(
+                    "Ngày chiếu không được trước ngày phát hành phim"
+            );
+        }
+
+        if (movie.getEndDate() != null
+                && showDate.isAfter(movie.getEndDate())) {
+            throw new IllegalArgumentException(
+                    "Ngày chiếu không được sau ngày kết thúc chiếu phim"
+            );
+        }
     }
 }
 

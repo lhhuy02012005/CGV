@@ -6,6 +6,7 @@ import com.cgv.catalogservice.entity.Genre;
 import com.cgv.catalogservice.entity.Movie;
 import com.cgv.catalogservice.entity.MovieGenre;
 import com.cgv.catalogservice.entity.MovieGenreId;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.MovieGenreMapper;
 import com.cgv.catalogservice.repository.GenreRepository;
 import com.cgv.catalogservice.repository.MovieGenreRepository;
@@ -40,6 +41,15 @@ public class MovieGenreServiceImpl implements MovieGenreService {
     public MovieGenreResponse createMovieGenre(
             MovieGenreCreateRequest request
     ) {
+
+        if (movieGenreRepository.existsByIdMovieIdAndIdGenreId(
+                request.movieId(),
+                request.genreId()
+        )) {
+            throw new ResourceConflictException(
+                    "Phim đã được gán thể loại này"
+            );
+        }
 
         Movie movie = movieRepository.findById(request.movieId())
                 .orElseThrow(() ->

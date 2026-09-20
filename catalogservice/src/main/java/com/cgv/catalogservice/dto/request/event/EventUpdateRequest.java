@@ -1,6 +1,6 @@
 package com.cgv.catalogservice.dto.request.event;
 
-import com.cgv.catalogservice.enums.EventStatus;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.Positive;
 
 import java.time.LocalDate;
@@ -15,6 +15,7 @@ public record EventUpdateRequest(
 
         String thumbnailUrl,
 
+        @FutureOrPresent(message = "Ngày sự kiện không được ở trong quá khứ")
         LocalDate eventDate,
 
         LocalTime eventTime,
@@ -26,8 +27,6 @@ public record EventUpdateRequest(
         String registrationUrl,
 
         @Positive(message = "Số người tối đa phải lớn hơn 0")
-        Integer maxAttendees,
-
-        EventStatus status
+        Integer maxAttendees
 ) {
 }

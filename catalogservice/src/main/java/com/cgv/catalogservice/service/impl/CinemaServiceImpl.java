@@ -7,6 +7,7 @@ import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.CinemaResponse;
 import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Region;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.CinemaMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RegionRepository;
@@ -38,6 +39,13 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @Transactional
     public CinemaResponse createCinema(CinemaCreateRequest request) {
+
+        if (cinemaRepository.existsByName(request.name())) {
+            throw new ResourceConflictException(
+                    "Rạp chiếu với tên '" + request.name() + "' đã tồn tại"
+            );
+        }
+
         Region region = regionRepository.findById(request.regionId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy region với id: " + request.regionId()
@@ -54,10 +62,24 @@ public class CinemaServiceImpl implements CinemaService {
     @Override
     @Transactional
     public CinemaResponse updateCinema(UUID cinemaId, CinemaUpdateRequest request) {
+
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy cinema với id: " + cinemaId
                 ));
+
+        if (request.name() != null
+                && cinemaRepository.existsByNameAndIdNot(
+                request.name(),
+                cinemaId
+        )) {
+
+            throw new ResourceConflictException(
+                    "Rạp chiếu với tên '"
+                            + request.name()
+                            + "' đã tồn tại"
+            );
+        }
 
         cinemaMapper.updateEntity(request, cinema);
 

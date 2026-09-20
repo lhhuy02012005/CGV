@@ -12,7 +12,7 @@ public interface ShowtimeRepository
         extends JpaRepository<Showtime, UUID>,
         JpaSpecificationExecutor<Showtime> {
 
-    boolean existsByRoom_IdAndStatusAndEndTimeAfter(
+    boolean existsByRoomIdAndStatusAndEndTimeAfter(
             UUID roomId,
             ShowtimeStatus status,
             LocalDateTime endTime

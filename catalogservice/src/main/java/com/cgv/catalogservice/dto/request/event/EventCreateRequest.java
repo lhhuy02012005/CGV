@@ -1,6 +1,7 @@
 package com.cgv.catalogservice.dto.request.event;
 
 import com.cgv.catalogservice.enums.EventStatus;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -19,6 +20,7 @@ public record EventCreateRequest(
         String thumbnailUrl,
 
         @NotNull(message = "Ngày sự kiện không được để trống")
+        @FutureOrPresent(message = "Ngày sự kiện không được ở trong quá khứ")
         LocalDate eventDate,
 
         LocalTime eventTime,

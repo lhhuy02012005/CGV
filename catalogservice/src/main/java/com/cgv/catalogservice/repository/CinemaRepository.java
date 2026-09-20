@@ -11,7 +11,11 @@ public interface CinemaRepository
         extends JpaRepository<Cinema, UUID>,
         JpaSpecificationExecutor<Cinema> {
 
-    Optional<Cinema> findByName(String name);
+    boolean existsByName(String name);
 
-    boolean existsById(UUID id);
+    boolean existsByNameAndIdNot(String name, UUID id);
+
+    boolean existsById(UUID cinemaId);
+
+    boolean existsByRegionId(Integer regionId);
 }

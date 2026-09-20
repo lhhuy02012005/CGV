@@ -6,6 +6,7 @@ import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.CinemaAmenity;
 import com.cgv.catalogservice.entity.CinemaAmenityId;
 import com.cgv.catalogservice.enums.Amenity;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.CinemaAmenityMapper;
 import com.cgv.catalogservice.repository.CinemaAmenityRepository;
 import com.cgv.catalogservice.repository.CinemaRepository;
@@ -39,6 +40,15 @@ public class CinemaAmenityServiceImpl
     public CinemaAmenityResponse createCinemaAmenity(
             CinemaAmenityCreateRequest request
     ) {
+
+        if (cinemaAmenityRepository.existsByIdCinemaIdAndIdAmenity(
+                request.cinemaId(),
+                request.amenity()
+        )) {
+            throw new ResourceConflictException(
+                    "Rạp chiếu đã có tiện ích " + request.amenity()
+            );
+        }
 
         Cinema cinema = cinemaRepository
                 .findById(request.cinemaId())

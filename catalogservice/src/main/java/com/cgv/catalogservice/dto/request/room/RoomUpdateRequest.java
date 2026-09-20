@@ -1,14 +1,9 @@
 package com.cgv.catalogservice.dto.request.room;
 
 import com.cgv.catalogservice.enums.Format;
-import com.cgv.catalogservice.enums.RoomStatus;
 import jakarta.validation.constraints.Positive;
 
-import java.util.UUID;
-
 public record RoomUpdateRequest(
-
-        UUID cinemaId,
 
         String name,
 
@@ -18,8 +13,6 @@ public record RoomUpdateRequest(
         Integer rowCount,
 
         @Positive(message = "Số cột phải lớn hơn 0")
-        Integer columnCount,
-
-        RoomStatus status
+        Integer columnCount
 ) {
 }

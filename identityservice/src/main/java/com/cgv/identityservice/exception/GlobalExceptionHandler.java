@@ -5,11 +5,14 @@ import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.commondto.exception.ErrorResponse;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -73,7 +76,7 @@ public class GlobalExceptionHandler {
         log.warn("Constraint violation exception occurred");
 
         List<String> errorMessages = ex.getConstraintViolations().stream()
-                .map(violation -> violation.getMessage())
+                .map(ConstraintViolation::getMessage)
                 .collect(Collectors.toList());
 
         ErrorResponse errorResponse = ErrorResponse.builder()
@@ -88,18 +91,25 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, errorCode.getHttpStatus());
     }
 
-
     @ExceptionHandler(DataIntegrityViolationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public ErrorResponse handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
-        log.error("Data integrity violation: ", ex);
-        return ErrorResponse.builder()
+    public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Data integrity violation: {}", ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(new Date())
-                .status(HttpStatus.BAD_REQUEST.value())
+                .status(HttpStatus.CONFLICT.value())
                 .path(request.getRequestURI())
-                .error("Bad Request")
-                .message("Dữ liệu không hợp lệ hoặc đã tồn tại trên hệ thống!")
+                .error(HttpStatus.CONFLICT.getReasonPhrase())
+                .message("Dữ liệu đã tồn tại hoặc xung đột với dữ liệu hiện có")
                 .build();
+
+        return new ResponseEntity<>(
+                errorResponse,
+                HttpStatus.CONFLICT
+        );
     }
 
     @ExceptionHandler(EntityNotFoundException.class)
@@ -120,6 +130,58 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(
                 errorResponse,
                 HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleMethodArgumentNotValid(
+            MethodArgumentNotValidException ex,
+            HttpServletRequest request
+    ) {
+        List<String> errors = ex.getBindingResult()
+                .getFieldErrors()
+                .stream()
+                .map(error ->
+                        error.getField() + ": " + error.getDefaultMessage()
+                )
+                .toList();
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .path(request.getRequestURI())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .message(
+                        "Validation failed: "
+                                + String.join(", ", errors)
+                )
+                .details(errors)
+                .build();
+
+        return new ResponseEntity<>(
+                errorResponse,
+                HttpStatus.BAD_REQUEST
+        );
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .path(request.getRequestURI())
+                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .message(
+                        "JSON không hợp lệ hoặc giá trị enum/ngày giờ không đúng định dạng"
+                )
+                .build();
+
+        return new ResponseEntity<>(
+                errorResponse,
+                HttpStatus.BAD_REQUEST
         );
     }
 

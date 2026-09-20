@@ -156,6 +156,10 @@ Table rooms {
   row_count int [not null]
   column_count int [not null]
   status varchar [default: 'ACTIVE', note: 'ACTIVE, MAINTENANCE']
+
+  indexes {
+      (cinema_id, name) [unique, name: 'uk_rooms_cinema_name']
+  }
 }
 
 Table seat_types {
@@ -186,7 +190,7 @@ Table genres {
 
 Table movies {
   id uuid [pk]
-  title varchar [not null]
+  title varchar [unique, not null]
   original_title varchar [note: 'Tên gốc tiếng Anh/Hàn nếu là phim nước ngoài']
   synopsis text [note: 'Mô tả đầy đủ cho trang chi tiết phim']
   director varchar

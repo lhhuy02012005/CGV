@@ -4,8 +4,10 @@ import com.cgv.catalogservice.dto.request.genre.GenreCreateRequest;
 import com.cgv.catalogservice.dto.request.genre.GenreUpdateRequest;
 import com.cgv.catalogservice.dto.response.GenreResponse;
 import com.cgv.catalogservice.entity.Genre;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.GenreMapper;
 import com.cgv.catalogservice.repository.GenreRepository;
+import com.cgv.catalogservice.repository.MovieGenreRepository;
 import com.cgv.catalogservice.service.GenreService;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
@@ -25,6 +27,8 @@ import java.util.List;
 public class GenreServiceImpl implements GenreService {
 
     GenreRepository genreRepository;
+    MovieGenreRepository movieGenreRepository;
+
     GenreMapper genreMapper;
 
     @Override
@@ -52,6 +56,13 @@ public class GenreServiceImpl implements GenreService {
     @Override
     @Transactional
     public void deleteGenre(Integer genreId) {
+
+        if (movieGenreRepository.existsByIdGenreId(genreId)) {
+            throw new ResourceConflictException(
+                    "Không thể xoá genre vì đang có phim sử dụng thể loại này"
+            );
+        }
+
         Genre genre = genreRepository.findById(genreId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy genre với id: " + genreId

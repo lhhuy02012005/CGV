@@ -22,6 +22,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -36,6 +37,8 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional
     public MovieResponse createMovie(MovieCreateRequest request) {
+
+        validateMovieDates(request.releaseDate(), request.endDate());
 
         if (movieRepository.existsByTitleIgnoreCase(request.title().trim())) {
             throw new ResourceConflictException(
@@ -54,13 +57,35 @@ public class MovieServiceImpl implements MovieService {
     @Transactional
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
 
-        if (movieRepository.existsByTitleIgnoreCaseAndIdNot(request.title().trim(), movieId)) {
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "Không tìm thấy movie với id: " + movieId
+                        )
+                );
+
+        if (request.title() != null
+                && movieRepository.existsByTitleIgnoreCaseAndIdNot(
+                request.title().trim(),
+                movieId
+        )) {
+
             throw new ResourceConflictException(
                     "Phim với tên '" + request.title() + "' đã tồn tại"
             );
         }
 
-        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
+        LocalDate releaseDate =
+                request.releaseDate() != null
+                        ? request.releaseDate()
+                        : movie.getReleaseDate();
+
+        LocalDate endDate =
+                request.endDate() != null
+                        ? request.endDate()
+                        : movie.getEndDate();
+
+        validateMovieDates(releaseDate, endDate);
 
         movieMapper.updateEntity(request, movie);
 
@@ -140,5 +165,19 @@ public class MovieServiceImpl implements MovieService {
                 .totalPages(moviePage.getTotalPages())
                 .totalElements(moviePage.getTotalElements())
                 .build();
+    }
+
+    private void validateMovieDates(
+            LocalDate releaseDate,
+            LocalDate endDate
+    ) {
+        if (releaseDate != null
+                && endDate != null
+                && endDate.isBefore(releaseDate)) {
+
+            throw new IllegalArgumentException(
+                    "Ngày kết thúc chiếu không được trước ngày phát hành"
+            );
+        }
     }
 }
