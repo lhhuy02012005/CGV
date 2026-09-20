@@ -1,0 +1,198 @@
+====================================================================================================
+                        HỆ THỐNG ĐẶT VÉ XEM PHIM TRỰC TUYẾN CGV
+       TÀI LIỆU PHÂN TÍCH TOÀN DIỆN CÁC TRƯỜNG HỢP RỦI RO (EDGE CASES) VÀ GIẢI PHÁP CHUẨN DOANH NGHIỆP
+====================================================================================================
+Người lập: CGV Architecture Team
+Áp dụng: Kiến trúc Microservices (Catalog, Booking, Payment, Marketing, Identity, Notification)
+
+MỤC LỤC:
+1. CHIẾN LƯỢC CACHING VÀ TTL (REDIS) CHO MEMBERSHIP TIER CỦA USER
+2. BẢNG TỔNG HỢP VÀ GIẢI PHÁP CÁC TRƯỜNG HỢP RỦI RO NGHIỆP VỤ & DỮ LIỆU
+   - Nhóm 1: Sự cố can thiệp của Quản trị viên (Admin) vào Ghế / Suất chiếu / Phim
+   - Nhóm 2: Sự cố Cạnh tranh (Concurrency) & Quá hạn giữ ghế (Lock Expiry Race Condition)
+   - Nhóm 3: Sự cố Thanh toán & Đồng bộ phân tán (Payment Gateway, Webhook, SAGA Failure)
+   - Nhóm 4: Sự cố Hạ tầng (Redis Crash, Network Partition, Database Failure)
+   - Nhóm 5: Sự cố Khuyến mãi, Voucher & Thăng hạng thành viên
+3. BẢNG TỔNG KẾT NGUYÊN TẮC BẢO VỆ DỮ LIỆU VÀNG (GOLDEN RULES)
+
+----------------------------------------------------------------------------------------------------
+1. CHIẾN LƯỢC CACHING VÀ TTL CHO USER MEMBERSHIP TIER
+----------------------------------------------------------------------------------------------------
+* VẤN ĐỀ:
+  - Khi User áp mã voucher, MarketingService / BookingService cần biết Hạng thành viên (MEMBER, SILVER, GOLD, PLATINUM)
+    của user trong vòng dưới 1ms mà không được query đè nát Database PostgreSQL.
+  - Lưu vào Redis: Key `user:tier:{userId}`, Value = "SILVER".
+  - Câu hỏi sống còn: TTL (Time-To-Live) lưu bao lâu?
+
+* GIẢI PHÁP CHUẨN PRODUCTION:
+  - TTL khuyến nghị: 24 giờ (86,400 giây) hoặc 7 ngày.
+  - QUY TẮC CỐT LÕI: KHÔNG BAO GIỜ chỉ trông chờ vào TTL tự hết hạn để cập nhật Rank!
+    Nếu chỉ đặt TTL 24h mà không có cơ chế xóa cache (Eviction), khi khách hàng vừa thanh toán đơn hàng lớn
+    và được thăng từ "SILVER" lên "GOLD", khách muốn áp mã giảm giá dành cho hạng GOLD ngay lập tức nhưng
+    hệ thống vẫn đọc cache cũ ("SILVER") -> Khách hàng khiếu nại, trải nghiệm tồi tệ.
+
+* KIẾN TRÚC THỰC THI (Cache-Aside + Event-Driven Eviction):
+  1. Khi Đăng nhập (AuthenticationService):
+     - Lấy user từ DB -> Ghi cache: `SET user:tier:{userId} "SILVER" EX 86400`
+  2. Khi Đọc Rank (BookingService / MarketingService):
+     - Bước 1: Đọc Redis `GET user:tier:{userId}`.
+     - Bước 2: Nếu Cache Hit -> Trả về ngay (0.2 ms).
+     - Bước 3: Nếu Cache Miss (hết hạn TTL hoặc bị xóa) -> Gọi nhẹ 1 query sang IdentityService / Read DB,
+               sau đó ghi lại vào Redis `SET user:tier:{userId} {tier} EX 86400`.
+  3. Khi Thăng hạng / Hạ hạng (Tier Upgrade Event):
+     - Khi Payment thành công -> User đạt đủ chi tiêu YTD (Year-To-Date) -> IdentityService update DB ->
+       Ngay lập tức chạy lệnh: `redisTemplate.delete("user:tier:" + userId)` (hoặc set đè giá trị mới).
+     - Khách hàng có ngay rank mới trong 0.001 giây!
+
+----------------------------------------------------------------------------------------------------
+2. BẢNG TỔNG HỢP VÀ GIẢI PHÁP CHI TIẾT CÁC TRƯỜNG HỢP RỦI RO (EDGE CASES)
+----------------------------------------------------------------------------------------------------
+
+====================================================================================================
+NHÓM 1: SỰ CỐ CAN THIỆP CỦA ADMIN VÀO GHẾ / SUẤT CHIẾU / PHIM
+====================================================================================================
+
+CASE 1.1: Ghế đang được User khoá (Hold/Lock 10 phút) nhưng Admin chuyển trạng thái Ghế sang Bảo trì
+- Kịch bản: Ghế F08 đang được khách hàng A giữ để chuẩn bị thanh toán. Tại rạp, nhân viên phát hiện ghế F08 bị rách đệm hoặc gãy tựa lưng, Admin mở trang quản trị bấm "Tạm khoá bảo trì" (is_active = false / status = MAINTENANCE).
+- Hậu quả nếu xử lý ẩu: Khách hàng A thanh toán xong, hệ thống xuất vé cho một chiếc ghế hỏng. Khi khách vào rạp không có ghế ngồi, gây bức xúc lớn.
+- Hướng giải quyết chuẩn:
+  1. KHÔNG tự ý ngắt kết nối thanh toán ngay lập tức của User A mà dùng cơ chế Double Check tại cổng tạo Booking (Checkout Barrier):
+  2. Tại CatalogService, khi Admin set ghế thành MAINTENANCE:
+     - Update DB: `seats.is_active = false`.
+     - Đồng thời ghi vào Redis: `SET seat:maintenance:{seatId} true EX 86400`.
+  3. Tại BookingService: Khi User A ấn "Xác nhận đặt vé" (Create Booking / Thanh toán):
+     - BookingService gọi gRPC sang CatalogService để validate tính toàn vẹn lần cuối (Price + Seat Status).
+     - CatalogService kiểm tra: Nếu phát hiện bất kỳ ghế nào có `is_active == false`, gRPC trả về mã lỗi:
+       `SEAT_UNDER_MAINTENANCE` kèm thông báo chi tiết: "Ghế F08 hiện đang được bảo trì đột xuất tại rạp".
+     - BookingService lập tức huỷ bỏ giao dịch, nhả lock Redis của User A và gửi phản hồi yêu cầu User chọn ghế khác.
+
+CASE 1.2: Admin bấm xoá Ghế (Delete Seat) khỏi sơ đồ phòng chiếu
+- Kịch bản: Admin muốn sửa layout rạp, bấm xoá ghế số 12 hàng G.
+- Nguy cơ: Lỗi vi phạm khoá ngoại (Foreign Key Integrity) hoặc mất dữ liệu lịch sử của các vé đã từng bán ở ghế này.
+- Hướng giải quyết chuẩn:
+  1. TUYỆT ĐỐI KHÔNG dùng Hard Delete (`DELETE FROM seats WHERE id = ...`).
+  2. Dùng cờ Soft Delete: `is_deleted = true`, `deleted_at = NOW()`.
+  3. Ràng buộc nghiệp vụ (Pre-condition Validation):
+     - Trước khi Admin xoá ghế, CatalogService phải kiểm tra: Ghế này có nằm trong bất kỳ Suất chiếu tương lai nào (`showtimes.start_time > NOW()`) mà đã có vé bán (`status = CONFIRMED`) hoặc đang giữ vé (`status = PENDING`) không?
+     - Nếu CÓ: Chặn đứng hành động xoá, hiển thị thông báo: "Không thể xoá ghế vì đã có lịch chiếu và vé đặt trong tương lai. Vui lòng dời lịch chiếu hoặc đổi ghế cho khách trước."
+     - Nếu KHÔNG CÓ vé nào: Cho phép soft delete. Các suất chiếu mới tạo sau này sẽ tự động loại bỏ ghế này ra khỏi sơ đồ.
+
+CASE 1.3: Admin huỷ Suất chiếu (Cancel Showtime) hoặc dời giờ chiếu do sự cố rạp
+- Kịch bản: Phòng chiếu số 3 bị nổ bóng đèn máy chiếu hoặc ngập nước/mất điện. Admin buộc phải bấm Huỷ suất chiếu 19:30 tối nay. Đã có 45 vé được thanh toán thành công và 5 người đang giữ ghế.
+- Hướng giải quyết chuẩn (Mass Cancellation & Auto-Refund SAGA):
+  1. Bước 1 - Đóng băng ngay lập tức (Freeze):
+     - Admin chuyển trạng thái Suất chiếu: `showtimes.status = CANCELLED`.
+     - CatalogService bắn Kafka Event: `ShowtimeCancelledEvent(showtimeId, reason)`.
+     - BookingService nhận event: Lập tức xoá toàn bộ key Redis đang giữ ghế của suất này, từ chối mọi yêu cầu đặt vé mới.
+  2. Bước 2 - Kích hoạt quy trình Bồi thường SAGA (Mass Refund Workflow):
+     - BookingService quét tất cả các `booking` của suất chiếu có trạng thái `CONFIRMED`.
+     - Chuyển trạng thái booking sang `CANCELLED_BY_CINEMA`.
+     - Bắn event sang PaymentService: Tự động hoàn tiền 100% về tài khoản gốc của khách (VNPAY/MOMO/Thẻ).
+  3. Bước 3 - Chăm sóc khách hàng tự động (Notification & Voucher):
+     - Bắn event sang MarketingService: Tặng tự động vào ví mỗi khách hàng 1 Voucher giảm 50% hoặc vé xem phim miễn phí (Free Ticket) xem như lời xin lỗi của CGV.
+     - Bắn event sang NotificationService: Gửi tin nhắn SMS khẩn cấp và Email thông báo rõ lý do sự cố kỹ thuật và xác nhận tiền đã được hoàn lại.
+
+CASE 1.4: Admin xoá Phim (Delete Movie) khi vẫn còn lịch chiếu trong tương lai
+- Hướng giải quyết chuẩn:
+  1. Trong Database: Áp dụng ràng buộc khoá ngoại `ON DELETE RESTRICT` giữa `showtimes` và `movies`.
+  2. Bất kỳ nỗ lực nào nhằm xoá phim có suất chiếu tương lai đều bị Database từ chối.
+  3. Nghiệp vụ chỉ cho phép đổi trạng thái Phim: `ACTIVE` -> `STOPPED_SHOWING` hoặc `ARCHIVED`. Phim ngừng chiếu thì không thể lên thêm lịch chiếu mới, nhưng các lịch cũ đã bán vé vẫn phải được chiếu trọn vẹn hoặc phải huỷ lịch theo quy trình Case 1.3 trước.
+
+====================================================================================================
+NHÓM 2: SỰ CỐ CẠNH TRANH (CONCURRENCY) & QUÁ HẠN GIỮ GHẾ (LOCK EXPIRY)
+====================================================================================================
+
+CASE 2.1: Cuộc đua sát giờ (Race Condition khi Lock sắp hết hạn)
+- Kịch bản:
+  - User A giữ ghế A01 trong 10 phút. Đến phút thứ 09:59, User A mới nhấn nút "Thanh Toán".
+  - Đúng lúc đó, key Redis giữ ghế của User A vừa hết hạn (TTL expires).
+  - User B lập tức vào giữ ghế A01 thành công.
+  - Cả 2 User cùng chuyển hướng sang cổng thanh toán hoặc cùng thanh toán.
+- Hướng giải quyết chuẩn (Bảo vệ 2 lớp: Lock Transition & Optimistic Lock):
+  1. Lớp 1 - Chuyển giao trạng thái (Lock Transition):
+     - Khi User A bấm "Tiến hành thanh toán" (Checkout), hệ thống KHÔNG chỉ dựa vào key tạm Redis `lock:seat:...`.
+     - BookingService tạo ngay 1 bản ghi `bookings` trong DB với `status = PENDING`, và bản ghi `booking_seats` với `status = HOLDING`, có lưu `booking_id`.
+     - Đồng thời, gia hạn key Redis thêm 10 phút thanh toán HOẶC đổi key thành `payment:lock:seat:{showtimeId}:{seatId}` thuộc về `bookingId` của User A.
+  2. Lớp 2 - Ràng buộc Unique Constraint ở tầng Database:
+     - Bảng `booking_seats` có Unique Index: `(showtime_id, seat_id)` trong điều kiện `status IN ('HOLDING', 'CONFIRMED')`.
+     - User B nếu cố tình chen chân vào lúc này, dù Redis có lọt qua thì Database cũng sẽ văng lỗi `DuplicateKeyException` / Unique Violation -> Đảm bảo tính nhất quán tuyệt đối (ACID).
+
+CASE 2.2: Hai người dùng cùng bấm "Khoá ghế" cùng 1 mili-giây (High Concurrency)
+- Hướng giải quyết:
+  - Dùng LUA Script nguyên tử (Atomic) trong Redis (`SeatLockServiceImpl.java` đã triển khai).
+  - LUA Script kiểm tra và set khoá trong một thao tác duy nhất (Single-threaded). Người đến trước 1 micro-giây sẽ thành công, người thứ hai sẽ nhận ngay thông báo "Ghế đã được người khác chọn".
+
+====================================================================================================
+NHÓM 3: SỰ CỐ THANH TOÁN & ĐỒNG BỘ PHÂN TÁN (GATEWAY, WEBHOOK, SAGA)
+====================================================================================================
+
+CASE 3.1: Tiền đã bị trừ trong tài khoản ngân hàng của khách, nhưng Webhook VNPAY/MOMO bị rớt mạng hoặc gửi chậm
+- Kịch bản: Khách quét QR Momo thành công, tiền bị trừ, nhưng đường truyền giữa Momo và server CGV bị timeout. Trạng thái đơn trên CGV vẫn là `PENDING`. Sau 10 phút, hệ thống CGV tự huỷ đơn và nhả ghế cho người khác mua mất.
+- Hướng giải quyết chuẩn (Cron Reconcile Job + Idempotent Webhook):
+  1. Webhook Idempotency:
+     - Bảng `payments` lưu `transaction_id` của ngân hàng là UNIQUE.
+     - Khi Webhook đến, dùng Redis Distributed Lock theo `orderId` để đảm bảo xử lý duy nhất 1 lần.
+  2. Hệ thống Đối soát tự động định kỳ (Auto Reconciliation Job - Chạy mỗi 2 phút):
+     - Quét các đơn `PENDING` đã tồn tại từ 5 - 10 phút.
+     - Chủ động gọi ngược lại API Truy vấn giao dịch (Query Transaction API) của VNPAY/MOMO/ZaloPay để lấy trạng thái thực.
+     - Nếu Cổng thanh toán báo: "Giao dịch thành công":
+       + Kiểm tra xem ghế của suất chiếu đó đã bị ai mua mất chưa.
+       + NẾU GHẾ VẪN CÒN: Lập tức chuyển `CONFIRMED`, xuất vé và gửi email cho khách!
+       + NẾU GHẾ ĐÃ BỊ NGƯỜI KHÁC MUA MẤT (Do quá giờ nhả khoá): Hệ thống tự động kích hoạt SAGA Hoàn tiền 100% (Refund API) về lại tài khoản của khách, kèm email giải thích rõ giao dịch bị chậm trễ ngoài ý muốn từ cổng thanh toán.
+
+CASE 3.2: Khách hàng thanh toán thành công nhưng vi dịch vụ xuất vé (BookingService) gặp sự cố sập DB
+- Kịch bản: PaymentService trừ tiền xong, bắn Kafka event `PaymentCompletedEvent`, nhưng BookingService bị sập hoặc gặp lỗi mạng không nhận được event -> Không ra được vé.
+- Hướng giải quyết chuẩn (Transactional Outbox Pattern + Kafka Consumer Retry):
+  1. PaymentService không gửi Kafka trực tiếp từ bộ nhớ mà lưu event vào bảng `outbox_events` cùng Transaction với việc ghi nhận thanh toán.
+  2. Debezium / Outbox Poller đọc từ DB đẩy lên Kafka -> Đảm bảo "At-least-once Delivery" (không bao giờ mất event).
+  3. BookingService thiết lập Dead Letter Queue (DLQ) & Retry Policy (Thử lại 3 lần với Exponential Backoff).
+  4. Nếu sau 3 lần vẫn lỗi: Bắn cảnh báo khẩn cấp lên Slack/Telegram cho đội ngũ trực vận hành (DevOps/SRE) để can thiệp trong vòng 5 phút.
+
+CASE 3.3: Admin thay đổi bảng giá vé (Pricing) ngay lúc khách đang thanh toán
+- Kịch bản: Khách bắt đầu đặt vé lúc 11:59 giá 80.000đ. Đúng 12:00 Admin đổi bảng giá cuối tuần lên 110.000đ. Lúc 12:02 khách bấm trả tiền.
+- Hướng giải quyết chuẩn (Price Snapshot):
+  - Giá vé được "đóng băng" (Freeze Price) ngay khi tạo bản ghi `booking_seats`.
+  - Trong bảng `booking_seats`, cột `unit_price` lưu giá chính xác tại thời điểm tạo đơn.
+  - Khi thanh toán, hệ thống chỉ thu đúng số tiền `total_amount` đã cam kết ban đầu trên đơn `PENDING`. Mọi sự thay đổi giá sau đó của Admin chỉ áp dụng cho các lượt đặt vé mới tạo sau thời điểm đổi giá.
+
+====================================================================================================
+NHÓM 4: SỰ CỐ HẠ TẦNG (REDIS CRASH, DATABASE OUTAGE)
+====================================================================================================
+
+CASE 4.1: Redis Server bị sập (Crash) hoặc Restart đột ngột làm mất dữ liệu giữ ghế
+- Nguy cơ: Key giữ ghế `lock:seat:...` trong RAM Redis bị biến mất, khiến nhiều người vào chọn trùng ghế đang thanh toán.
+- Hướng giải quyết chuẩn:
+  1. Cấu hình Redis Persistence:
+     - Bật AOF (Append Only File) với tuỳ chọn `appendfsync everysec` (chỉ mất tối đa 1 giây dữ liệu nếu sập nguồn).
+     - Kết hợp RDB Snapshots định kỳ.
+     - Sử dụng Redis Cluster / Sentinel để tự động Failover (Master sập thì Replica lên thay trong vài giây).
+  2. Lớp bọc an toàn cuối cùng ở Database (Database as Ultimate Source of Truth):
+     - Khi user tiến hành thanh toán, hệ thống kiểm tra bảng `booking_seats`:
+       `SELECT COUNT(*) FROM booking_seats WHERE showtime_id = ? AND seat_id IN (?) AND status IN ('PENDING', 'CONFIRMED')`
+     - Kể cả khi Redis trống rỗng sau khi restart, DB vẫn bảo vệ toàn vẹn dữ liệu, chặn đứng việc bán trùng ghế.
+
+====================================================================================================
+NHÓM 5: SỰ CỐ KHUYẾN MÃI, VOUCHER & HẠNG THÀNH VIÊN
+====================================================================================================
+
+CASE 5.1: User áp Voucher nhưng đơn hàng bị huỷ hoặc hết hạn thanh toán
+- Hướng giải quyết (Two-Phase Voucher Reservation):
+  1. Giai đoạn 1: Khi áp voucher vào đơn đặt vé -> Voucher chuyển trạng thái `RESERVED` (chưa tính là đã sử dụng hoàn toàn).
+  2. Giai đoạn 2:
+     - Nếu thanh toán thành công: Bắn event `BookingConfirmedEvent` -> MarketingService chuyển voucher thành `USED`.
+     - Nếu đơn bị huỷ hoặc timeout: Bắn event `BookingCancelledEvent` -> MarketingService nhả voucher về lại `ACTIVE` cho user sử dụng cho lần đặt tiếp theo.
+
+CASE 5.2: Gian lận hạ/thăng hạng để trục lợi voucher
+- Hướng giải quyết:
+  - Tất cả các thao tác xác định điều kiện áp dụng Voucher đều được chạy qua tầng Business Rule Engine ở Backend (MarketingService).
+  - Luôn kiểm tra song song `user_id` từ JWT token và Rank thực tế từ Redis/DB, không bao giờ tin tưởng bất kỳ tham số rank nào do Client (Frontend) gửi lên trong Body request.
+
+----------------------------------------------------------------------------------------------------
+3. BẢNG TỔNG KẾT CÁC NGUYÊN TẮC BẢO VỆ DỮ LIỆU VÀNG (GOLDEN RULES)
+----------------------------------------------------------------------------------------------------
+1. NGUYÊN TẮC BẤT BIẾN (IMMUTABILITY): Không bao giờ Hard Delete dữ liệu lõi (Phim, Rạp, Ghế, Suất chiếu, Vé). Luôn dùng cờ Soft-delete và State Machine rõ ràng.
+2. NGUYÊN TẮC NGUYÊN TỬ (ATOMICITY): Mọi thao tác giữ/nhả ghế ở tầng Cache phải chạy qua LUA Script để tránh Race Condition.
+3. NGUYÊN TẮC CHỐNG LẶP (IDEMPOTENCY): Mọi Webhook thanh toán và Kafka Consumer phải có cơ chế kiểm tra trùng lặp (Idempotent Consumer) dựa trên Transaction ID / Event ID.
+4. NGUYÊN TẮC SNAPSHOT GIÁ: Giá vé và khuyến mãi phải được chốt cứng tại thời điểm tạo đơn, độc lập với việc Admin điều chỉnh bảng giá sau đó.
+5. NGUYÊN TẮC DỮ LIỆU NGUỒN CUỐI (SOURCE OF TRUTH): Redis là bộ tăng tốc (Speed Layer), PostgreSQL luôn là chân lý tối thượng (Truth Layer).
+====================================================================================================

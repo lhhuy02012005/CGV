@@ -1,5 +1,6 @@
 package com.cgv.bookingservice.entity;
 
+import com.cgv.bookingservice.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -59,8 +60,11 @@ public class Booking extends BaseEntity{
     @Column
     Instant cancelledAt;
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "booking", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<BookingSeat> bookingSeats = new ArrayList<>();
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    BookingStatus status;
 }

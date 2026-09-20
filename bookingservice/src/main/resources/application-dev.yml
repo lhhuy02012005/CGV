@@ -106,3 +106,9 @@ logging:
     com.cgv.bookingservice: INFO
     org.springframework.kafka: INFO
     org.apache.kafka: WARN
+
+grpc:
+  client:
+    catalog-service:
+      address: 'static://127.0.0.1:9098' # Khi chạy local
+      negotiation-type: plaintext
