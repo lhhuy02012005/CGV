@@ -19,5 +19,16 @@ public interface RoomRepository
             RoomStatus status
     );
 
-    boolean existsById(UUID id);
+    boolean existsById(UUID roomId);
+
+    boolean existsByCinemaIdAndNameIgnoreCase(
+            UUID cinemaId,
+            String name
+    );
+
+    boolean existsByCinemaIdAndNameIgnoreCaseAndIdNot(
+            UUID cinemaId,
+            String name,
+            UUID roomId
+    );
 }

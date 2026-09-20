@@ -9,9 +9,9 @@ import java.util.UUID;
 public interface MovieCastRepository
         extends JpaRepository<MovieCast, UUID> {
 
-    List<MovieCast> findByMovie_IdOrderByDisplayOrderAsc(
+    List<MovieCast> findByMovieIdOrderByDisplayOrderAsc(
             UUID movieId
     );
 
-    void deleteByMovie_Id(UUID movieId);
+    void deleteByMovieId(UUID movieId);
 }

@@ -1,6 +1,5 @@
 package com.cgv.catalogservice.dto.request.movie;
 
-import com.cgv.catalogservice.enums.MovieStatus;
 import com.cgv.catalogservice.enums.ShowingStatus;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -37,8 +36,6 @@ public record MovieUpdateRequest(
 
         String backdropUrl,
 
-        String trailerYoutubeUrl,
-
-        MovieStatus status
+        String trailerYoutubeUrl
 ) {
 }

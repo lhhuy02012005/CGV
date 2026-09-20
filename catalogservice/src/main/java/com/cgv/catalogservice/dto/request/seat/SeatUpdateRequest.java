@@ -16,8 +16,6 @@ public record SeatUpdateRequest(
         @Positive(message = "Số ghế phải lớn hơn 0")
         Integer seatNumber,
 
-        SeatTypeName seatTypeName,
-
-        Boolean isActive
+        SeatTypeName seatTypeName
 ) {
 }

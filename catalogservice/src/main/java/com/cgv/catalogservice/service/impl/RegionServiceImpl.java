@@ -4,7 +4,9 @@ import com.cgv.catalogservice.dto.request.region.RegionCreateRequest;
 import com.cgv.catalogservice.dto.request.region.RegionUpdateRequest;
 import com.cgv.catalogservice.dto.response.RegionResponse;
 import com.cgv.catalogservice.entity.Region;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.RegionMapper;
+import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RegionRepository;
 import com.cgv.catalogservice.service.RegionService;
 import com.cgv.commondto.dto.PageResponse;
@@ -25,6 +27,8 @@ import java.util.List;
 public class RegionServiceImpl implements RegionService {
 
     RegionRepository regionRepository;
+    CinemaRepository cinemaRepository;
+
     RegionMapper regionMapper;
 
     @Override
@@ -52,6 +56,13 @@ public class RegionServiceImpl implements RegionService {
     @Override
     @Transactional
     public void deleteRegion(Integer regionId) {
+
+        if (cinemaRepository.existsByRegionId(regionId)) {
+            throw new ResourceConflictException(
+                    "Không thể xoá region vì đang có cinema thuộc region này"
+            );
+        }
+
         Region region = regionRepository.findById(regionId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy region với id: " + regionId

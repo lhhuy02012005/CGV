@@ -12,17 +12,24 @@ import java.util.UUID;
 public interface SeatRepository
         extends JpaRepository<Seat, UUID> {
 
-    List<Seat> findByRoom_Id(UUID roomId);
+    List<Seat> findByRoomId(UUID roomId);
 
-    Page<Seat> findAllByRoom_Id(UUID roomId, Pageable pageable);
+    Page<Seat> findAllByRoomId(UUID roomId, Pageable pageable);
 
-    boolean existsByRoom_IdAndRowCharAndSeatNumber(
+    boolean existsByRoomIdAndRowCharAndSeatNumber(
             UUID roomId,
             String rowChar,
             Integer seatNumber
     );
 
-    int countByRoom_Id(UUID roomId);
+    boolean existsByRoomIdAndRowCharAndSeatNumberAndIdNot(
+            UUID roomId,
+            String rowChar,
+            Integer seatNumber,
+            UUID seatId
+    );
 
-    boolean existsBySeatType_Name(SeatTypeName seatTypeName);
+    int countByRoomId(UUID roomId);
+
+    boolean existsBySeatTypeName(SeatTypeName seatTypeName);
 }

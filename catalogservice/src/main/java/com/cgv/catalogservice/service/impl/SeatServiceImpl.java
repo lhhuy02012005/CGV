@@ -48,6 +48,17 @@ public class SeatServiceImpl implements SeatService {
 
         validateRoomHasNoScheduledShowtime(request.roomId());
 
+        if (seatRepository.existsByRoomIdAndRowCharAndSeatNumber(
+                request.roomId(),
+                request.rowChar(),
+                request.seatNumber()
+        )) {
+            throw new ResourceConflictException(
+                    "Ghế " + request.rowChar() + request.seatNumber()
+                            + " đã tồn tại trong phòng"
+            );
+        }
+
         Room room = roomRepository.findById(request.roomId())
                 .orElseThrow(() ->
                         new EntityNotFoundException(
@@ -79,7 +90,7 @@ public class SeatServiceImpl implements SeatService {
                 seatRepository.saveAndFlush(seat);
 
         room.setTotalSeats(
-                seatRepository.countByRoom_Id(room.getId())
+                seatRepository.countByRoomId(room.getId())
         );
 
         return seatMapper.toResponse(savedSeat);
@@ -98,6 +109,33 @@ public class SeatServiceImpl implements SeatService {
                                 "Không tìm thấy seat với id: " + seatId
                         )
                 );
+
+        UUID targetRoomId =
+                request.roomId() != null
+                        ? request.roomId()
+                        : seat.getRoom().getId();
+
+        String targetRowChar =
+                request.rowChar() != null
+                        ? request.rowChar()
+                        : seat.getRowChar();
+
+        Integer targetSeatNumber =
+                request.seatNumber() != null
+                        ? request.seatNumber()
+                        : seat.getSeatNumber();
+
+        if (seatRepository.existsByRoomIdAndRowCharAndSeatNumberAndIdNot(
+                targetRoomId,
+                targetRowChar,
+                targetSeatNumber,
+                seatId
+        )) {
+            throw new ResourceConflictException(
+                    "Ghế " + targetRowChar + targetSeatNumber
+                            + " đã tồn tại trong phòng"
+            );
+        }
 
         validateRoomHasNoScheduledShowtime(seat.getRoom().getId());
 
@@ -152,13 +190,13 @@ public class SeatServiceImpl implements SeatService {
         if (roomChanged) {
 
             oldRoom.setTotalSeats(
-                    seatRepository.countByRoom_Id(
+                    seatRepository.countByRoomId(
                             oldRoom.getId()
                     )
             );
 
             newRoom.setTotalSeats(
-                    seatRepository.countByRoom_Id(
+                    seatRepository.countByRoomId(
                             newRoom.getId()
                     )
             );
@@ -204,11 +242,13 @@ public class SeatServiceImpl implements SeatService {
     @Transactional(readOnly = true)
     public PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable) {
 
-        if (roomRepository.existsById(roomId)) {
-            throw new IllegalArgumentException("Không tồn tại phòng chiếu với id: " + roomId);
+        if (!roomRepository.existsById(roomId)) {
+            throw new EntityNotFoundException(
+                    "Không tồn tại phòng chiếu với id: " + roomId
+            );
         }
 
-        Page<Seat> seatPage = seatRepository.findAllByRoom_Id(roomId, pageable);
+        Page<Seat> seatPage = seatRepository.findAllByRoomId(roomId, pageable);
         List<SeatResponse> seatResponses = seatMapper.toResponseList(seatPage.getContent());
 
         return PageResponse.<SeatResponse>builder()
@@ -224,7 +264,7 @@ public class SeatServiceImpl implements SeatService {
 
         boolean hasScheduledShowtime =
                 showtimeRepository
-                        .existsByRoom_IdAndStatusAndEndTimeAfter(
+                        .existsByRoomIdAndStatusAndEndTimeAfter(
                                 roomId,
                                 ShowtimeStatus.SCHEDULED,
                                 LocalDateTime.now()

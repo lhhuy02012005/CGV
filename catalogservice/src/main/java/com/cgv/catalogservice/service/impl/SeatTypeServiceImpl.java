@@ -35,6 +35,13 @@ public class SeatTypeServiceImpl implements SeatTypeService {
     @Override
     @Transactional
     public SeatTypeResponse createSeatType(SeatTypeCreateRequest request) {
+
+        if (seatTypeRepository.existsByName(request.name())) {
+            throw new ResourceConflictException(
+                    "Seat type " + request.name() + " đã tồn tại"
+            );
+        }
+
         SeatType seatType = seatTypeMapper.toEntity(request);
         SeatType savedSeatType = seatTypeRepository.save(seatType);
 
@@ -47,6 +54,7 @@ public class SeatTypeServiceImpl implements SeatTypeService {
             SeatTypeName seatTypeName,
             SeatTypeUpdateRequest request
     ) {
+
         SeatType seatType = seatTypeRepository.findById(seatTypeName)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy seat type với name: " + seatTypeName
@@ -66,7 +74,7 @@ public class SeatTypeServiceImpl implements SeatTypeService {
                 ));
 
         boolean isUsed =
-                seatRepository.existsBySeatType_Name(seatTypeName);
+                seatRepository.existsBySeatTypeName(seatTypeName);
 
         if (isUsed) {
             throw new ResourceConflictException(

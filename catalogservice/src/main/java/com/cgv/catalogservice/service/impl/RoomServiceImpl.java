@@ -6,6 +6,7 @@ import com.cgv.catalogservice.dto.request.room.RoomUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.RoomResponse;
 import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Room;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.RoomMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RoomRepository;
@@ -35,9 +36,20 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional
     public RoomResponse createRoom(RoomCreateRequest request) {
+
+        if (roomRepository.existsByCinemaIdAndNameIgnoreCase(
+                request.cinemaId(),
+                request.name()
+        )) {
+            throw new ResourceConflictException(
+                    "Phòng '" + request.name()
+                            + "' đã tồn tại trong rạp " + request.cinemaId()
+            );
+        }
+
         Cinema cinema = cinemaRepository.findById(request.cinemaId())
                 .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy cinema với id: " + request.cinemaId()
+                        "Không tìm thấy rạp chiếu với id: " + request.cinemaId()
                 ));
 
         Room room = roomMapper.toEntity(request);
@@ -51,20 +63,13 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional
     public RoomResponse updateRoom(UUID roomId, RoomUpdateRequest request) {
+
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy room với id: " + roomId
                 ));
 
         roomMapper.updateEntity(request, room);
-
-        if (request.cinemaId() != null) {
-            Cinema cinema = cinemaRepository.findById(request.cinemaId())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Không tìm thấy cinema với id: " + request.cinemaId()
-                    ));
-            room.setCinema(cinema);
-        }
 
         return roomMapper.toResponse(room);
     }
@@ -98,7 +103,9 @@ public class RoomServiceImpl implements RoomService {
     public PageResponse<RoomResponse> getAllRoomsByCinemaId(UUID cinemaId, Pageable pageable) {
 
         if (!cinemaRepository.existsById(cinemaId)) {
-            throw new IllegalArgumentException("Không tồn tại rạp chiếu với id: " + cinemaId);
+            throw new EntityNotFoundException(
+                    "Không tồn tại rạp chiếu với id: " + cinemaId
+            );
         }
 
         Page<Room> roomPage = roomRepository.findAllByCinemaId(cinemaId, pageable);

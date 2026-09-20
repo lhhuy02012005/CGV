@@ -22,4 +22,6 @@ public interface MovieGenreRepository
     );
 
     void deleteByIdMovieId(UUID movieId);
+
+    boolean existsByIdGenreId(Integer genreId);
 }
