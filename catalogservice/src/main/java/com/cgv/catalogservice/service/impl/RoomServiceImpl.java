@@ -69,6 +69,17 @@ public class RoomServiceImpl implements RoomService {
                         "Không tìm thấy room với id: " + roomId
                 ));
 
+        if (request.name() != null
+                && roomRepository.existsByCinemaIdAndNameIgnoreCaseAndIdNot(
+                room.getCinema().getId(),
+                request.name(),
+                roomId
+        )) {
+            throw new ResourceConflictException(
+                    "Phòng '" + request.name() + "' đã tồn tại trong rạp"
+            );
+        }
+
         roomMapper.updateEntity(request, room);
 
         return roomMapper.toResponse(room);
