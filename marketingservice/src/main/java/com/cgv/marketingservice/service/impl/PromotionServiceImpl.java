@@ -1,5 +1,7 @@
 package com.cgv.marketingservice.service.impl;
 
+import com.cgv.commondto.dto.PageResponse;
+import org.springframework.data.domain.Pageable;
 import com.cgv.commondto.exception.BusinessException;
 import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.marketingservice.dto.request.PromotionCreateRequest;
@@ -13,7 +15,6 @@ import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -54,5 +55,23 @@ public class PromotionServiceImpl implements PromotionService {
     public PromotionResponse getPromotion(UUID id) {
         Promotion promotion = promotionRepository.findById(id).orElseThrow(() -> new BusinessException(ErrorCode.NOT_EXISTED, "Promotion not found"));
         return promotionMapper.toPromotionResponse(promotion);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PromotionResponse> getAllPromotions(Pageable pageable) {
+        var promotionPage = promotionRepository.findAll(pageable);
+
+        var responses = promotionPage.getContent().stream()
+                .map(promotionMapper::toPromotionResponse)
+                .toList();
+
+        return PageResponse.<PromotionResponse>builder()
+                .data(responses)
+                .pageNumber(promotionPage.getNumber() + 1)
+                .pageSize(promotionPage.getSize())
+                .totalPages(promotionPage.getTotalPages())
+                .totalElements(promotionPage.getTotalElements())
+                .build();
     }
 }
