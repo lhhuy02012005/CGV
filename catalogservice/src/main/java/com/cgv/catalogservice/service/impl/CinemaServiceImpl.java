@@ -69,6 +69,8 @@ public class CinemaServiceImpl implements CinemaService {
             cinema.setRegion(region);
         }
 
+        cinemaRepository.saveAndFlush(cinema);
+
         return cinemaMapper.toResponse(cinema);
     }
 
@@ -82,18 +84,9 @@ public class CinemaServiceImpl implements CinemaService {
 
         cinema.setStatus(request.status());
 
+        cinemaRepository.saveAndFlush(cinema);
+
         return cinemaMapper.toResponse(cinema);
-    }
-
-    @Override
-    @Transactional
-    public void deleteCinema(UUID cinemaId) {
-        Cinema cinema = cinemaRepository.findById(cinemaId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy cinema với id: " + cinemaId
-                ));
-
-        cinemaRepository.delete(cinema);
     }
 
     @Override

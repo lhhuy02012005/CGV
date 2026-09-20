@@ -18,8 +18,6 @@ public interface EventService {
 
     EventResponse updateEventStatus(UUID eventId, EventUpdateStatusRequest request);
 
-    void deleteEvent(UUID eventId);
-
     EventResponse getEventById(UUID eventId);
 
     PageResponse<EventResponse> getAllEvents(

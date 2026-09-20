@@ -73,6 +73,8 @@ public class EventServiceImpl implements EventService {
             event.setCinema(cinema);
         }
 
+        eventRepository.saveAndFlush(event);
+
         return eventMapper.toResponse(event);
     }
 
@@ -89,18 +91,9 @@ public class EventServiceImpl implements EventService {
 
         event.setStatus(request.status());
 
+        eventRepository.saveAndFlush(event);
+
         return eventMapper.toResponse(event);
-    }
-
-    @Override
-    @Transactional
-    public void deleteEvent(UUID eventId) {
-        Event event = eventRepository.findById(eventId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy event với id: " + eventId
-                ));
-
-        eventRepository.delete(event);
     }
 
     @Override

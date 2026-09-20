@@ -145,7 +145,3 @@ springdoc:
     operationsSorter: method
     tagsSorter: alpha
     tryItOutEnabled: true
-
-grpc:
-  server:
-    port: 9098

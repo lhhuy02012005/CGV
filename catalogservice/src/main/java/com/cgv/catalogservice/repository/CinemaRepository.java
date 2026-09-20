@@ -13,5 +13,5 @@ public interface CinemaRepository
 
     Optional<Cinema> findByName(String name);
 
-    boolean existsByName(String name);
+    boolean existsById(UUID id);
 }

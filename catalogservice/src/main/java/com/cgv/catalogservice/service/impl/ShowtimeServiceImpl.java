@@ -74,6 +74,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         if (hasOverlappingShowtime(
                 room.getId(),
+                request.showDate(),
                 request.startTime(),
                 request.endTime(),
                 null
@@ -188,6 +189,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
             if (hasOverlappingShowtime(
                     room.getId(),
+                    showDate,
                     startTime,
                     endTime,
                     showtimeId
@@ -218,6 +220,8 @@ public class ShowtimeServiceImpl implements ShowtimeService {
             showtime.setAvailableSeats(availableSeats);
         }
 
+        showtimeRepository.saveAndFlush(showtime);
+
         return showtimeMapper.toResponse(showtime);
     }
 
@@ -241,6 +245,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
             if (hasOverlappingShowtime(
                     showtime.getRoom().getId(),
+                    showtime.getShowDate(),
                     showtime.getStartTime(),
                     showtime.getEndTime(),
                     showtimeId
@@ -253,23 +258,9 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         showtime.setStatus(request.status());
 
+        showtimeRepository.saveAndFlush(showtime);
+
         return showtimeMapper.toResponse(showtime);
-    }
-
-    @Override
-    @Transactional
-    public void deleteShowtime(UUID showtimeId) {
-
-        Showtime showtime =
-                showtimeRepository.findById(showtimeId)
-                        .orElseThrow(() ->
-                                new EntityNotFoundException(
-                                        "Không tìm thấy suất chiếu với id: "
-                                                + showtimeId
-                                )
-                        );
-
-        showtimeRepository.delete(showtime);
     }
 
     @Override
@@ -384,6 +375,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
     private boolean hasOverlappingShowtime(
             UUID roomId,
+            LocalDate showDate,
             LocalDateTime startTime,
             LocalDateTime endTime,
             UUID excludedShowtimeId
@@ -396,6 +388,10 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                             cb.equal(
                                     root.get("room").get("id"),
                                     roomId
+                            ),
+                            cb.equal(
+                                    root.get("showDate"),
+                                    showDate
                             ),
                             cb.lessThan(
                                     root.get("startTime"),

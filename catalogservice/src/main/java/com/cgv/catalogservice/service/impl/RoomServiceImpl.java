@@ -83,17 +83,6 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
-    @Transactional
-    public void deleteRoom(UUID roomId) {
-        Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy room với id: " + roomId
-                ));
-
-        roomRepository.delete(room);
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public RoomResponse getRoomById(UUID roomId) {
         Room room = roomRepository.findById(roomId)
@@ -106,8 +95,13 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<RoomResponse> getAllRooms(Pageable pageable) {
-        Page<Room> roomPage = roomRepository.findAll(pageable);
+    public PageResponse<RoomResponse> getAllRoomsByCinemaId(UUID cinemaId, Pageable pageable) {
+
+        if (!cinemaRepository.existsById(cinemaId)) {
+            throw new IllegalArgumentException("Không tồn tại rạp chiếu với id: " + cinemaId);
+        }
+
+        Page<Room> roomPage = roomRepository.findAllByCinemaId(cinemaId, pageable);
 
         List<RoomResponse> roomResponses = roomMapper.toResponseList(roomPage.getContent());
 

@@ -6,6 +6,7 @@ import com.cgv.catalogservice.dto.request.movie.MovieUpdateRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.catalogservice.entity.Movie;
+import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.MovieMapper;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieService;
@@ -36,6 +37,12 @@ public class MovieServiceImpl implements MovieService {
     @Transactional
     public MovieResponse createMovie(MovieCreateRequest request) {
 
+        if (movieRepository.existsByTitleIgnoreCase(request.title().trim())) {
+            throw new ResourceConflictException(
+                    "Phim với tên '" + request.title() + "' đã tồn tại"
+            );
+        }
+
         Movie movie = movieMapper.toEntity(request);
 
         Movie savedMovie = movieRepository.save(movie);
@@ -47,9 +54,17 @@ public class MovieServiceImpl implements MovieService {
     @Transactional
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
 
+        if (movieRepository.existsByTitleIgnoreCaseAndIdNot(request.title().trim(), movieId)) {
+            throw new ResourceConflictException(
+                    "Phim với tên '" + request.title() + "' đã tồn tại"
+            );
+        }
+
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
         movieMapper.updateEntity(request, movie);
+
+        movieRepository.saveAndFlush(movie);
 
         return movieMapper.toResponse(movie);
     }
@@ -62,16 +77,9 @@ public class MovieServiceImpl implements MovieService {
 
         movie.setStatus(request.status());
 
+        movieRepository.saveAndFlush(movie);
+
         return movieMapper.toResponse(movie);
-    }
-
-    @Override
-    @Transactional
-    public void deleteMovie(UUID movieId) {
-
-        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
-
-        movieRepository.delete(movie);
     }
 
     @Override

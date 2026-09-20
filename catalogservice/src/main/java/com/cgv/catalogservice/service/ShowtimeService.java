@@ -26,10 +26,6 @@ public interface ShowtimeService {
             ShowtimeUpdateStatusRequest request
     );
 
-    void deleteShowtime(
-            UUID showtimeId
-    );
-
     ShowtimeResponse getShowtimeById(
             UUID showtimeId
     );
