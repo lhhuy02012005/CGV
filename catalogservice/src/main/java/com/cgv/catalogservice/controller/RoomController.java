@@ -89,7 +89,7 @@ public class RoomController {
         return ApiResponse.<PageResponse<RoomResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(response)
-                .message("Danh sách phòng chiếu")
+                .message("Danh sách phòng chiếu theo rạp")
                 .build();
     }
 }

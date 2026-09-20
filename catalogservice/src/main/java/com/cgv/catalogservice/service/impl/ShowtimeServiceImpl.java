@@ -220,6 +220,8 @@ public class ShowtimeServiceImpl implements ShowtimeService {
             showtime.setAvailableSeats(availableSeats);
         }
 
+        showtimeRepository.saveAndFlush(showtime);
+
         return showtimeMapper.toResponse(showtime);
     }
 
@@ -255,6 +257,8 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         }
 
         showtime.setStatus(request.status());
+
+        showtimeRepository.saveAndFlush(showtime);
 
         return showtimeMapper.toResponse(showtime);
     }

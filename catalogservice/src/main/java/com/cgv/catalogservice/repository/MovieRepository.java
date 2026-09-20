@@ -15,7 +15,12 @@ public interface MovieRepository
         extends JpaRepository<Movie, UUID>,
         JpaSpecificationExecutor<Movie> {
 
-    boolean existsByTitle(String title);
+    boolean existsByTitleIgnoreCase(String title);
+
+    boolean existsByTitleIgnoreCaseAndIdNot(
+            String title,
+            UUID movieId
+    );
 
     @Modifying(
             clearAutomatically = true,

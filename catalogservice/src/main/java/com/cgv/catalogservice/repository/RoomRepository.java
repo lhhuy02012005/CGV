@@ -12,10 +12,12 @@ import java.util.UUID;
 public interface RoomRepository
         extends JpaRepository<Room, UUID> {
 
-    Page<Room> findAllByCinema_Id(UUID cinemaId, Pageable pageable);
+    Page<Room> findAllByCinemaId(UUID cinemaId, Pageable pageable);
 
-    List<Room> findByCinema_IdAndStatus(
+    List<Room> findByCinemaIdAndStatus(
             UUID cinemaId,
             RoomStatus status
     );
+
+    boolean existsById(UUID id);
 }

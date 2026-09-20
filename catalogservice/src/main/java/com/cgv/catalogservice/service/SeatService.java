@@ -19,5 +19,5 @@ public interface SeatService {
 
     SeatResponse getSeatById(UUID seatId);
 
-    PageResponse<SeatResponse> getAllSeats(Pageable pageable);
+    PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable);
 }

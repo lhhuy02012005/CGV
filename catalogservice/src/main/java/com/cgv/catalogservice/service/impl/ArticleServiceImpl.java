@@ -84,6 +84,8 @@ public class ArticleServiceImpl implements ArticleService {
             article.setMovie(movie);
         }
 
+        articleRepository.saveAndFlush(article);
+
         return articleMapper.toResponse(article);
     }
 
