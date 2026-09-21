@@ -22,6 +22,8 @@ services:
       POSTGRES_DB: cgv
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
+    # THÊM DÒNG NÀY ĐỂ BẬT REPLICATION LOG CHO DEBEZIUM ĐỌC ĐƯỢC:
+    command: [ "postgres", "-c", "wal_level=logical" ]
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-keycloak-schema.sql:/docker-entrypoint-initdb.d/init-keycloak-schema.sql
@@ -265,6 +267,34 @@ services:
       KAFKA_CLUSTERS_0_NAME: 3-broker-cluster
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
     depends_on:
+      - kafka-1
+      - kafka-2
+      - kafka-3
+    networks:
+      - cgv-net
+    restart: unless-stopped
+
+  debezium-connect:
+    image: debezium/connect:2.5
+    container_name: cgv-debezium
+    ports:
+      - "8088:8088" # Cổng REST API để điều khiển Debezium
+    environment:
+      BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: debezium_connect_configs
+      OFFSET_STORAGE_TOPIC: debezium_connect_offsets
+      STATUS_STORAGE_TOPIC: debezium_connect_statuses
+      #Quy định số lượng bản sao (Replicas) cho 3 topic
+      CONFIG_STORAGE_REPLICATION_FACTOR: 3
+      OFFSET_STORAGE_REPLICATION_FACTOR: 3
+      STATUS_STORAGE_REPLICATION_FACTOR: 3
+      KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    depends_on:
+      - postgres
       - kafka-1
       - kafka-2
       - kafka-3

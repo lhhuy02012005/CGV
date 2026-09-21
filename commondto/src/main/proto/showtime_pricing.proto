@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package com.cgv.grpc;
+option java_multiple_files = true;
+option java_package = "com.cgv.commondto.grpc";
+
+service ShowtimePricingGrpcService {
+  rpc GetShowtimePricing (ShowtimePricingRequest) returns (ShowtimePricingResponse);
+}
+
+message ShowtimePricingRequest {
+  string showtime_id = 1;
+}
+
+message ShowtimePricingResponse {
+  string showtime_id = 1;
+  string movie_id = 2;
+  string movie_title = 3;
+  string poster_url = 4;
+  string cinema_id = 5;
+  string cinema_name = 6;
+  string cinema_address = 7;
+  string room_name = 8;
+  double base_price = 9;
+  string start_time = 10;
+  string end_time = 11;
+  repeated SeatPricingInfo seats = 12; // Danh sách ghế và phụ thu từng loại ghế
+}
+
+message SeatPricingInfo {
+  string seat_id = 1;
+  string seat_label = 2; // "A1", "H5"
+  string seat_type = 3;  // "NORMAL", "VIP", "SWEETBOX"
+  double surcharge = 4;  // 0, 15000, 30000
+}
