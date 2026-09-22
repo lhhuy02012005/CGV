@@ -9,7 +9,17 @@ public interface RegionRepository extends JpaRepository<Region, Integer> {
 
     Optional<Region> findBySlug(String slug);
 
-    boolean existsByName(String name);
+    boolean existsByNameIgnoreCase(String name);
+
+    boolean existsByNameIgnoreCaseAndIdNot(
+            String name,
+            Integer regionId
+    );
 
     boolean existsBySlug(String slug);
+
+    boolean existsBySlugAndIdNot(
+            String slug,
+            Integer regionId
+    );
 }

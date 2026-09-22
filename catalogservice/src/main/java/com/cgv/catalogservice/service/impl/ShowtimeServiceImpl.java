@@ -16,12 +16,12 @@ import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.ShowtimeRepository;
 import com.cgv.catalogservice.service.ShowtimeService;
 import com.cgv.catalogservice.specification.ShowtimeSpecification;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -344,21 +343,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                         )
                 );
 
-        Page<Showtime> showtimePage =
-                showtimeRepository.findAll(spec, pageable);
-
-        List<ShowtimeResponse> responses =
-                showtimeMapper.toResponseList(
-                        showtimePage.getContent()
-                );
-
-        return PageResponse.<ShowtimeResponse>builder()
-                .data(responses)
-                .pageNumber(showtimePage.getNumber() + 1)
-                .pageSize(showtimePage.getSize())
-                .totalPages(showtimePage.getTotalPages())
-                .totalElements(showtimePage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> showtimeRepository.findAll(spec, p),
+                pageable,
+                showtimeMapper::toResponseList
+        );
     }
 
     private void validateShowtimeTime(

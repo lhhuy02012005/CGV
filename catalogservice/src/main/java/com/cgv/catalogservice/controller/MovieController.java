@@ -1,9 +1,6 @@
 package com.cgv.catalogservice.controller;
 
-import com.cgv.catalogservice.dto.request.movie.MovieCreateRequest;
-import com.cgv.catalogservice.dto.request.movie.MovieFilterRequest;
-import com.cgv.catalogservice.dto.request.movie.MovieUpdateRequest;
-import com.cgv.catalogservice.dto.request.movie.MovieUpdateStatusRequest;
+import com.cgv.catalogservice.dto.request.movie.*;
 import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.catalogservice.service.MovieService;
 import com.cgv.commondto.dto.ApiResponse;
@@ -75,6 +72,22 @@ public class MovieController {
                 .build();
     }
 
+    @PatchMapping("/{movieId}/showing-status")
+    public ApiResponse<MovieResponse> updateShowingStatus(
+            @PathVariable UUID movieId,
+            @RequestBody @Valid MovieUpdateShowingStatusRequest request
+    ) {
+
+        MovieResponse movieResponse =
+                movieService.updateMovieShowingStatus(movieId, request);
+
+        return ApiResponse.<MovieResponse>builder()
+                .status(HttpStatus.OK.value())
+                .data(movieResponse)
+                .message("Cập nhật trạng thái chiếu thành công")
+                .build();
+    }
+
     @GetMapping("/{movieId}")
     public ApiResponse<MovieResponse> get(
             @PathVariable UUID movieId
@@ -87,6 +100,36 @@ public class MovieController {
                 .status(HttpStatus.OK.value())
                 .data(movieResponse)
                 .message("Xem chi tiết phim thành công")
+                .build();
+    }
+
+    @GetMapping("/now-showing")
+    public ApiResponse<PageResponse<MovieResponse>>
+    getNowShowingMovies(
+            @PageableDefault Pageable pageable
+    ) {
+
+        PageResponse<MovieResponse> movieResponsePage = movieService.getNowShowingMovies(pageable);
+
+        return ApiResponse.<PageResponse<MovieResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Lấy danh sách phim đang chiếu thành công")
+                .data(movieResponsePage)
+                .build();
+    }
+
+    @GetMapping("/coming-soon")
+    public ApiResponse<PageResponse<MovieResponse>>
+    getComingSoonMovies(
+            @PageableDefault Pageable pageable
+    ) {
+
+        PageResponse<MovieResponse> movieResponsePage = movieService.getComingSoonMovies(pageable);
+
+        return ApiResponse.<PageResponse<MovieResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Lấy danh sách phim sắp chiếu thành công")
+                .data(movieResponsePage)
                 .build();
     }
 

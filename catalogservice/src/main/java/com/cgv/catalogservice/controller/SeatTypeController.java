@@ -6,15 +6,14 @@ import com.cgv.catalogservice.dto.response.SeatTypeResponse;
 import com.cgv.catalogservice.enums.SeatTypeName;
 import com.cgv.catalogservice.service.SeatTypeService;
 import com.cgv.commondto.dto.ApiResponse;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/seat-types")
@@ -74,12 +73,11 @@ public class SeatTypeController {
     }
 
     @GetMapping
-    public ApiResponse<PageResponse<SeatTypeResponse>> findAll(
-            @PageableDefault Pageable pageable
-    ) {
-        PageResponse<SeatTypeResponse> response = seatTypeService.getAllSeatTypes(pageable);
+    public ApiResponse<List<SeatTypeResponse>> findAll() {
 
-        return ApiResponse.<PageResponse<SeatTypeResponse>>builder()
+        List<SeatTypeResponse> response = seatTypeService.getAllSeatTypes();
+
+        return ApiResponse.<List<SeatTypeResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Danh sách loại ghế")

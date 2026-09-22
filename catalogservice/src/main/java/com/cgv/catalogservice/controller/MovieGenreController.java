@@ -4,13 +4,10 @@ import com.cgv.catalogservice.dto.request.moviegenre.MovieGenreCreateRequest;
 import com.cgv.catalogservice.dto.response.MovieGenreResponse;
 import com.cgv.catalogservice.service.MovieGenreService;
 import com.cgv.commondto.dto.ApiResponse;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -67,25 +64,6 @@ public class MovieGenreController {
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Danh sách thể loại của phim")
-                .build();
-    }
-
-    @GetMapping("/genre/{genreId}")
-    public ApiResponse<PageResponse<MovieGenreResponse>> getMoviesByGenreId(
-            @PathVariable Integer genreId,
-            @PageableDefault Pageable pageable
-    ) {
-
-        PageResponse<MovieGenreResponse> response =
-                movieGenreService.getMoviesByGenreId(
-                        genreId,
-                        pageable
-                );
-
-        return ApiResponse.<PageResponse<MovieGenreResponse>>builder()
-                .status(HttpStatus.OK.value())
-                .data(response)
-                .message("Danh sách phim theo thể loại")
                 .build();
     }
 }

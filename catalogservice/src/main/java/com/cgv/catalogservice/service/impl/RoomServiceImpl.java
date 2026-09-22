@@ -11,17 +11,16 @@ import com.cgv.catalogservice.mapper.RoomMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RoomRepository;
 import com.cgv.catalogservice.service.RoomService;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -119,16 +118,10 @@ public class RoomServiceImpl implements RoomService {
             );
         }
 
-        Page<Room> roomPage = roomRepository.findAllByCinemaId(cinemaId, pageable);
-
-        List<RoomResponse> roomResponses = roomMapper.toResponseList(roomPage.getContent());
-
-        return PageResponse.<RoomResponse>builder()
-                .data(roomResponses)
-                .pageNumber(roomPage.getNumber() + 1)
-                .pageSize(roomPage.getSize())
-                .totalPages(roomPage.getTotalPages())
-                .totalElements(roomPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> roomRepository.findAllByCinemaId(cinemaId, p),
+                pageable,
+                roomMapper::toResponseList
+        );
     }
 }

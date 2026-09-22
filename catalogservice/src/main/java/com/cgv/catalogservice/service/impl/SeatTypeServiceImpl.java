@@ -10,13 +10,10 @@ import com.cgv.catalogservice.mapper.SeatTypeMapper;
 import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.SeatTypeRepository;
 import com.cgv.catalogservice.service.SeatTypeService;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,17 +97,10 @@ public class SeatTypeServiceImpl implements SeatTypeService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<SeatTypeResponse> getAllSeatTypes(Pageable pageable) {
-        Page<SeatType> seatTypePage = seatTypeRepository.findAll(pageable);
-        List<SeatTypeResponse> seatTypeResponses =
-                seatTypeMapper.toResponseList(seatTypePage.getContent());
+    public List<SeatTypeResponse> getAllSeatTypes() {
 
-        return PageResponse.<SeatTypeResponse>builder()
-                .data(seatTypeResponses)
-                .pageNumber(seatTypePage.getNumber() + 1)
-                .pageSize(seatTypePage.getSize())
-                .totalPages(seatTypePage.getTotalPages())
-                .totalElements(seatTypePage.getTotalElements())
-                .build();
+        List<SeatType> seatTypeList = seatTypeRepository.findAll();
+
+        return seatTypeMapper.toResponseList(seatTypeList);
     }
 }

@@ -12,13 +12,10 @@ import com.cgv.catalogservice.repository.GenreRepository;
 import com.cgv.catalogservice.repository.MovieGenreRepository;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieGenreService;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -103,7 +100,6 @@ public class MovieGenreServiceImpl implements MovieGenreService {
     public List<MovieGenreResponse> getGenresByMovieId(
             UUID movieId
     ) {
-
         if (!movieRepository.existsById(movieId)) {
             throw new EntityNotFoundException(
                     "Không tìm thấy phim với id: " + movieId
@@ -114,38 +110,5 @@ public class MovieGenreServiceImpl implements MovieGenreService {
                 movieGenreRepository.findByIdMovieId(movieId);
 
         return movieGenreMapper.toResponseList(movieGenreList);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PageResponse<MovieGenreResponse> getMoviesByGenreId(
-            Integer genreId,
-            Pageable pageable
-    ) {
-
-        if (!genreRepository.existsById(genreId)) {
-            throw new EntityNotFoundException(
-                    "Không tìm thấy thể loại với id: " + genreId
-            );
-        }
-
-        Page<MovieGenre> movieGenrePage =
-                movieGenreRepository.findByIdGenreId(
-                        genreId,
-                        pageable
-                );
-
-        List<MovieGenreResponse> responses =
-                movieGenreMapper.toResponseList(
-                        movieGenrePage.getContent()
-                );
-
-        return PageResponse.<MovieGenreResponse>builder()
-                .data(responses)
-                .pageNumber(movieGenrePage.getNumber() + 1)
-                .pageSize(movieGenrePage.getSize())
-                .totalPages(movieGenrePage.getTotalPages())
-                .totalElements(movieGenrePage.getTotalElements())
-                .build();
     }
 }

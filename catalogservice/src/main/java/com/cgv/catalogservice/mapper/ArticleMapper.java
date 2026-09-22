@@ -15,10 +15,12 @@ public interface ArticleMapper {
 
     @Mapping(target = "movie", ignore = true)
     @Mapping(target = "views", ignore = true)
+    @Mapping(target = "slug", ignore = true)
     Article toEntity(ArticleCreateRequest request);
 
     @Mapping(target = "movie", ignore = true)
     @Mapping(target = "views", ignore = true)
+    @Mapping(target = "slug", ignore = true)
     void updateEntity(ArticleUpdateRequest request, @MappingTarget Article article);
 
     @Mapping(target = "movieId", source = "movie.id")

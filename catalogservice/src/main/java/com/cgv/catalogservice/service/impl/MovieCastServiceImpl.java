@@ -9,17 +9,16 @@ import com.cgv.catalogservice.mapper.MovieCastMapper;
 import com.cgv.catalogservice.repository.MovieCastRepository;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieCastService;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -96,16 +95,11 @@ public class MovieCastServiceImpl implements MovieCastService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<MovieCastResponse> getAllMovieCasts(Pageable pageable) {
-        Page<MovieCast> movieCastPage = movieCastRepository.findAll(pageable);
-        List<MovieCastResponse> movieCastResponses =
-                movieCastMapper.toResponseList(movieCastPage.getContent());
 
-        return PageResponse.<MovieCastResponse>builder()
-                .data(movieCastResponses)
-                .pageNumber(movieCastPage.getNumber() + 1)
-                .pageSize(movieCastPage.getSize())
-                .totalPages(movieCastPage.getTotalPages())
-                .totalElements(movieCastPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                movieCastRepository::findAll,
+                pageable,
+                movieCastMapper::toResponseList
+        );
     }
 }

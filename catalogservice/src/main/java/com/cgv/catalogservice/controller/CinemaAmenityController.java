@@ -1,11 +1,8 @@
 package com.cgv.catalogservice.controller;
 
-import com.cgv.commondto.dto.PageResponse;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -74,25 +71,6 @@ public class CinemaAmenityController {
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Danh sách tiện ích của rạp")
-                .build();
-    }
-
-    @GetMapping("/amenity/{amenity}")
-    public ApiResponse<PageResponse<CinemaAmenityResponse>> getCinemasByAmenity(
-            @PathVariable Amenity amenity,
-            @PageableDefault Pageable pageable
-    ) {
-
-        PageResponse<CinemaAmenityResponse> response =
-                cinemaAmenityService.getCinemasByAmenity(
-                        amenity,
-                        pageable
-                );
-
-        return ApiResponse.<PageResponse<CinemaAmenityResponse>>builder()
-                .status(HttpStatus.OK.value())
-                .data(response)
-                .message("Danh sách rạp theo tiện ích")
                 .build();
     }
 }

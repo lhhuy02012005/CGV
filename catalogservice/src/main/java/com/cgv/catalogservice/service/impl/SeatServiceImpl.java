@@ -16,18 +16,17 @@ import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.SeatTypeRepository;
 import com.cgv.catalogservice.repository.ShowtimeRepository;
 import com.cgv.catalogservice.service.SeatService;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -248,16 +247,11 @@ public class SeatServiceImpl implements SeatService {
             );
         }
 
-        Page<Seat> seatPage = seatRepository.findAllByRoomId(roomId, pageable);
-        List<SeatResponse> seatResponses = seatMapper.toResponseList(seatPage.getContent());
-
-        return PageResponse.<SeatResponse>builder()
-                .data(seatResponses)
-                .pageNumber(seatPage.getNumber() + 1)
-                .pageSize(seatPage.getSize())
-                .totalPages(seatPage.getTotalPages())
-                .totalElements(seatPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> seatRepository.findAllByRoomId(roomId, p),
+                pageable,
+                seatMapper::toResponseList
+        );
     }
 
     private void validateRoomHasNoScheduledShowtime(UUID roomId) {

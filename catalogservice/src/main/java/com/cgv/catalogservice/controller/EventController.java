@@ -82,6 +82,34 @@ public class EventController {
                 .build();
     }
 
+    @GetMapping("/status/upcoming")
+    public ApiResponse<PageResponse<EventResponse>> getUpcomingEvents(
+            @PageableDefault Pageable pageable
+    ) {
+        PageResponse<EventResponse> eventResponsePage =
+                eventService.getUpcomingEvents(pageable);
+
+        return ApiResponse.<PageResponse<EventResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(eventResponsePage)
+                .message("Danh sách sự kiện sắp diễn ra")
+                .build();
+    }
+
+    @GetMapping("/status/ongoing")
+    public ApiResponse<PageResponse<EventResponse>> getOngoingEvents(
+            @PageableDefault Pageable pageable
+    ) {
+        PageResponse<EventResponse> eventResponsePage =
+                eventService.getOngoingEvents(pageable);
+
+        return ApiResponse.<PageResponse<EventResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(eventResponsePage)
+                .message("Danh sách sự kiện đang diễn ra")
+                .build();
+    }
+
     @GetMapping
     public ApiResponse<PageResponse<EventResponse>> findAll(
             @ModelAttribute EventFilterRequest request,

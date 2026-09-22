@@ -9,17 +9,16 @@ import com.cgv.catalogservice.mapper.GenreMapper;
 import com.cgv.catalogservice.repository.GenreRepository;
 import com.cgv.catalogservice.repository.MovieGenreRepository;
 import com.cgv.catalogservice.service.GenreService;
+import com.cgv.catalogservice.util.PageResponseUtils;
+import com.cgv.catalogservice.util.SlugUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -33,8 +32,29 @@ public class GenreServiceImpl implements GenreService {
 
     @Override
     @Transactional
-    public GenreResponse createGenre(GenreCreateRequest request) {
+    public GenreResponse createGenre(
+            GenreCreateRequest request
+    ) {
+        String name = request.name();
+
+        if (genreRepository.existsByNameIgnoreCase(name)) {
+            throw new ResourceConflictException(
+                    "Thể loại với tên '" + name + "' đã tồn tại"
+            );
+        }
+
+        String slug = SlugUtils.toSlug(name);
+
+        if (genreRepository.existsBySlug(slug)) {
+            throw new ResourceConflictException(
+                    "Slug '" + slug + "' đã tồn tại"
+            );
+        }
+
         Genre genre = genreMapper.toEntity(request);
+
+        genre.setSlug(slug);
+
         Genre savedGenre = genreRepository.save(genre);
 
         return genreMapper.toResponse(savedGenre);
@@ -42,13 +62,48 @@ public class GenreServiceImpl implements GenreService {
 
     @Override
     @Transactional
-    public GenreResponse updateGenre(Integer genreId, GenreUpdateRequest request) {
+    public GenreResponse updateGenre(
+            Integer genreId,
+            GenreUpdateRequest request
+    ) {
         Genre genre = genreRepository.findById(genreId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy genre với id: " + genreId
-                ));
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "Không tìm thấy genre với id: " + genreId
+                        )
+                );
+
+        String name = request.name();
+
+        if (name.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Tên thể loại không được để trống"
+            );
+        }
+
+        if (genreRepository.existsByNameIgnoreCaseAndIdNot(
+                name,
+                genreId
+        )) {
+            throw new ResourceConflictException(
+                    "Thể loại với tên '" + name + "' đã tồn tại"
+            );
+        }
+
+        String slug = SlugUtils.toSlug(name);
+
+        if (genreRepository.existsBySlugAndIdNot(
+                slug,
+                genreId
+        )) {
+            throw new ResourceConflictException(
+                    "Slug '" + slug + "' đã tồn tại"
+            );
+        }
 
         genreMapper.updateEntity(request, genre);
+
+        genre.setSlug(slug);
 
         return genreMapper.toResponse(genre);
     }
@@ -85,15 +140,11 @@ public class GenreServiceImpl implements GenreService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<GenreResponse> getAllGenres(Pageable pageable) {
-        Page<Genre> genrePage = genreRepository.findAll(pageable);
-        List<GenreResponse> genreResponses = genreMapper.toResponseList(genrePage.getContent());
 
-        return PageResponse.<GenreResponse>builder()
-                .data(genreResponses)
-                .pageNumber(genrePage.getNumber() + 1)
-                .pageSize(genrePage.getSize())
-                .totalPages(genrePage.getTotalPages())
-                .totalElements(genrePage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                genreRepository::findAll,
+                pageable,
+                genreMapper::toResponseList
+        );
     }
 }

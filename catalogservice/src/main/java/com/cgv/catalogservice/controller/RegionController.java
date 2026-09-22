@@ -37,7 +37,7 @@ public class RegionController {
                 .build();
     }
 
-    @PatchMapping("/{regionId}")
+    @PutMapping("/{regionId}")
     public ApiResponse<RegionResponse> update(
             @PathVariable Integer regionId,
             @RequestBody @Valid RegionUpdateRequest request

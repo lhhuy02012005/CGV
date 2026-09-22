@@ -13,18 +13,21 @@ import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RegionRepository;
 import com.cgv.catalogservice.service.CinemaService;
 import com.cgv.catalogservice.specification.CinemaSpecification;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -37,6 +40,10 @@ public class CinemaServiceImpl implements CinemaService {
     CinemaMapper cinemaMapper;
 
     @Override
+    @CacheEvict(
+            value = "cinemasByRegion",
+            allEntries = true
+    )
     @Transactional
     public CinemaResponse createCinema(CinemaCreateRequest request) {
 
@@ -60,6 +67,20 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "cinema",
+                            key = "#cinemaId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "cinemasByRegion",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public CinemaResponse updateCinema(UUID cinemaId, CinemaUpdateRequest request) {
 
@@ -97,6 +118,20 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "cinema",
+                            key = "#cinemaId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "cinemasByRegion",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public CinemaResponse updateCinemaStatus(UUID cinemaId, CinemaUpdateStatusRequest request) {
         Cinema cinema = cinemaRepository.findById(cinemaId)
@@ -112,6 +147,10 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
+    @Cacheable(
+            value = "cinema",
+            key = "#cinemaId"
+    )
     @Transactional(readOnly = true)
     public CinemaResponse getCinemaById(UUID cinemaId) {
         Cinema cinema = cinemaRepository.findById(cinemaId)
@@ -120,6 +159,40 @@ public class CinemaServiceImpl implements CinemaService {
                 ));
 
         return cinemaMapper.toResponse(cinema);
+    }
+
+    @Override
+    @Cacheable(
+            value = "cinemasByRegion",
+            key = "#regionId"
+                    + " + ':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<CinemaResponse> getCinemasByRegionId(
+            Integer regionId,
+            Pageable pageable
+    ) {
+
+        if (!regionRepository.existsById(regionId)) {
+            throw new EntityNotFoundException(
+                    "Không tìm thấy region với id: " + regionId
+            );
+        }
+
+        Specification<Cinema> spec =
+                Specification.allOf(
+                        CinemaSpecification.hasRegionId(
+                                regionId
+                        )
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p -> cinemaRepository.findAll(spec, p),
+                pageable,
+                cinemaMapper::toResponseList
+        );
     }
 
     @Override
@@ -148,23 +221,10 @@ public class CinemaServiceImpl implements CinemaService {
                         )
                 );
 
-        Page<Cinema> cinemaPage =
-                cinemaRepository.findAll(
-                        specification,
-                        pageable
-                );
-
-        List<CinemaResponse> cinemaResponses =
-                cinemaMapper.toResponseList(
-                        cinemaPage.getContent()
-                );
-
-        return PageResponse.<CinemaResponse>builder()
-                .data(cinemaResponses)
-                .pageNumber(cinemaPage.getNumber() + 1)
-                .pageSize(cinemaPage.getSize())
-                .totalPages(cinemaPage.getTotalPages())
-                .totalElements(cinemaPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> cinemaRepository.findAll(specification, p),
+                pageable,
+                cinemaMapper::toResponseList
+        );
     }
 }

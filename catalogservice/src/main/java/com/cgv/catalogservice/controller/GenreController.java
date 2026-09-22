@@ -37,7 +37,7 @@ public class GenreController {
                 .build();
     }
 
-    @PatchMapping("/{genreId}")
+    @PutMapping("/{genreId}")
     public ApiResponse<GenreResponse> update(
             @PathVariable Integer genreId,
             @RequestBody @Valid GenreUpdateRequest request

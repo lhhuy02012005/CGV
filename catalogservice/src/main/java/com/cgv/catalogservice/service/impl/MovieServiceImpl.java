@@ -1,18 +1,22 @@
 package com.cgv.catalogservice.service.impl;
 
-import com.cgv.catalogservice.dto.request.movie.MovieCreateRequest;
-import com.cgv.catalogservice.dto.request.movie.MovieFilterRequest;
-import com.cgv.catalogservice.dto.request.movie.MovieUpdateRequest;
-import com.cgv.catalogservice.dto.request.movie.MovieUpdateStatusRequest;
+import com.cgv.catalogservice.dto.request.movie.*;
 import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.catalogservice.entity.Movie;
+import com.cgv.catalogservice.enums.MovieStatus;
+import com.cgv.catalogservice.enums.ShowingStatus;
 import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.MovieMapper;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieService;
 import com.cgv.catalogservice.specification.MovieSpecification;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +39,18 @@ public class MovieServiceImpl implements MovieService {
     MovieMapper movieMapper;
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "nowShowingMovies",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "comingSoonMovies",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public MovieResponse createMovie(MovieCreateRequest request) {
 
@@ -54,6 +70,24 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "movie",
+                            key = "#movieId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "nowShowingMovies",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "comingSoonMovies",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
 
@@ -95,6 +129,24 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "movie",
+                            key = "#movieId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "nowShowingMovies",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "comingSoonMovies",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public MovieResponse updateMovieStatus(UUID movieId, MovieUpdateStatusRequest request) {
 
@@ -108,12 +160,95 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "movie",
+                            key = "#movieId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "nowShowingMovies",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "comingSoonMovies",
+                            allEntries = true
+                    )
+            }
+    )
+    @Transactional
+    public MovieResponse updateMovieShowingStatus(UUID movieId, MovieUpdateShowingStatusRequest request) {
+
+        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy phim với id: " + movieId));
+
+        movie.setShowingStatus(request.showingStatus());
+
+        movieRepository.saveAndFlush(movie);
+
+        return movieMapper.toResponse(movie);
+    }
+
+    @Override
+    @Cacheable(
+            value = "movie",
+            key = "#movieId"
+    )
     @Transactional(readOnly = true)
     public MovieResponse getMovieById(UUID movieId) {
 
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
         return movieMapper.toResponse(movie);
+    }
+
+    @Override
+    @Cacheable(
+            value = "nowShowingMovies",
+            key = "'page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<MovieResponse> getNowShowingMovies(Pageable pageable) {
+
+        Specification<Movie> spec =
+                Specification.allOf(
+                        MovieSpecification.hasShowingStatus(ShowingStatus.NOW_SHOWING),
+                        MovieSpecification.hasStatus(MovieStatus.ACTIVE)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p -> movieRepository.findAll(spec, p),
+                pageable,
+                movieMapper::toResponseList
+        );
+    }
+
+    @Override
+    @Cacheable(
+            value = "comingSoonMovies",
+            key = "'page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<MovieResponse> getComingSoonMovies(Pageable pageable) {
+
+        Specification<Movie> spec =
+                Specification.allOf(
+                        MovieSpecification.hasShowingStatus(ShowingStatus.COMING_SOON),
+                        MovieSpecification.hasStatus(MovieStatus.ACTIVE)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p -> movieRepository.findAll(spec, p),
+                pageable,
+                movieMapper::toResponseList
+        );
     }
 
     @Override
@@ -154,17 +289,11 @@ public class MovieServiceImpl implements MovieService {
                         )
                 );
 
-        Page<Movie> moviePage = movieRepository.findAll(specification, pageable);
-
-        List<MovieResponse> movieResponseList = movieMapper.toResponseList(moviePage.getContent());
-
-        return PageResponse.<MovieResponse>builder()
-                .data(movieResponseList)
-                .pageNumber(moviePage.getNumber() + 1)
-                .pageSize(moviePage.getSize())
-                .totalPages(moviePage.getTotalPages())
-                .totalElements(moviePage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> movieRepository.findAll(specification, p),
+                pageable,
+                movieMapper::toResponseList
+        );
     }
 
     private void validateMovieDates(

@@ -1,6 +1,5 @@
 package com.cgv.catalogservice.dto.request.movie;
 
-import com.cgv.catalogservice.enums.ShowingStatus;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
@@ -29,8 +28,6 @@ public record MovieUpdateRequest(
         LocalDate releaseDate,
 
         LocalDate endDate,
-
-        ShowingStatus showingStatus,
 
         String posterUrl,
 

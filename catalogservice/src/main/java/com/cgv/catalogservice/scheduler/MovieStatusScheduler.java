@@ -5,6 +5,8 @@ import com.cgv.catalogservice.repository.MovieRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,22 @@ public class MovieStatusScheduler {
     @Scheduled(
             cron = "0 5 0 * * *",
             zone = "Asia/Ho_Chi_Minh"
+    )
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "movie",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "nowShowingMovies",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "comingSoonMovies",
+                            allEntries = true
+                    )
+            }
     )
     @Transactional
     public void updateExpiredMoviesToEnded() {

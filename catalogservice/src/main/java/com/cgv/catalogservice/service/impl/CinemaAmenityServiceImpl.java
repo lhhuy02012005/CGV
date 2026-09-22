@@ -11,13 +11,10 @@ import com.cgv.catalogservice.mapper.CinemaAmenityMapper;
 import com.cgv.catalogservice.repository.CinemaAmenityRepository;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.service.CinemaAmenityService;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,46 +96,15 @@ public class CinemaAmenityServiceImpl
     public List<CinemaAmenityResponse> getAmenitiesByCinemaId(
             UUID cinemaId
     ) {
-
         if (!cinemaRepository.existsById(cinemaId)) {
             throw new EntityNotFoundException(
-                    "Không tìm thấy rạp chiếu phim với id: "
-                            + cinemaId
+                    "Không tìm thấy rạp chiếu phim với id: " + cinemaId
             );
         }
 
-        List<CinemaAmenity> cinemaAmenityList =
-                cinemaAmenityRepository
-                        .findByIdCinemaId(cinemaId);
+        List<CinemaAmenity> amenities =
+                cinemaAmenityRepository.findByIdCinemaId(cinemaId);
 
-        return cinemaAmenityMapper
-                .toResponseList(cinemaAmenityList);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PageResponse<CinemaAmenityResponse> getCinemasByAmenity(
-            Amenity amenity,
-            Pageable pageable
-    ) {
-
-        Page<CinemaAmenity> cinemaAmenityPage =
-                cinemaAmenityRepository.findByIdAmenity(
-                        amenity,
-                        pageable
-                );
-
-        List<CinemaAmenityResponse> responses =
-                cinemaAmenityMapper.toResponseList(
-                        cinemaAmenityPage.getContent()
-                );
-
-        return PageResponse.<CinemaAmenityResponse>builder()
-                .data(responses)
-                .pageNumber(cinemaAmenityPage.getNumber() + 1)
-                .pageSize(cinemaAmenityPage.getSize())
-                .totalPages(cinemaAmenityPage.getTotalPages())
-                .totalElements(cinemaAmenityPage.getTotalElements())
-                .build();
+        return cinemaAmenityMapper.toResponseList(amenities);
     }
 }

@@ -4,6 +4,7 @@ import com.cgv.catalogservice.dto.request.article.ArticleCreateRequest;
 import com.cgv.catalogservice.dto.request.article.ArticleFilterRequest;
 import com.cgv.catalogservice.dto.request.article.ArticleUpdateRequest;
 import com.cgv.catalogservice.dto.response.ArticleResponse;
+import com.cgv.catalogservice.enums.ArticleCategory;
 import com.cgv.catalogservice.service.ArticleService;
 import com.cgv.commondto.dto.ApiResponse;
 import com.cgv.commondto.dto.PageResponse;
@@ -83,6 +84,52 @@ public class ArticleController {
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Xem chi tiết bài viết thành công")
+                .build();
+    }
+
+    @GetMapping("/category/{category}")
+    public ApiResponse<PageResponse<ArticleResponse>> getArticlesByCategory(
+            @PathVariable ArticleCategory category,
+            @PageableDefault Pageable pageable
+    ) {
+
+        PageResponse<ArticleResponse> response =
+                articleService.getArticlesByCategory(category, pageable);
+
+        return ApiResponse.<PageResponse<ArticleResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(response)
+                .message("Danh sách bài viết theo loại")
+                .build();
+    }
+
+    @GetMapping("/featured")
+    public ApiResponse<PageResponse<ArticleResponse>> getFeaturedArticles(
+            @PageableDefault Pageable pageable
+    ) {
+
+        PageResponse<ArticleResponse> response =
+                articleService.getFeaturedArticles(pageable);
+
+        return ApiResponse.<PageResponse<ArticleResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(response)
+                .message("Danh sách bài viết nổi bật")
+                .build();
+    }
+
+    @GetMapping("/trending")
+    public ApiResponse<PageResponse<ArticleResponse>> getTrendingArticles(
+            @PageableDefault Pageable pageable
+    ) {
+
+        PageResponse<ArticleResponse> response =
+                articleService.getTrendingArticles(pageable);
+
+        return ApiResponse.<PageResponse<ArticleResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(response)
+                .message("Danh sách bài viết thịnh hành")
                 .build();
     }
 
