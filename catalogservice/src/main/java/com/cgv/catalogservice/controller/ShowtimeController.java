@@ -26,6 +26,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -150,7 +151,7 @@ public class ShowtimeController {
     public ApiResponse<PageResponse<ShowtimeResponse>>
     getShowtimesByMovieAndDate(
             @Parameter(description = "ID của phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID movieId,
-            @Parameter(description = "Ngày chiếu theo định dạng yyyy-MM-dd", required = true, schema = @Schema(type = "string", format = "date", example = "2026-09-23")) @PathVariable LocalDate showDate,
+            @Parameter(description = "Ngày chiếu theo định dạng yyyy-MM-dd", required = true, schema = @Schema(type = "string", format = "date", example = "2026-09-23")) @PathVariable Instant showDate,
             @ParameterObject @PageableDefault Pageable pageable
     ) {
 
@@ -180,7 +181,7 @@ public class ShowtimeController {
     public ApiResponse<PageResponse<ShowtimeResponse>>
     getShowtimesByCinemaAndDate(
             @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId,
-            @Parameter(description = "Ngày chiếu theo định dạng yyyy-MM-dd", required = true, schema = @Schema(type = "string", format = "date", example = "2026-09-23")) @PathVariable LocalDate showDate,
+            @Parameter(description = "Ngày chiếu theo định dạng yyyy-MM-dd", required = true, schema = @Schema(type = "string", format = "date", example = "2026-09-23")) @PathVariable Instant showDate,
             @ParameterObject @PageableDefault Pageable pageable
     ) {
 

@@ -10,6 +10,7 @@ import com.cgv.catalogservice.dto.response.ShowtimeResponse;
 import com.cgv.commondto.dto.PageResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -35,13 +36,13 @@ public interface ShowtimeService {
 
     PageResponse<ShowtimeResponse> getShowtimesByMovieAndDate(
             UUID movieId,
-            LocalDate showDate,
+            Instant showDate,
             Pageable pageable
     );
 
     PageResponse<ShowtimeResponse> getShowtimesByCinemaAndDate(
             UUID cinemaId,
-            LocalDate showDate,
+            Instant showDate,
             Pageable pageable
     );
 

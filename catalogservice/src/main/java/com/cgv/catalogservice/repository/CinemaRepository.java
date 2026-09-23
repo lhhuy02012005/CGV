@@ -1,6 +1,7 @@
 package com.cgv.catalogservice.repository;
 
 import com.cgv.catalogservice.entity.Cinema;
+import jakarta.validation.constraints.NotBlank;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -21,4 +22,8 @@ public interface CinemaRepository
 
     @Query("SELECT c FROM Cinema c JOIN FETCH c.region WHERE c.status = :status")
     List<Cinema> findByStatusWithRegion(CinemaStatus status);
+
+    boolean existsByName(@NotBlank(message = "Tên rạp không được để trống") String name);
+
+    boolean existsByNameAndIdNot(String name, UUID cinemaId);
 }

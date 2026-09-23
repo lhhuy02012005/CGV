@@ -3,7 +3,7 @@ package com.cgv.catalogservice.dto.request.movie;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDate;
+import java.time.Instant;
 
 public record MovieUpdateRequest(
 
@@ -27,9 +27,9 @@ public record MovieUpdateRequest(
         @Positive(message = "Thời lượng phim phải lớn hơn 0")
         Integer durationMinutes,
 
-        LocalDate releaseDate,
+        Instant releaseDate,
 
-        LocalDate endDate,
+        Instant endDate,
 
         String posterUrl,
 

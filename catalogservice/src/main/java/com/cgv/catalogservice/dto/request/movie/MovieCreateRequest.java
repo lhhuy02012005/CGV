@@ -7,7 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDate;
+import java.time.Instant;
 
 public record MovieCreateRequest(
 
@@ -32,9 +32,9 @@ public record MovieCreateRequest(
         @Positive(message = "Thời lượng phim phải lớn hơn 0")
         Integer durationMinutes,
 
-        LocalDate releaseDate,
+        Instant releaseDate,
 
-        LocalDate endDate,
+        Instant endDate,
 
         @NotNull(message = "Trạng thái chiếu không được để trống")
         ShowingStatus showingStatus,

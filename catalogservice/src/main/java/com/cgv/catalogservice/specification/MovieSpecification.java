@@ -8,7 +8,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDate;
+import java.time.Instant;
 
 public final class MovieSpecification {
 
@@ -115,7 +115,7 @@ public final class MovieSpecification {
     }
 
     public static Specification<Movie> releaseDateFrom(
-            LocalDate from
+            Instant from
     ) {
         return (root, query, cb) ->
                 from == null
@@ -127,7 +127,7 @@ public final class MovieSpecification {
     }
 
     public static Specification<Movie> releaseDateTo(
-            LocalDate to
+            Instant to
     ) {
         return (root, query, cb) ->
                 to == null
