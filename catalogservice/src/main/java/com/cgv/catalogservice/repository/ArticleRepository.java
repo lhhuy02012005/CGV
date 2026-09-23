@@ -14,4 +14,9 @@ public interface ArticleRepository
     Optional<Article> findBySlug(String slug);
 
     boolean existsBySlug(String slug);
+
+    boolean existsBySlugAndIdNot(
+            String slug,
+            UUID articleId
+    );
 }

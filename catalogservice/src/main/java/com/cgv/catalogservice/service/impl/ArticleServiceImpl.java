@@ -6,25 +6,31 @@ import com.cgv.catalogservice.dto.request.article.ArticleUpdateRequest;
 import com.cgv.catalogservice.dto.response.ArticleResponse;
 import com.cgv.catalogservice.entity.Article;
 import com.cgv.catalogservice.entity.Movie;
+import com.cgv.catalogservice.enums.ArticleCategory;
 import com.cgv.catalogservice.mapper.ArticleMapper;
 import com.cgv.catalogservice.repository.ArticleRepository;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.ArticleService;
 import com.cgv.catalogservice.specification.ArticleSpecification;
+import com.cgv.catalogservice.util.PageResponseUtils;
+import com.cgv.catalogservice.util.SlugUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "ARTICLE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -36,48 +42,122 @@ public class ArticleServiceImpl implements ArticleService {
     ArticleMapper articleMapper;
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "articlesByCategory",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "featuredArticles",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "trendingArticles",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
-    public ArticleResponse createArticle(ArticleCreateRequest request) {
+    public ArticleResponse createArticle(
+            ArticleCreateRequest request
+    ) {
+
+        log.info("Creating article: title={}", request.title());
+        String title = request.title();
+
+        String slug = SlugUtils.generateUniqueSlug(
+                title,
+                articleRepository::existsBySlug
+        );
 
         Article article = articleMapper.toEntity(request);
+
+        article.setSlug(slug);
 
         if (request.movieId() != null) {
             Movie movie = movieRepository.findById(request.movieId())
                     .orElseThrow(() ->
                             new EntityNotFoundException(
-                                    "Không tìm thấy movie với id: " + request.movieId()
+                                    "Không tìm thấy movie với id: "
+                                            + request.movieId()
                             )
                     );
 
             article.setMovie(movie);
         }
 
-        Article savedArticle = articleRepository.save(article);
+        Article savedArticle =
+                articleRepository.save(article);
 
         return articleMapper.toResponse(savedArticle);
     }
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "articlesByCategory",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "featuredArticles",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "trendingArticles",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public ArticleResponse updateArticle(
             UUID articleId,
             ArticleUpdateRequest request
     ) {
 
+        log.info("Updating article: articleId={}", articleId);
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() ->
                         new EntityNotFoundException(
-                                "Không tìm thấy bài viết với id: " + articleId
+                                "Không tìm thấy bài viết với id: "
+                                        + articleId
                         )
                 );
 
+        String newSlug = null;
+
+        if (request.title() != null) {
+
+            String newTitle = request.title();
+
+            if (newTitle.isBlank()) {
+                throw new IllegalArgumentException(
+                        "Tiêu đề không được để trống"
+                );
+            }
+
+            newSlug = SlugUtils.generateUniqueSlug(
+                    newTitle,
+                    slug -> articleRepository.existsBySlugAndIdNot(
+                            slug,
+                            articleId
+                    )
+            );
+        }
+
         articleMapper.updateEntity(request, article);
+
+        if (newSlug != null) {
+            article.setSlug(newSlug);
+        }
 
         if (request.movieId() != null) {
             Movie movie = movieRepository.findById(request.movieId())
                     .orElseThrow(() ->
                             new EntityNotFoundException(
-                                    "Không tìm thấy movie với id: " + request.movieId()
+                                    "Không tìm thấy movie với id: "
+                                            + request.movieId()
                             )
                     );
 
@@ -90,8 +170,26 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "articlesByCategory",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "featuredArticles",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "trendingArticles",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public void deleteArticle(UUID articleId) {
+
+        log.info("Deleting article: articleId={}", articleId);
 
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() ->
@@ -106,6 +204,8 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional
     public ArticleResponse getArticleById(UUID articleId) {
+
+        log.debug("Getting article by id: articleId={}", articleId);
 
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() ->
@@ -125,11 +225,86 @@ public class ArticleServiceImpl implements ArticleService {
     }
 
     @Override
+    @Cacheable(
+            value = "articlesByCategory",
+            key = "#category"
+                    + " + ':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<ArticleResponse> getArticlesByCategory(ArticleCategory category, Pageable pageable) {
+
+        log.debug("Getting articles by category: category={}, page={}, size={}", category, pageable.getPageNumber(), pageable.getPageSize());
+
+        Specification<Article> spec =
+                Specification.allOf(
+                        ArticleSpecification.hasCategory(category)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p  -> articleRepository.findAll(spec, p),
+                pageable,
+                articleMapper::toResponseList
+        );
+    }
+
+    @Override
+    @Cacheable(
+            value = "featuredArticles",
+            key = "':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<ArticleResponse> getFeaturedArticles(Pageable pageable) {
+
+        log.debug("Getting featured articles: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
+        Specification<Article> spec =
+                Specification.allOf(
+                        ArticleSpecification.isFeatured(Boolean.TRUE)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p  -> articleRepository.findAll(spec, p),
+                pageable,
+                articleMapper::toResponseList
+        );
+    }
+
+    @Override
+    @Cacheable(
+            value = "trendingArticles",
+            key = "':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<ArticleResponse> getTrendingArticles(Pageable pageable) {
+
+        log.debug("Getting trending articles: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
+        Specification<Article> spec =
+                Specification.allOf(
+                        ArticleSpecification.isTrending(Boolean.TRUE)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p  -> articleRepository.findAll(spec, p),
+                pageable,
+                articleMapper::toResponseList
+        );
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PageResponse<ArticleResponse> getAllArticles(
             ArticleFilterRequest filter,
             Pageable pageable
     ) {
+
+        log.debug("Getting all articles: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Article> spec =
                 Specification.allOf(
@@ -159,20 +334,10 @@ public class ArticleServiceImpl implements ArticleService {
                         )
                 );
 
-        Page<Article> articlePage =
-                articleRepository.findAll(spec, pageable);
-
-        List<ArticleResponse> articleResponses =
-                articleMapper.toResponseList(
-                        articlePage.getContent()
-                );
-
-        return PageResponse.<ArticleResponse>builder()
-                .data(articleResponses)
-                .pageNumber(articlePage.getNumber() + 1)
-                .pageSize(articlePage.getSize())
-                .totalPages(articlePage.getTotalPages())
-                .totalElements(articlePage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p  -> articleRepository.findAll(spec, p),
+                pageable,
+                articleMapper::toResponseList
+        );
     }
 }

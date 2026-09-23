@@ -17,7 +17,5 @@ public interface SeatService {
 
     SeatResponse updateSeatStatus(UUID seatId, SeatUpdateStatusRequest request);
 
-    SeatResponse getSeatById(UUID seatId);
-
     PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable);
 }

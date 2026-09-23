@@ -13,9 +13,6 @@ public record ArticleCreateRequest(
         @NotBlank(message = "Tiêu đề không được để trống")
         String title,
 
-        @NotBlank(message = "Slug không được để trống")
-        String slug,
-
         String thumbnailUrl,
 
         @NotBlank(message = "Nội dung không được để trống")

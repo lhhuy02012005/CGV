@@ -13,7 +13,7 @@ import java.util.UUID;
 public interface SeatRepository
         extends JpaRepository<Seat, UUID> {
 
-    List<Seat> findByRoom_Id(UUID roomId);
+    List<Seat> findByRoomId(UUID roomId);
 
     @Query("""
         SELECT s FROM Seat s
@@ -22,15 +22,17 @@ public interface SeatRepository
     """)
     List<Seat> findByRoomIdWithSeatType(@org.springframework.data.repository.query.Param("roomId") UUID roomId);
 
-    Page<Seat> findAllByRoom_Id(UUID roomId, Pageable pageable);
+    Page<Seat> findAllByRoomId(UUID roomId, Pageable pageable);
 
-    boolean existsByRoom_IdAndRowCharAndSeatNumber(
+    boolean existsByRoomIdAndRowCharAndSeatNumber(
             UUID roomId,
             String rowChar,
             Integer seatNumber
     );
 
-    int countByRoom_Id(UUID roomId);
+    int countByRoomId(UUID roomId);
 
-    boolean existsBySeatType_Name(SeatTypeName seatTypeName);
+    boolean existsBySeatTypeName(SeatTypeName seatTypeName);
+
+    boolean existsByRoomIdAndRowCharAndSeatNumberAndIdNot(UUID targetRoomId, String targetRowChar, Integer targetSeatNumber, UUID seatId);
 }

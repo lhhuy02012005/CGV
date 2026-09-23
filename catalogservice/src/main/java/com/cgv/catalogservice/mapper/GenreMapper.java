@@ -5,6 +5,7 @@ import com.cgv.catalogservice.dto.request.genre.GenreUpdateRequest;
 import com.cgv.catalogservice.dto.response.GenreResponse;
 import com.cgv.catalogservice.entity.Genre;
 import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
 import java.util.List;
@@ -12,11 +13,18 @@ import java.util.List;
 @Mapper(config = CatalogMapperConfig.class)
 public interface GenreMapper {
 
+    @Mapping(target = "slug", ignore = true)
     Genre toEntity(GenreCreateRequest request);
 
-    void updateEntity(GenreUpdateRequest request, @MappingTarget Genre genre);
+    @Mapping(target = "slug", ignore = true)
+    void updateEntity(
+            GenreUpdateRequest request,
+            @MappingTarget Genre genre
+    );
 
     GenreResponse toResponse(Genre genre);
 
-    List<GenreResponse> toResponseList(List<Genre> genres);
+    List<GenreResponse> toResponseList(
+            List<Genre> genres
+    );
 }

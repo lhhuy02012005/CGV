@@ -3,8 +3,6 @@ package com.cgv.catalogservice.repository;
 import com.cgv.catalogservice.entity.CinemaAmenity;
 import com.cgv.catalogservice.entity.CinemaAmenityId;
 import com.cgv.catalogservice.enums.Amenity;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -14,8 +12,6 @@ public interface CinemaAmenityRepository
         extends JpaRepository<CinemaAmenity, CinemaAmenityId> {
 
     List<CinemaAmenity> findByIdCinemaId(UUID cinemaId);
-
-    Page<CinemaAmenity> findByIdAmenity(Amenity amenity, Pageable pageable);
 
     boolean existsByIdCinemaIdAndIdAmenity(
             UUID cinemaId,

@@ -12,19 +12,18 @@ import com.cgv.catalogservice.repository.GenreRepository;
 import com.cgv.catalogservice.repository.MovieGenreRepository;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieGenreService;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "MOVIE-GENRE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -41,6 +40,8 @@ public class MovieGenreServiceImpl implements MovieGenreService {
     public MovieGenreResponse createMovieGenre(
             MovieGenreCreateRequest request
     ) {
+
+        log.info("Creating movie genre: movieId={}, genreId={}", request.movieId(), request.genreId());
 
         if (movieGenreRepository.existsByIdMovieIdAndIdGenreId(
                 request.movieId(),
@@ -83,6 +84,8 @@ public class MovieGenreServiceImpl implements MovieGenreService {
             Integer genreId
     ) {
 
+        log.info("Deleting movie genre: movieId={}, genreId={}", movieId, genreId);
+
         MovieGenreId movieGenreId =
                 new MovieGenreId(movieId, genreId);
 
@@ -104,6 +107,7 @@ public class MovieGenreServiceImpl implements MovieGenreService {
             UUID movieId
     ) {
 
+        log.debug("Getting genres by movie: movieId={}", movieId);
         if (!movieRepository.existsById(movieId)) {
             throw new EntityNotFoundException(
                     "Không tìm thấy phim với id: " + movieId
@@ -114,38 +118,5 @@ public class MovieGenreServiceImpl implements MovieGenreService {
                 movieGenreRepository.findByIdMovieId(movieId);
 
         return movieGenreMapper.toResponseList(movieGenreList);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PageResponse<MovieGenreResponse> getMoviesByGenreId(
-            Integer genreId,
-            Pageable pageable
-    ) {
-
-        if (!genreRepository.existsById(genreId)) {
-            throw new EntityNotFoundException(
-                    "Không tìm thấy thể loại với id: " + genreId
-            );
-        }
-
-        Page<MovieGenre> movieGenrePage =
-                movieGenreRepository.findByIdGenreId(
-                        genreId,
-                        pageable
-                );
-
-        List<MovieGenreResponse> responses =
-                movieGenreMapper.toResponseList(
-                        movieGenrePage.getContent()
-                );
-
-        return PageResponse.<MovieGenreResponse>builder()
-                .data(responses)
-                .pageNumber(movieGenrePage.getNumber() + 1)
-                .pageSize(movieGenrePage.getSize())
-                .totalPages(movieGenrePage.getTotalPages())
-                .totalElements(movieGenrePage.getTotalElements())
-                .build();
     }
 }

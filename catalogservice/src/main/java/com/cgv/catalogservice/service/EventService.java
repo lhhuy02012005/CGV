@@ -20,6 +20,10 @@ public interface EventService {
 
     EventResponse getEventById(UUID eventId);
 
+    PageResponse<EventResponse> getUpcomingEvents(Pageable pageable);
+
+    PageResponse<EventResponse> getOngoingEvents(Pageable pageable);
+
     PageResponse<EventResponse> getAllEvents(
             EventFilterRequest filter,
             Pageable pageable

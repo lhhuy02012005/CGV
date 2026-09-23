@@ -1,11 +1,9 @@
 package com.cgv.catalogservice.dto.request.movie;
 
-import com.cgv.catalogservice.enums.MovieStatus;
-import com.cgv.catalogservice.enums.ShowingStatus;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDate;
+import java.time.Instant;
 
 public record MovieUpdateRequest(
 
@@ -29,11 +27,9 @@ public record MovieUpdateRequest(
         @Positive(message = "Thời lượng phim phải lớn hơn 0")
         Integer durationMinutes,
 
-        LocalDate releaseDate,
+        Instant releaseDate,
 
-        LocalDate endDate,
-
-        ShowingStatus showingStatus,
+        Instant endDate,
 
         String posterUrl,
 
@@ -41,8 +37,6 @@ public record MovieUpdateRequest(
 
         String trailerYoutubeUrl,
 
-        Boolean isFeatured,
-
-        MovieStatus status
+        Boolean isFeatured
 ) {
 }

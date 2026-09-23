@@ -10,9 +10,17 @@ public interface GenreRepository
 
     Optional<Genre> findBySlug(String slug);
 
-    Optional<Genre> findByName(String name);
+    boolean existsByNameIgnoreCase(String name);
 
-    boolean existsByName(String name);
+    boolean existsByNameIgnoreCaseAndIdNot(
+            String name,
+            Integer genreId
+    );
 
     boolean existsBySlug(String slug);
+
+    boolean existsBySlugAndIdNot(
+            String slug,
+            Integer genreId
+    );
 }

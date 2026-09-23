@@ -4,7 +4,6 @@ import com.cgv.catalogservice.enums.MovieStatus;
 import com.cgv.catalogservice.enums.ShowingStatus;
 
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.UUID;
 
 public record MovieResponse(
@@ -18,8 +17,8 @@ public record MovieResponse(
         String supportedModes,
         String ageRating,
         Integer durationMinutes,
-        LocalDate releaseDate,
-        LocalDate endDate,
+        Instant releaseDate,
+        Instant endDate,
         ShowingStatus showingStatus,
         String posterUrl,
         String backdropUrl,

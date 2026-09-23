@@ -4,7 +4,7 @@ import com.cgv.catalogservice.enums.MovieStatus;
 import com.cgv.catalogservice.enums.ShowingStatus;
 import jakarta.validation.constraints.Positive;
 
-import java.time.LocalDate;
+import java.time.Instant;
 
 public record MovieFilterRequest(
 
@@ -16,9 +16,9 @@ public record MovieFilterRequest(
 
         MovieStatus status,
 
-        LocalDate releaseFrom,
+        Instant releaseFrom,
 
-        LocalDate releaseTo,
+        Instant releaseTo,
 
         @Positive(message = "Thời lượng tối thiểu phải lớn hơn 0")
         Integer minDuration,

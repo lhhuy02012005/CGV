@@ -23,6 +23,8 @@ public interface CinemaService {
 
     CinemaResponse getCinemaById(UUID cinemaId);
 
+    PageResponse<CinemaResponse> getCinemasByRegionId(Integer regionId, Pageable pageable);
+
     PageResponse<CinemaResponse> getAllCinemas(
             CinemaFilterRequest filter,
             Pageable pageable
