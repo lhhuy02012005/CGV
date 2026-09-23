@@ -1,0 +1,8 @@
+# 1. Khởi động toàn bộ hạ tầng (Postgres, Redis, Kafka, Kong, Elasticsearch, Keycloak)
+docker compose -f docker-compose-dev.yml up -d
+
+# 2. Nạp dữ liệu mẫu vào Database (chỉ mất ~2 giây)
+chmod +x ./scripts/seed-data.sh
+./scripts/seed-data.sh
+
+# 3. Khởi chạy các service (hoặc chạy trực tiếp trên IDE của bạn)

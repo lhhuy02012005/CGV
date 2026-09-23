@@ -28,7 +28,8 @@ public record MovieFilterRequest(
 
         String language,
 
-        String ageRating
+        String ageRating,
 
+        Boolean isFeatured
 ) {
 }

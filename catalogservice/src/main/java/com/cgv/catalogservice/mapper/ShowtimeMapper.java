@@ -10,7 +10,7 @@ import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
-@Mapper(config = CatalogMapperConfig.class)
+@Mapper(config = CatalogMapperConfig.class, uses = {RoomMapper.class})
 public interface ShowtimeMapper {
 
     @Mapping(target = "movie", ignore = true)
@@ -26,10 +26,7 @@ public interface ShowtimeMapper {
 
     @Mapping(target = "movieId", source = "movie.id")
     @Mapping(target = "movieTitle", source = "movie.title")
-    @Mapping(target = "roomId", source = "room.id")
-    @Mapping(target = "roomName", source = "room.name")
-    @Mapping(target = "cinemaId", source = "room.cinema.id")
-    @Mapping(target = "cinemaName", source = "room.cinema.name")
+    @Mapping(target = "roomResponse", source = "room")
     ShowtimeResponse toResponse(Showtime showtime);
 
     List<ShowtimeResponse> toResponseList(List<Showtime> showtimes);

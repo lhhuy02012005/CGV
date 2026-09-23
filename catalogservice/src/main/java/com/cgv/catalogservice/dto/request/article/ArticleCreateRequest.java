@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ArticleCreateRequest(
@@ -37,6 +37,6 @@ public record ArticleCreateRequest(
 
         UUID movieId,
 
-        LocalDateTime publishedAt
+        Instant publishedAt
 ) {
 }

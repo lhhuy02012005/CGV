@@ -10,7 +10,7 @@ import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
-@Mapper(config = CatalogMapperConfig.class)
+@Mapper(config = CatalogMapperConfig.class, uses = {CinemaMapper.class})
 public interface RoomMapper {
 
     @Mapping(target = "cinema", ignore = true)
@@ -23,8 +23,7 @@ public interface RoomMapper {
     @Mapping(target = "totalSeats", ignore = true)
     void updateEntity(RoomUpdateRequest request, @MappingTarget Room room);
 
-    @Mapping(target = "cinemaId", source = "cinema.id")
-    @Mapping(target = "cinemaName", source = "cinema.name")
+    @Mapping(target = "cinemaResponse", source = "cinema")
     RoomResponse toResponse(Room room);
 
     List<RoomResponse> toResponseList(List<Room> rooms);

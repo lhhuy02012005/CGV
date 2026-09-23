@@ -5,6 +5,7 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  es_data:
   kafka_1_data:
   kafka_2_data:
   kafka_3_data:
@@ -276,6 +277,7 @@ services:
 
   debezium-connect:
     image: debezium/connect:2.5
+    platform: linux/amd64
     container_name: cgv-debezium
     ports:
       - "8088:8088" # Cổng REST API để điều khiển Debezium
@@ -406,3 +408,29 @@ services:
         aliases:
           - media-service
     restart: unless-stopped
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: cgv-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false # Tắt password trên dev cho tiện
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    networks:
+      - cgv-net
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: cgv-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - cgv-net
+    depends_on:
+      - elasticsearch

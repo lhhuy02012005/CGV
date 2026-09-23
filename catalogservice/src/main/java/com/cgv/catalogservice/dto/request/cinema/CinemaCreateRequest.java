@@ -20,6 +20,10 @@ public record CinemaCreateRequest(
 
         String openingHours,
 
+        Double latitude,
+
+        Double longitude,
+
         CinemaStatus status
 ) {
 }

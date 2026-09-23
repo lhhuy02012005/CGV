@@ -35,7 +35,7 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "payload" , columnDefinition = "TEXT" , nullable = false)
     String payload;
 
-    @Column
+    @Column(name = "is_published")
     Boolean isPublished;
 
     @Column

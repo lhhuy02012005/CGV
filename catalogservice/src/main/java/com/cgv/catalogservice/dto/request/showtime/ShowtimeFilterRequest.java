@@ -5,8 +5,7 @@ import com.cgv.catalogservice.enums.ShowtimeStatus;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ShowtimeFilterRequest(
@@ -17,15 +16,15 @@ public record ShowtimeFilterRequest(
 
         UUID cinemaId,
 
-        LocalDate showDate,
+        Instant showDate,
 
-        LocalDate showDateFrom,
+        Instant showDateFrom,
 
-        LocalDate showDateTo,
+        Instant showDateTo,
 
-        LocalDateTime startTimeFrom,
+        Instant startTimeFrom,
 
-        LocalDateTime startTimeTo,
+        Instant startTimeTo,
 
         ShowtimeStatus status,
 

@@ -13,6 +13,8 @@ public record CinemaResponse(
         String address,
         String phone,
         String openingHours,
+        Double latitude,
+        Double longitude,
         CinemaStatus status,
         Instant createdAt,
         Instant updatedAt

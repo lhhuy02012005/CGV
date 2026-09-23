@@ -25,6 +25,7 @@ message ShowtimePricingResponse {
   string start_time = 10;
   string end_time = 11;
   repeated SeatPricingInfo seats = 12; // Danh sách ghế và phụ thu từng loại ghế
+  string showtime_status = 13;
 }
 
 message SeatPricingInfo {
@@ -32,4 +33,5 @@ message SeatPricingInfo {
   string seat_label = 2; // "A1", "H5"
   string seat_type = 3;  // "NORMAL", "VIP", "SWEETBOX"
   double surcharge = 4;  // 0, 15000, 30000
+  bool is_active = 5;
 }

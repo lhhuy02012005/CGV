@@ -8,6 +8,7 @@ import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.commondto.dto.PageResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface MovieService {
@@ -28,6 +29,11 @@ public interface MovieService {
 
     PageResponse<MovieResponse> getAllMovies(
             MovieFilterRequest filter,
+            Pageable pageable
+    );
+
+    List<MovieResponse> searchMovies(
+            String keyword,
             Pageable pageable
     );
 }

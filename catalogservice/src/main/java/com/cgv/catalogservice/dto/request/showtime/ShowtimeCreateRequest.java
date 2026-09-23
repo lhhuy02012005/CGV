@@ -2,12 +2,12 @@ package com.cgv.catalogservice.dto.request.showtime;
 
 import com.cgv.catalogservice.enums.Format;
 import com.cgv.catalogservice.enums.ShowtimeStatus;
+import com.cgv.catalogservice.enums.ViewingMode;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ShowtimeCreateRequest(
@@ -19,17 +19,19 @@ public record ShowtimeCreateRequest(
         UUID roomId,
 
         @NotNull(message = "Ngày chiếu không được để trống")
-        LocalDate showDate,
+        Instant showDate,
 
         @NotNull(message = "Thời gian bắt đầu không được để trống")
-        LocalDateTime startTime,
+        Instant startTime,
 
         @NotNull(message = "Thời gian kết thúc không được để trống")
-        LocalDateTime endTime,
+        Instant endTime,
 
         String language,
 
         String subtitleLanguage,
+
+        ViewingMode viewingMode,
 
         Format format,
 

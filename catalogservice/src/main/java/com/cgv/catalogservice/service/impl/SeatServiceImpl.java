@@ -26,7 +26,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -204,7 +203,7 @@ public class SeatServiceImpl implements SeatService {
     @Transactional(readOnly = true)
     public PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable) {
 
-        if (roomRepository.existsById(roomId)) {
+        if (!roomRepository.existsById(roomId)) {
             throw new IllegalArgumentException("Không tồn tại phòng chiếu với id: " + roomId);
         }
 
@@ -227,7 +226,7 @@ public class SeatServiceImpl implements SeatService {
                         .existsByRoom_IdAndStatusAndEndTimeAfter(
                                 roomId,
                                 ShowtimeStatus.SCHEDULED,
-                                LocalDateTime.now()
+                                java.time.Instant.now()
                         );
 
         if (hasScheduledShowtime) {

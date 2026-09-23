@@ -47,8 +47,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     KafkaTemplate<String, Object> kafkaTemplate;
 
     // Constants
-    final String OTP_KEY_PREFIX = "OTP:";
-    final String NOTIFICATION_SEND_TOPIC = "notification.send";
+    static String OTP_KEY_PREFIX = "OTP:";
+    static String USER_TIER_KEY_PREFIX = "USER_TIER:";
+    static int USER_TIER_KEY_DURATION = 24;
+    static String NOTIFICATION_SEND_TOPIC = "notification.send";
 
     @NonFinal
     @Value("${keycloak.realm:cgv-realm}")
@@ -110,6 +112,38 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         } catch (Exception e) {
             throw new RuntimeException("Refresh token không hợp lệ hoặc đã hết hạn!", e);
+        }
+    }
+
+    @Override
+    public AuthenticationResponse exchangeCode(ExchangeCodeRequest request) {
+        Map<String, String> body = createTokenRequestBody("authorization_code", Map.of(
+                "code", request.getCode(),
+                "redirect_uri", request.getRedirectUri()
+        ));
+
+        try {
+            JsonNode responseNode = keycloakClient.exchangeToken(realm, body);
+            if (responseNode == null || !responseNode.has("access_token")) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể đổi mã xác thực lấy token từ Keycloak!");
+            }
+
+            String accessToken = responseNode.get("access_token").asText();
+            String refreshToken = responseNode.has("refresh_token") ? responseNode.get("refresh_token").asText() : null;
+            long expiresIn = responseNode.has("expires_in") ? responseNode.get("expires_in").asLong() : 300;
+
+            syncUserToLocalDatabase(accessToken, null);
+
+            return AuthenticationResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .expiresIn(expiresIn)
+                    .authenticated(true)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Exchange code failed: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Xác thực mã đăng nhập thất bại: " + e.getMessage());
         }
     }
 
@@ -221,6 +255,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         User user = saveOrGetUser(sub, email, customFullName);
+        String tierCode = (user.getMembershipTier() != null) ? user.getMembershipTier().getCode() : "MEMBER";
+        redisTemplate.opsForValue().set(USER_TIER_KEY_PREFIX + user.getId() , tierCode , Duration.ofHours(USER_TIER_KEY_DURATION));
         return userMapper.toUserResponse(user);
     }
 

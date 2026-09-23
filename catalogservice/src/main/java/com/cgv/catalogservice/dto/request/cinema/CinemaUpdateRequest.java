@@ -16,6 +16,10 @@ public record CinemaUpdateRequest(
 
         String openingHours,
 
+        Double latitude,
+
+        Double longitude,
+
         CinemaStatus status
 ) {
 }
