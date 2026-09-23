@@ -29,7 +29,7 @@ public class Movie extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     UUID id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, unique = true)
     String title;
 
     @Column(name = "original_title")

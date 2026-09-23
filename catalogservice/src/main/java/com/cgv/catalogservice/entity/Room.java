@@ -10,7 +10,14 @@ import lombok.experimental.FieldDefaults;
 import java.util.UUID;
 
 @Entity
-@Table(name = "rooms")
+@Table(name = "rooms",
+        uniqueConstraints = {
+            @UniqueConstraint(
+                name = "uk_rooms_cinema_name",
+                columnNames = {"cinema_id", "name"}
+            )
+        }
+)
 @Getter
 @Setter
 @Builder

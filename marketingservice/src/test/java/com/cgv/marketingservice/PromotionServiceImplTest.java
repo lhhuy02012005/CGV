@@ -15,6 +15,10 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
+import java.util.List;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -136,6 +140,36 @@ class PromotionServiceImplTest {
 
         assertEquals("Sale", captor.getValue().getName());
         assertEquals("Sale", response.getName());
+    }
+
+    @Test
+    void getAllPromotionsReturnsPage() {
+        var pageable = PageRequest.of(0, 10);
+
+        var promotion = new Promotion();
+        promotion.setId(UUID.randomUUID());
+        promotion.setCode("CGV30");
+
+        var page = new PageImpl<>(
+                List.of(promotion),
+                pageable,
+                1
+        );
+
+        when(promotionRepository.findAll(pageable))
+                .thenReturn(page);
+
+        var response = promotionService.getAllPromotions(pageable);
+
+        assertEquals(1, response.getData().size());
+        assertEquals(promotion.getId(), response.getData().get(0).getId());
+        assertEquals("CGV30", response.getData().get(0).getCode());
+        assertEquals(1, response.getPageNumber());
+        assertEquals(10, response.getPageSize());
+        assertEquals(1, response.getTotalPages());
+        assertEquals(1L, response.getTotalElements());
+
+        verify(promotionRepository).findAll(pageable);
     }
 
     private PromotionCreateRequest validRequest() {

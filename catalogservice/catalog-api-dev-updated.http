@@ -1,0 +1,1565 @@
+# CatalogService API test suite - DEV / no JWT
+# IntelliJ IDEA Ultimate HTTP Client
+#
+# HOW TO USE
+# 1) Run CatalogService with profile "dev".
+# 2) For the cleanest result, use a clean/dev database before "Run All Requests in File".
+# 3) Run requests from top to bottom. Positive create requests capture IDs used later.
+# 4) Lines marked EXPECT 4xx are intentional negative/business-validation tests.
+#
+# IMPORTANT
+# - This suite contains both happy-path and negative tests.
+# - A 400/404/409 marked EXPECT is a PASS for that test case.
+# - Dynamic UUID variables can still trigger harmless IntelliJ OpenAPI inspections.
+# - LocalDateTime values intentionally use Spring's ISO_LOCAL_DATE_TIME format.
+# - No JWT header is required when SecurityConfigDev permits all requests.
+
+@baseUrl = http://localhost:8083/api/v1
+@page = 0
+@size = 20
+@missingUuid = 11111111-1111-4111-8111-111111111111
+@missingUuid2 = 22222222-2222-4222-8222-222222222222
+@missingInt = 2147483647
+
+
+### ============================================================
+### 0. INFRASTRUCTURE
+### ============================================================
+
+### 0.1 OpenAPI JSON - EXPECT 200
+GET {{baseUrl}}/v3/api-docs
+Accept: application/json
+
+
+### ============================================================
+### 1. REGION
+### ============================================================
+
+### 1.1 Create Region - EXPECT 201
+POST {{baseUrl}}/regions
+Content-Type: application/json
+
+{
+  "name": "HTTP Region {{$timestamp}}",
+  "slug": "http-region-{{$timestamp}}"
+}
+
+> {%
+client.global.set("regionId", String(response.body["data"]["id"]));
+client.global.set("regionName", String(response.body["data"]["name"]));
+client.global.set("regionSlug", String(response.body["data"]["slug"]));
+%}
+
+
+### 1.2 Get Region by ID - EXPECT 200
+GET {{baseUrl}}/regions/{{regionId}}
+Accept: application/json
+
+
+### 1.3 Get all Regions - EXPECT 200
+GET {{baseUrl}}/regions?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 1.4 Update Region - EXPECT 200
+PATCH {{baseUrl}}/regions/{{regionId}}
+Content-Type: application/json
+
+{
+  "name": "HTTP Region Updated {{$timestamp}}"
+}
+
+
+### 1.5 Create duplicate Region using existing slug - EXPECT 409
+POST {{baseUrl}}/regions
+Content-Type: application/json
+
+{
+  "name": "Another HTTP Region {{$timestamp}}",
+  "slug": "{{regionSlug}}"
+}
+
+
+### 1.6 Create Region with blank name - EXPECT 400
+POST {{baseUrl}}/regions
+Content-Type: application/json
+
+{
+  "name": "   ",
+  "slug": "invalid-blank-region-{{$timestamp}}"
+}
+
+
+### 1.7 Get nonexistent Region - EXPECT 404
+GET {{baseUrl}}/regions/{{missingInt}}
+Accept: application/json
+
+
+### ============================================================
+### 2. CINEMA
+### ============================================================
+
+### 2.1 Create Cinema - EXPECT 201
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{regionId}},
+  "name": "CineGo HTTP Cinema A {{$timestamp}}",
+  "address": "72 Le Thanh Ton, District 1",
+  "phone": "02812345678",
+  "openingHours": "08:00 - 23:30",
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("cinemaId", String(response.body["data"]["id"]));
+client.global.set("cinemaName", String(response.body["data"]["name"]));
+%}
+
+
+### 2.2 Create second Cinema - EXPECT 201
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{regionId}},
+  "name": "CineGo HTTP Cinema B {{$timestamp}}",
+  "address": "100 Nguyen Hue, District 1",
+  "phone": "02812345679",
+  "openingHours": "09:00 - 23:00",
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("cinema2Id", String(response.body["data"]["id"]));
+%}
+
+
+### 2.3 Get Cinema by ID - EXPECT 200
+GET {{baseUrl}}/cinemas/{{cinemaId}}
+Accept: application/json
+
+
+### 2.4 Filter Cinemas by Region + Status - EXPECT 200
+GET {{baseUrl}}/cinemas?regionId={{regionId}}&status=ACTIVE&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 2.5 Filter Cinemas by Region slug - EXPECT 200
+GET {{baseUrl}}/cinemas?regionSlug={{regionSlug}}&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 2.6 Filter Cinemas by keyword - EXPECT 200
+GET {{baseUrl}}/cinemas?keyword=CineGo&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 2.7 Update Cinema without name - EXPECT 200
+PATCH {{baseUrl}}/cinemas/{{cinemaId}}
+Content-Type: application/json
+
+{
+  "address": "72A Le Thanh Ton, District 1",
+  "openingHours": "08:30 - 23:45"
+}
+
+
+### 2.8 Update Cinema status -> TEMPORARILY_CLOSED - EXPECT 200
+PATCH {{baseUrl}}/cinemas/{{cinemaId}}/status
+Content-Type: application/json
+
+{
+  "status": "TEMPORARILY_CLOSED"
+}
+
+
+### 2.9 Restore Cinema status -> ACTIVE - EXPECT 200
+PATCH {{baseUrl}}/cinemas/{{cinemaId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+
+### 2.10 Duplicate Cinema create - EXPECT 409
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{regionId}},
+  "name": "{{cinemaName}}",
+  "status": "ACTIVE"
+}
+
+
+### 2.11 Duplicate Cinema name on update - EXPECT 409
+PATCH {{baseUrl}}/cinemas/{{cinema2Id}}
+Content-Type: application/json
+
+{
+  "name": "{{cinemaName}}"
+}
+
+
+### 2.12 Create Cinema with nonexistent Region FK - EXPECT 404
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{missingInt}},
+  "name": "Cinema Invalid Region {{$timestamp}}",
+  "status": "ACTIVE"
+}
+
+
+### 2.13 Create Cinema with blank name - EXPECT 400
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{regionId}},
+  "name": "   "
+}
+
+
+### 2.14 Invalid Cinema enum - EXPECT 400
+POST {{baseUrl}}/cinemas
+Content-Type: application/json
+
+{
+  "regionId": {{regionId}},
+  "name": "Invalid Enum Cinema {{$timestamp}}",
+  "status": "NOT_A_STATUS"
+}
+
+
+### 2.15 Update nonexistent Cinema - EXPECT 404
+PATCH {{baseUrl}}/cinemas/{{missingUuid}}
+Content-Type: application/json
+
+{
+  "name": "{{cinemaName}}"
+}
+
+
+### ============================================================
+### 3. CINEMA AMENITY
+### ============================================================
+
+### 3.1 Add IMAX - EXPECT 201
+POST {{baseUrl}}/cinema-amenities
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "amenity": "IMAX"
+}
+
+
+### 3.2 Add DOLBY_ATMOS - EXPECT 201
+POST {{baseUrl}}/cinema-amenities
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "amenity": "DOLBY_ATMOS"
+}
+
+
+### 3.3 Get amenities by Cinema - EXPECT 200
+GET {{baseUrl}}/cinema-amenities/cinema/{{cinemaId}}
+Accept: application/json
+
+
+### 3.4 Get Cinemas by amenity - EXPECT 200
+GET {{baseUrl}}/cinema-amenities/amenity/IMAX?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 3.5 Cinema Specification filter by amenity - EXPECT 200
+GET {{baseUrl}}/cinemas?amenity=IMAX&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 3.6 Duplicate CinemaAmenity - EXPECT 409
+POST {{baseUrl}}/cinema-amenities
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "amenity": "IMAX"
+}
+
+
+### 3.7 CinemaAmenity with nonexistent Cinema FK - EXPECT 404
+POST {{baseUrl}}/cinema-amenities
+Content-Type: application/json
+
+{
+  "cinemaId": "{{missingUuid}}",
+  "amenity": "PARKING"
+}
+
+
+### 3.8 Get amenities for nonexistent Cinema - EXPECT 404
+GET {{baseUrl}}/cinema-amenities/cinema/{{missingUuid}}
+Accept: application/json
+
+
+### ============================================================
+### 4. SEAT TYPE
+### ============================================================
+
+### 4.1 Create NORMAL - EXPECT 201
+POST {{baseUrl}}/seat-types
+Content-Type: application/json
+
+{
+  "name": "NORMAL",
+  "surcharge": 0,
+  "description": "Ghế thường"
+}
+
+
+### 4.2 Create VIP - EXPECT 201
+POST {{baseUrl}}/seat-types
+Content-Type: application/json
+
+{
+  "name": "VIP",
+  "surcharge": 15000,
+  "description": "Ghế VIP"
+}
+
+
+### 4.3 Get all SeatTypes - EXPECT 200
+GET {{baseUrl}}/seat-types?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 4.4 Get VIP - EXPECT 200
+GET {{baseUrl}}/seat-types/VIP
+Accept: application/json
+
+
+### 4.5 Update VIP - EXPECT 200
+PATCH {{baseUrl}}/seat-types/VIP
+Content-Type: application/json
+
+{
+  "surcharge": 20000,
+  "description": "Ghế VIP - HTTP test"
+}
+
+
+### 4.6 Duplicate SeatType - EXPECT 409
+POST {{baseUrl}}/seat-types
+Content-Type: application/json
+
+{
+  "name": "VIP",
+  "surcharge": 25000,
+  "description": "Duplicate VIP"
+}
+
+
+### 4.7 Invalid negative surcharge - EXPECT 400
+POST {{baseUrl}}/seat-types
+Content-Type: application/json
+
+{
+  "name": "SWEETBOX",
+  "surcharge": -1000,
+  "description": "Invalid surcharge"
+}
+
+
+### ============================================================
+### 5. ROOM
+### ============================================================
+
+### 5.1 Create Room A - EXPECT 201
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "name": "HTTP IMAX Room A {{$timestamp}}",
+  "format": "IMAX",
+  "rowCount": 10,
+  "columnCount": 12,
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("roomId", String(response.body["data"]["id"]));
+client.global.set("roomName", String(response.body["data"]["name"]));
+%}
+
+
+### 5.2 Create Room B - EXPECT 201
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "name": "HTTP Room B {{$timestamp}}",
+  "format": "2D",
+  "rowCount": 8,
+  "columnCount": 10,
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("room2Id", String(response.body["data"]["id"]));
+%}
+
+
+### 5.3 Get Room by ID - EXPECT 200
+GET {{baseUrl}}/rooms/{{roomId}}
+Accept: application/json
+
+
+### 5.4 Get Rooms by Cinema - EXPECT 200
+GET {{baseUrl}}/rooms/cinema/{{cinemaId}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 5.5 Update Room without cinemaId - EXPECT 200
+PATCH {{baseUrl}}/rooms/{{roomId}}
+Content-Type: application/json
+
+{
+  "format": "IMAX",
+  "rowCount": 11,
+  "columnCount": 12
+}
+
+
+### 5.6 Update Room status -> MAINTENANCE - EXPECT 200
+PATCH {{baseUrl}}/rooms/{{roomId}}/status
+Content-Type: application/json
+
+{
+  "status": "MAINTENANCE"
+}
+
+
+### 5.7 Restore Room status -> ACTIVE - EXPECT 200
+PATCH {{baseUrl}}/rooms/{{roomId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+
+### 5.8 Duplicate Room create in same Cinema - EXPECT 409
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "name": "{{roomName}}",
+  "format": "2D",
+  "rowCount": 5,
+  "columnCount": 5
+}
+
+
+### 5.9 Duplicate Room name on update - EXPECT 409
+PATCH {{baseUrl}}/rooms/{{room2Id}}
+Content-Type: application/json
+
+{
+  "name": "{{roomName}}"
+}
+
+
+### 5.10 Create Room with nonexistent Cinema FK - EXPECT 404
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "cinemaId": "{{missingUuid}}",
+  "name": "Invalid Parent Room {{$timestamp}}",
+  "format": "2D",
+  "rowCount": 5,
+  "columnCount": 5
+}
+
+
+### 5.11 Get Rooms by nonexistent Cinema - EXPECT 404
+GET {{baseUrl}}/rooms/cinema/{{missingUuid}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 5.12 Invalid Room rowCount - EXPECT 400
+POST {{baseUrl}}/rooms
+Content-Type: application/json
+
+{
+  "cinemaId": "{{cinemaId}}",
+  "name": "Invalid Dimension Room {{$timestamp}}",
+  "format": "2D",
+  "rowCount": 0,
+  "columnCount": 10
+}
+
+
+### ============================================================
+### 6. SEAT
+### Run all Seat mutations BEFORE creating a SCHEDULED Showtime.
+### ============================================================
+
+### 6.1 Create Seat A1 NORMAL - EXPECT 201
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "A",
+  "seatNumber": 1,
+  "seatTypeName": "NORMAL",
+  "isActive": true
+}
+
+> {%
+client.global.set("seatId", String(response.body["data"]["id"]));
+%}
+
+
+### 6.2 Create Seat A2 VIP - EXPECT 201
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "A",
+  "seatNumber": 2,
+  "seatTypeName": "VIP",
+  "isActive": true
+}
+
+> {%
+client.global.set("seat2Id", String(response.body["data"]["id"]));
+%}
+
+
+### 6.3 Create Seat A3 NORMAL - EXPECT 201
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "A",
+  "seatNumber": 3,
+  "seatTypeName": "NORMAL",
+  "isActive": true
+}
+
+> {%
+client.global.set("seat3Id", String(response.body["data"]["id"]));
+%}
+
+
+### 6.4 Get Seat by ID - EXPECT 200
+GET {{baseUrl}}/seats/{{seatId}}
+Accept: application/json
+
+
+### 6.5 Get Seats by Room - EXPECT 200
+GET {{baseUrl}}/seats/room/{{roomId}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 6.6 Update Seat A1 -> VIP - EXPECT 200
+PATCH {{baseUrl}}/seats/{{seatId}}
+Content-Type: application/json
+
+{
+  "seatTypeName": "VIP"
+}
+
+
+### 6.7 Disable Seat A1 - EXPECT 200
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+
+### 6.8 Enable Seat A1 - EXPECT 200
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": true
+}
+
+
+### 6.9 Duplicate Seat create A1 - EXPECT 409
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "A",
+  "seatNumber": 1,
+  "seatTypeName": "NORMAL",
+  "isActive": true
+}
+
+
+### 6.10 Duplicate Seat position on update A3 -> A2 - EXPECT 409
+PATCH {{baseUrl}}/seats/{{seat3Id}}
+Content-Type: application/json
+
+{
+  "rowChar": "A",
+  "seatNumber": 2
+}
+
+
+### 6.11 Create Seat with nonexistent Room FK - EXPECT 404
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{missingUuid}}",
+  "rowChar": "Z",
+  "seatNumber": 1,
+  "seatTypeName": "NORMAL"
+}
+
+
+### 6.12 Create Seat with nonexistent SeatType SWEETBOX - EXPECT 404
+### SWEETBOX was intentionally NOT created because 4.7 failed validation.
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "B",
+  "seatNumber": 1,
+  "seatTypeName": "SWEETBOX"
+}
+
+
+### 6.13 Invalid seat number 0 - EXPECT 400
+POST {{baseUrl}}/seats
+Content-Type: application/json
+
+{
+  "roomId": "{{roomId}}",
+  "rowChar": "B",
+  "seatNumber": 0,
+  "seatTypeName": "NORMAL"
+}
+
+
+### 6.14 Get Seats by nonexistent Room - EXPECT 404
+GET {{baseUrl}}/seats/room/{{missingUuid}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### ============================================================
+### 7. GENRE
+### ============================================================
+
+### 7.1 Create Genre - EXPECT 201
+POST {{baseUrl}}/genres
+Content-Type: application/json
+
+{
+  "name": "HTTP Action {{$timestamp}}",
+  "slug": "http-action-{{$timestamp}}"
+}
+
+> {%
+client.global.set("genreId", String(response.body["data"]["id"]));
+client.global.set("genreSlug", String(response.body["data"]["slug"]));
+%}
+
+
+### 7.2 Get Genre by ID - EXPECT 200
+GET {{baseUrl}}/genres/{{genreId}}
+Accept: application/json
+
+
+### 7.3 Get all Genres - EXPECT 200
+GET {{baseUrl}}/genres?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 7.4 Update Genre - EXPECT 200
+PATCH {{baseUrl}}/genres/{{genreId}}
+Content-Type: application/json
+
+{
+  "name": "HTTP Action Updated {{$timestamp}}"
+}
+
+
+### 7.5 Duplicate Genre slug - EXPECT 409
+POST {{baseUrl}}/genres
+Content-Type: application/json
+
+{
+  "name": "Another Genre {{$timestamp}}",
+  "slug": "{{genreSlug}}"
+}
+
+
+### 7.6 Blank Genre name - EXPECT 400
+POST {{baseUrl}}/genres
+Content-Type: application/json
+
+{
+  "name": " ",
+  "slug": "invalid-genre-{{$timestamp}}"
+}
+
+
+### 7.7 Get nonexistent Genre - EXPECT 404
+GET {{baseUrl}}/genres/{{missingInt}}
+Accept: application/json
+
+
+### ============================================================
+### 8. MOVIE
+### ============================================================
+
+### 8.1 Create Movie A - EXPECT 201
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": "HTTP Test Movie A {{$timestamp}}",
+  "originalTitle": "HTTP Test Movie A",
+  "synopsis": "Created from IntelliJ HTTP Client.",
+  "director": "Test Director",
+  "language": "English",
+  "subtitle": "Vietnamese",
+  "ageRating": "T13",
+  "durationMinutes": 150,
+  "releaseDate": "2030-01-01",
+  "endDate": "2030-12-31",
+  "showingStatus": "NOW_SHOWING",
+  "posterUrl": "https://example.com/poster-a.jpg",
+  "backdropUrl": "https://example.com/backdrop-a.jpg",
+  "trailerYoutubeUrl": "https://www.youtube.com/watch?v=test-a",
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("movieId", String(response.body["data"]["id"]));
+client.global.set("movieTitle", String(response.body["data"]["title"]));
+%}
+
+
+### 8.2 Create Movie B - EXPECT 201
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": "HTTP Test Movie B {{$timestamp}}",
+  "director": "Second Director",
+  "language": "English",
+  "ageRating": "T16",
+  "durationMinutes": 120,
+  "releaseDate": "2030-01-01",
+  "endDate": "2030-12-31",
+  "showingStatus": "COMING_SOON",
+  "status": "ACTIVE"
+}
+
+> {%
+client.global.set("movie2Id", String(response.body["data"]["id"]));
+%}
+
+
+### 8.3 Get Movie by ID - EXPECT 200
+GET {{baseUrl}}/movies/{{movieId}}
+Accept: application/json
+
+
+### 8.4 Filter Movie by showingStatus/status/language - EXPECT 200
+GET {{baseUrl}}/movies?showingStatus=NOW_SHOWING&status=ACTIVE&language=English&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 8.5 Filter Movie by duration/date - EXPECT 200
+GET {{baseUrl}}/movies?releaseFrom=2030-01-01&releaseTo=2030-12-31&minDuration=100&maxDuration=180&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 8.6 Partial update Movie WITHOUT title - EXPECT 200
+### Regression test for previous request.title().trim() NPE.
+PATCH {{baseUrl}}/movies/{{movieId}}
+Content-Type: application/json
+
+{
+  "director": "Updated Test Director",
+  "durationMinutes": 155
+}
+
+
+### 8.7 Update Movie status -> DRAFT - EXPECT 200
+PATCH {{baseUrl}}/movies/{{movieId}}/status
+Content-Type: application/json
+
+{
+  "status": "DRAFT"
+}
+
+
+### 8.8 Restore Movie status -> ACTIVE - EXPECT 200
+PATCH {{baseUrl}}/movies/{{movieId}}/status
+Content-Type: application/json
+
+{
+  "status": "ACTIVE"
+}
+
+
+### 8.9 Duplicate Movie title create - EXPECT 409
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": "{{movieTitle}}",
+  "durationMinutes": 100,
+  "releaseDate": "2030-01-01",
+  "endDate": "2030-12-31",
+  "showingStatus": "NOW_SHOWING"
+}
+
+
+### 8.10 Duplicate Movie title update Movie B -> Movie A title - EXPECT 409
+PATCH {{baseUrl}}/movies/{{movie2Id}}
+Content-Type: application/json
+
+{
+  "title": "{{movieTitle}}"
+}
+
+
+### 8.11 Invalid Movie date range - EXPECT 400
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": "Invalid Date Movie {{$timestamp}}",
+  "durationMinutes": 100,
+  "releaseDate": "2030-12-31",
+  "endDate": "2030-01-01",
+  "showingStatus": "NOW_SHOWING"
+}
+
+
+### 8.12 Invalid duration - EXPECT 400
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": "Invalid Duration Movie {{$timestamp}}",
+  "durationMinutes": 0,
+  "showingStatus": "NOW_SHOWING"
+}
+
+
+### 8.13 Blank Movie title - EXPECT 400
+POST {{baseUrl}}/movies
+Content-Type: application/json
+
+{
+  "title": " ",
+  "durationMinutes": 100,
+  "showingStatus": "NOW_SHOWING"
+}
+
+
+### 8.14 Get nonexistent Movie - EXPECT 404
+GET {{baseUrl}}/movies/{{missingUuid}}
+Accept: application/json
+
+
+### ============================================================
+### 9. MOVIE GENRE
+### ============================================================
+
+### 9.1 Link Movie -> Genre - EXPECT 201
+POST {{baseUrl}}/movie-genres
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "genreId": {{genreId}}
+}
+
+
+### 9.2 Get Genres by Movie - EXPECT 200
+GET {{baseUrl}}/movie-genres/movie/{{movieId}}
+Accept: application/json
+
+
+### 9.3 Get Movies by Genre - EXPECT 200
+GET {{baseUrl}}/movie-genres/genre/{{genreId}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 9.4 Filter Movies by genreId - EXPECT 200
+GET {{baseUrl}}/movies?genreId={{genreId}}&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 9.5 Duplicate MovieGenre relation - EXPECT 409
+POST {{baseUrl}}/movie-genres
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "genreId": {{genreId}}
+}
+
+
+### 9.6 MovieGenre with nonexistent Movie - EXPECT 404
+POST {{baseUrl}}/movie-genres
+Content-Type: application/json
+
+{
+  "movieId": "{{missingUuid}}",
+  "genreId": {{genreId}}
+}
+
+
+### 9.7 MovieGenre with nonexistent Genre - EXPECT 404
+POST {{baseUrl}}/movie-genres
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "genreId": {{missingInt}}
+}
+
+
+### 9.8 Get Genres by nonexistent Movie - EXPECT 404
+GET {{baseUrl}}/movie-genres/movie/{{missingUuid}}
+Accept: application/json
+
+
+### 9.9 Get Movies by nonexistent Genre - EXPECT 404
+GET {{baseUrl}}/movie-genres/genre/{{missingInt}}?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### ============================================================
+### 10. MOVIE CAST
+### ============================================================
+
+### 10.1 Create MovieCast - EXPECT 201
+POST {{baseUrl}}/movie-casts
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "actorName": "HTTP Test Actor {{$timestamp}}",
+  "characterName": "Hero",
+  "roleType": "LEAD",
+  "avatarUrl": "https://example.com/actor.jpg",
+  "displayOrder": 1
+}
+
+> {%
+client.global.set("movieCastId", String(response.body["data"]["id"]));
+%}
+
+
+### 10.2 Get MovieCast by ID - EXPECT 200
+GET {{baseUrl}}/movie-casts/{{movieCastId}}
+Accept: application/json
+
+
+### 10.3 Get all MovieCasts - EXPECT 200
+GET {{baseUrl}}/movie-casts?page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 10.4 Partial update MovieCast - EXPECT 200
+PATCH {{baseUrl}}/movie-casts/{{movieCastId}}
+Content-Type: application/json
+
+{
+  "characterName": "Updated Hero",
+  "displayOrder": 0
+}
+
+
+### 10.5 Create MovieCast with nonexistent Movie - EXPECT 404
+POST {{baseUrl}}/movie-casts
+Content-Type: application/json
+
+{
+  "movieId": "{{missingUuid}}",
+  "actorName": "Invalid FK Actor",
+  "roleType": "LEAD"
+}
+
+
+### 10.6 Blank actorName on create - EXPECT 400
+POST {{baseUrl}}/movie-casts
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "actorName": " ",
+  "roleType": "LEAD"
+}
+
+
+### ============================================================
+### 11. ARTICLE
+### ============================================================
+
+### 11.1 Create Article - EXPECT 201
+POST {{baseUrl}}/articles
+Content-Type: application/json
+
+{
+  "title": "HTTP Test Article {{$timestamp}}",
+  "slug": "http-test-article-{{$timestamp}}",
+  "thumbnailUrl": "https://example.com/article.jpg",
+  "content": "Full HTTP test article content.",
+  "excerpt": "HTTP Client test article.",
+  "category": "REVIEW",
+  "tags": "[\"HTTP\",\"Movie\",\"Test\"]",
+  "authorName": "Catalog Tester",
+  "featured": true,
+  "trending": false,
+  "movieId": "{{movieId}}",
+  "publishedAt": "2030-01-02T08:00:00"
+}
+
+> {%
+client.global.set("articleId", String(response.body["data"]["id"]));
+client.global.set("articleSlug", String(response.body["data"]["slug"]));
+%}
+
+
+### 11.2 Get Article by ID - EXPECT 200
+### views should increase after this request.
+GET {{baseUrl}}/articles/{{articleId}}
+Accept: application/json
+
+
+### 11.3 Filter Articles - EXPECT 200
+GET {{baseUrl}}/articles?category=REVIEW&featured=true&movieId={{movieId}}&published=true&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 11.4 Update Article - EXPECT 200
+PATCH {{baseUrl}}/articles/{{articleId}}
+Content-Type: application/json
+
+{
+  "excerpt": "Updated excerpt from IntelliJ HTTP Client.",
+  "trending": true
+}
+
+
+### 11.5 Duplicate Article slug - EXPECT 409 from DB unique constraint
+POST {{baseUrl}}/articles
+Content-Type: application/json
+
+{
+  "title": "Different Article Title {{$timestamp}}",
+  "slug": "{{articleSlug}}",
+  "content": "Different article, same slug.",
+  "category": "TIN_DIEN_ANH"
+}
+
+
+### 11.6 Article with nonexistent Movie FK - EXPECT 404
+POST {{baseUrl}}/articles
+Content-Type: application/json
+
+{
+  "title": "Invalid Movie Article {{$timestamp}}",
+  "slug": "invalid-movie-article-{{$timestamp}}",
+  "content": "Invalid FK test.",
+  "category": "REVIEW",
+  "movieId": "{{missingUuid}}"
+}
+
+
+### 11.7 Blank Article content - EXPECT 400
+POST {{baseUrl}}/articles
+Content-Type: application/json
+
+{
+  "title": "Invalid Content Article {{$timestamp}}",
+  "slug": "invalid-content-article-{{$timestamp}}",
+  "content": " ",
+  "category": "REVIEW"
+}
+
+
+### ============================================================
+### 12. EVENT
+### ============================================================
+
+### 12.1 Create Event - EXPECT 201
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "HTTP Premiere Event {{$timestamp}}",
+  "description": "CatalogService API test event.",
+  "thumbnailUrl": "https://example.com/event.jpg",
+  "eventDate": "2030-01-20",
+  "eventTime": "18:30:00",
+  "locationName": "HTTP Test Cinema",
+  "cinemaId": "{{cinemaId}}",
+  "registrationUrl": "https://example.com/register",
+  "maxAttendees": 100,
+  "status": "UPCOMING"
+}
+
+> {%
+client.global.set("eventId", String(response.body["data"]["id"]));
+%}
+
+
+### 12.2 Get Event by ID - EXPECT 200
+GET {{baseUrl}}/events/{{eventId}}
+Accept: application/json
+
+
+### 12.3 Filter Events - EXPECT 200
+GET {{baseUrl}}/events?status=UPCOMING&cinemaId={{cinemaId}}&eventDateFrom=2030-01-01&eventDateTo=2030-01-31&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 12.4 Update Event - EXPECT 200
+PATCH {{baseUrl}}/events/{{eventId}}
+Content-Type: application/json
+
+{
+  "locationName": "HTTP Test Cinema - Hall",
+  "maxAttendees": 120
+}
+
+
+### 12.5 Event status -> ONGOING - EXPECT 200
+PATCH {{baseUrl}}/events/{{eventId}}/status
+Content-Type: application/json
+
+{
+  "status": "ONGOING"
+}
+
+
+### 12.6 Event status -> UPCOMING - EXPECT 200
+PATCH {{baseUrl}}/events/{{eventId}}/status
+Content-Type: application/json
+
+{
+  "status": "UPCOMING"
+}
+
+
+### 12.7 Event with nonexistent Cinema FK - EXPECT 404
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "Invalid Cinema Event {{$timestamp}}",
+  "eventDate": "2030-02-01",
+  "cinemaId": "{{missingUuid}}",
+  "maxAttendees": 50
+}
+
+
+### 12.8 Event in the past - EXPECT 400
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "Past Event {{$timestamp}}",
+  "eventDate": "2020-01-01",
+  "maxAttendees": 50
+}
+
+
+### 12.9 Event maxAttendees = 0 - EXPECT 400
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "Invalid Attendees Event {{$timestamp}}",
+  "eventDate": "2030-02-01",
+  "maxAttendees": 0
+}
+
+
+### ============================================================
+### 13. SHOWTIME
+### Depends on Movie + Room + active Seats.
+### ============================================================
+
+### 13.1 Create Showtime - EXPECT 201
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{roomId}}",
+  "showDate": "2030-01-15",
+  "startTime": "2030-01-15T19:00:00",
+  "endTime": "2030-01-15T21:30:00",
+  "language": "English",
+  "subtitleLanguage": "Vietnamese",
+  "format": "IMAX",
+  "basePrice": 120000,
+  "status": "SCHEDULED"
+}
+
+> {%
+client.global.set("showtimeId", String(response.body["data"]["id"]));
+%}
+
+
+### 13.2 Get Showtime by ID - EXPECT 200
+GET {{baseUrl}}/showtimes/{{showtimeId}}
+Accept: application/json
+
+
+### 13.3 Showtime by Cinema + date - EXPECT 200
+GET {{baseUrl}}/showtimes?cinemaId={{cinemaId}}&showDate=2030-01-15&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 13.4 Showtime by Movie + format + available - EXPECT 200
+GET {{baseUrl}}/showtimes?movieId={{movieId}}&format=IMAX&available=true&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 13.5 Showtime by date/time/price range - EXPECT 200
+GET {{baseUrl}}/showtimes?showDateFrom=2030-01-01&showDateTo=2030-01-31&startTimeFrom=2030-01-15T00:00:00&startTimeTo=2030-01-15T23:59:59&minPrice=100000&maxPrice=200000&page={{page}}&size={{size}}
+Accept: application/json
+
+
+### 13.6 Partial update Showtime - EXPECT 200
+PATCH {{baseUrl}}/showtimes/{{showtimeId}}
+Content-Type: application/json
+
+{
+  "basePrice": 130000,
+  "subtitleLanguage": "Vietnamese"
+}
+
+
+### 13.7 Create overlapping Showtime - EXPECT 400
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{roomId}}",
+  "showDate": "2030-01-15",
+  "startTime": "2030-01-15T20:00:00",
+  "endTime": "2030-01-15T22:00:00",
+  "language": "English",
+  "format": "IMAX",
+  "basePrice": 100000
+}
+
+
+### 13.8 endTime <= startTime - EXPECT 400
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{room2Id}}",
+  "showDate": "2030-01-16",
+  "startTime": "2030-01-16T21:00:00",
+  "endTime": "2030-01-16T19:00:00",
+  "format": "2D",
+  "basePrice": 100000
+}
+
+
+### 13.9 showDate != startTime date - EXPECT 400
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{room2Id}}",
+  "showDate": "2030-01-16",
+  "startTime": "2030-01-17T19:00:00",
+  "endTime": "2030-01-17T21:00:00",
+  "format": "2D",
+  "basePrice": 100000
+}
+
+
+### 13.10 showDate before Movie.releaseDate - EXPECT 400
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{room2Id}}",
+  "showDate": "2029-12-31",
+  "startTime": "2029-12-31T19:00:00",
+  "endTime": "2029-12-31T21:00:00",
+  "format": "2D",
+  "basePrice": 100000
+}
+
+
+### 13.11 showDate after Movie.endDate - EXPECT 400
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{room2Id}}",
+  "showDate": "2031-01-01",
+  "startTime": "2031-01-01T19:00:00",
+  "endTime": "2031-01-01T21:00:00",
+  "format": "2D",
+  "basePrice": 100000
+}
+
+
+### 13.12 Showtime with nonexistent Movie FK - EXPECT 404
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{missingUuid}}",
+  "roomId": "{{room2Id}}",
+  "showDate": "2030-02-01",
+  "startTime": "2030-02-01T19:00:00",
+  "endTime": "2030-02-01T21:00:00",
+  "format": "2D",
+  "basePrice": 100000
+}
+
+
+### 13.13 Showtime with nonexistent Room FK - EXPECT 404
+POST {{baseUrl}}/showtimes
+Content-Type: application/json
+
+{
+  "movieId": "{{movieId}}",
+  "roomId": "{{missingUuid}}",
+  "showDate": "2030-02-01",
+  "startTime": "2030-02-01T19:00:00",
+  "endTime": "2030-02-01T21:00:00",
+  "format": "2D",
+  "basePrice": 100000
+}
+
+
+### 13.14 Seat mutation blocked by SCHEDULED Showtime - EXPECT 409
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+
+### 13.15 Delete SeatType in use - EXPECT 409
+DELETE {{baseUrl}}/seat-types/VIP
+
+
+### 13.16 Cancel Showtime - EXPECT 200
+PATCH {{baseUrl}}/showtimes/{{showtimeId}}/status
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+
+### 13.17 Seat mutation after Showtime cancellation - EXPECT 200
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": false
+}
+
+
+### 13.18 Re-enable Seat while Showtime is CANCELLED - EXPECT 200
+PATCH {{baseUrl}}/seats/{{seatId}}/status
+Content-Type: application/json
+
+{
+  "isActive": true
+}
+
+
+### 13.19 Restore Showtime -> SCHEDULED - EXPECT 200
+PATCH {{baseUrl}}/showtimes/{{showtimeId}}/status
+Content-Type: application/json
+
+{
+  "status": "SCHEDULED"
+}
+
+
+### ============================================================
+### 14. DELETE / RESOURCE-CONFLICT / 404 TESTS
+### ============================================================
+
+### 14.1 Delete Region that is referenced by Cinema - EXPECT 409
+DELETE {{baseUrl}}/regions/{{regionId}}
+
+
+### 14.2 Delete Genre that is referenced by MovieGenre - EXPECT 409
+DELETE {{baseUrl}}/genres/{{genreId}}
+
+
+### 14.3 Delete nonexistent CinemaAmenity - EXPECT 404
+DELETE {{baseUrl}}/cinema-amenities/{{cinemaId}}/PARKING
+
+
+### 14.4 Delete nonexistent MovieGenre relation - EXPECT 404
+DELETE {{baseUrl}}/movie-genres/{{movie2Id}}/{{genreId}}
+
+
+### ============================================================
+### 15. DATA-INTEGRITY / MALFORMED INPUT TESTS
+### These specifically exercise GlobalExceptionHandler.
+### ============================================================
+
+### 15.1 Duplicate Article slug -> DB constraint - EXPECT 409
+### Already exercised at 11.5; repeated here only as handler documentation.
+POST {{baseUrl}}/articles
+Content-Type: application/json
+
+{
+  "title": "Second Duplicate Slug {{$timestamp}}",
+  "slug": "{{articleSlug}}",
+  "content": "Duplicate slug handler test.",
+  "category": "REVIEW"
+}
+
+
+### 15.2 Invalid enum JSON - EXPECT 400
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "Bad Enum Event {{$timestamp}}",
+  "eventDate": "2030-03-01",
+  "status": "NOT_A_REAL_EVENT_STATUS"
+}
+
+
+### 15.3 Invalid date JSON - EXPECT 400
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "title": "Bad Date Event {{$timestamp}}",
+  "eventDate": "not-a-date"
+}
+
+
+### 15.4 Unsupported media type - EXPECT 415
+POST {{baseUrl}}/movies
+Content-Type: text/plain
+
+this is not JSON
+
+
+### ============================================================
+### 16. CLEANUP OF RESOURCES THAT HAVE DELETE ENDPOINTS
+### Do this last.
+### ============================================================
+
+### 16.1 Delete Article - EXPECT 200
+DELETE {{baseUrl}}/articles/{{articleId}}
+
+
+### 16.2 Delete MovieCast - EXPECT 200
+DELETE {{baseUrl}}/movie-casts/{{movieCastId}}
+
+
+### 16.3 Delete MovieGenre relation - EXPECT 200
+DELETE {{baseUrl}}/movie-genres/{{movieId}}/{{genreId}}
+
+
+### 16.4 Delete Genre after relation removed - EXPECT 200
+DELETE {{baseUrl}}/genres/{{genreId}}
+
+
+### 16.5 Delete Cinema Amenity IMAX - EXPECT 200
+DELETE {{baseUrl}}/cinema-amenities/{{cinemaId}}/IMAX
+
+
+### 16.6 Delete Cinema Amenity DOLBY_ATMOS - EXPECT 200
+DELETE {{baseUrl}}/cinema-amenities/{{cinemaId}}/DOLBY_ATMOS
+
+
+### 16.7 Create independent temporary Region - EXPECT 201
+POST {{baseUrl}}/regions
+Content-Type: application/json
+
+{
+  "name": "HTTP Delete Region {{$timestamp}}",
+  "slug": "http-delete-region-{{$timestamp}}"
+}
+
+> {%
+client.global.set("tempRegionId", String(response.body["data"]["id"]));
+%}
+
+
+### 16.8 Delete independent Region - EXPECT 200
+DELETE {{baseUrl}}/regions/{{tempRegionId}}
+
+
+### 16.9 Create independent temporary Genre - EXPECT 201
+POST {{baseUrl}}/genres
+Content-Type: application/json
+
+{
+  "name": "HTTP Delete Genre {{$timestamp}}",
+  "slug": "http-delete-genre-{{$timestamp}}"
+}
+
+> {%
+client.global.set("tempGenreId", String(response.body["data"]["id"]));
+%}
+
+
+### 16.10 Delete independent Genre - EXPECT 200
+DELETE {{baseUrl}}/genres/{{tempGenreId}}
+
+
+### ============================================================
+### END
+###
+### Expected intentional errors covered:
+### 400 - DTO validation, invalid enum/date JSON, Movie/Showtime business rules
+### 404 - invalid FK / missing parent / missing resource/relation
+### 409 - duplicates, FK-style delete conflicts, scheduled-Showtime seat lock
+### 415 - unsupported Content-Type
+###
+### Current controllers still have no DELETE endpoints for:
+### Cinema, Room, Seat, Movie, Event, Showtime.
+### ============================================================

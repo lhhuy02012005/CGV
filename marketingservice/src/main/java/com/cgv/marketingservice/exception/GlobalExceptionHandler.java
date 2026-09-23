@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.security.access.AccessDeniedException;
 
-import java.nio.file.AccessDeniedException;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,7 +34,7 @@ public class GlobalExceptionHandler {
         log.error("Business Exception occurred: {}", ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(new Date())
-                .status(ex.getCode())
+                .status(ex.getStatus().value())
                 .path(request.getRequestURI())
                 .error(ex.getStatus().getReasonPhrase())
                 .message(ex.getMessage())
