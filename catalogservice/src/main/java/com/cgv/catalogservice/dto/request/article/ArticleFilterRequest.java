@@ -2,7 +2,7 @@ package com.cgv.catalogservice.dto.request.article;
 
 import com.cgv.catalogservice.enums.ArticleCategory;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ArticleFilterRequest(
@@ -19,9 +19,9 @@ public record ArticleFilterRequest(
 
         Boolean published,
 
-        LocalDateTime publishedFrom,
+        Instant publishedFrom,
 
-        LocalDateTime publishedTo
+        Instant publishedTo
 
 ) {
 }

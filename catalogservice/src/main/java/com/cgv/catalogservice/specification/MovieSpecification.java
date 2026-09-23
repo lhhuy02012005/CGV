@@ -191,4 +191,13 @@ public final class MovieSpecification {
             );
         };
     }
+
+    public static Specification<Movie> isFeatured(
+            Boolean isFeatured
+    ) {
+        return (root, query, cb) ->
+                isFeatured == null
+                        ? cb.conjunction()
+                        : cb.equal(root.get("isFeatured"), isFeatured);
+    }
 }

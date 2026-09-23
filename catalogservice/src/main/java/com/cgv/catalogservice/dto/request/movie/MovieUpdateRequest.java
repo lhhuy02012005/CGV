@@ -1,5 +1,6 @@
 package com.cgv.catalogservice.dto.request.movie;
 
+import com.cgv.catalogservice.enums.MovieStatus;
 import com.cgv.catalogservice.enums.ShowingStatus;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -20,6 +21,8 @@ public record MovieUpdateRequest(
 
         String subtitle,
 
+        String supportedModes,
+
         @Size(max = 5, message = "Phân loại độ tuổi tối đa 5 ký tự")
         String ageRating,
 
@@ -36,6 +39,10 @@ public record MovieUpdateRequest(
 
         String backdropUrl,
 
-        String trailerYoutubeUrl
+        String trailerYoutubeUrl,
+
+        Boolean isFeatured,
+
+        MovieStatus status
 ) {
 }

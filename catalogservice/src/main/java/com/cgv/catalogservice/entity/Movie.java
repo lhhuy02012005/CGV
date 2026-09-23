@@ -44,6 +44,9 @@ public class Movie extends BaseEntity {
 
     String subtitle;
 
+    @Column(name = "supported_modes")
+    String supportedModes;
+
     @Column(name = "age_rating", length = 5)
     String ageRating;
 
@@ -68,6 +71,10 @@ public class Movie extends BaseEntity {
 
     @Column(name = "trailer_youtube_url")
     String trailerYoutubeUrl;
+
+    @Column(name = "is_featured", nullable = false)
+    @Builder.Default
+    Boolean isFeatured = false;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

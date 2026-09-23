@@ -8,7 +8,7 @@ public enum Format {
     TWO_D("2D"),
     THREE_D("3D"),
     IMAX("IMAX"),
-    FOUR_D("4D"),
+    FOUR_D("4DX"),
     SCREENX("SCREENX");
 
     private final String dbValue;
@@ -24,14 +24,16 @@ public enum Format {
 
     @JsonCreator
     public static Format fromDbValue(String dbValue) {
+        if (dbValue == null) return TWO_D;
+        if ("4D".equalsIgnoreCase(dbValue) || "4DX".equalsIgnoreCase(dbValue)) {
+            return FOUR_D;
+        }
         for (Format format : values()) {
-            if (format.dbValue.equals(dbValue)) {
+            if (format.dbValue.equalsIgnoreCase(dbValue) || format.name().equalsIgnoreCase(dbValue)) {
                 return format;
             }
         }
 
-        throw new IllegalArgumentException(
-                "Unknown Format value: " + dbValue
-        );
+        return TWO_D;
     }
 }

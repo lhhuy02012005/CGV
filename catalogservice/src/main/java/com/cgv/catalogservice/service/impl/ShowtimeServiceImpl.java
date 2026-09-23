@@ -4,18 +4,17 @@ import com.cgv.catalogservice.dto.request.showtime.ShowtimeCreateRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeFilterRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeUpdateRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeUpdateStatusRequest;
-import com.cgv.catalogservice.dto.response.ShowtimeResponse;
+import com.cgv.catalogservice.dto.response.*;
+import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Movie;
 import com.cgv.catalogservice.entity.Room;
 import com.cgv.catalogservice.entity.Showtime;
 import com.cgv.catalogservice.enums.ShowtimeStatus;
 import com.cgv.catalogservice.mapper.ShowtimeMapper;
-import com.cgv.catalogservice.repository.MovieRepository;
-import com.cgv.catalogservice.repository.RoomRepository;
-import com.cgv.catalogservice.repository.SeatRepository;
-import com.cgv.catalogservice.repository.ShowtimeRepository;
+import com.cgv.catalogservice.repository.*;
 import com.cgv.catalogservice.service.ShowtimeService;
 import com.cgv.catalogservice.specification.ShowtimeSpecification;
+import com.cgv.catalogservice.util.GeoUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
@@ -27,10 +26,11 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.time.ZoneId;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,6 +41,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     MovieRepository movieRepository;
     RoomRepository roomRepository;
     SeatRepository seatRepository;
+    CinemaRepository cinemaRepository;
 
     ShowtimeMapper showtimeMapper;
 
@@ -57,11 +58,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                                         + request.movieId()
                         )
                 );
-
-        validateShowDateWithinMoviePeriod(
-                movie,
-                request.showDate()
-        );
 
         Room room = roomRepository.findById(request.roomId())
                 .orElseThrow(() ->
@@ -96,7 +92,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         showtime.setRoom(room);
 
         int availableSeats =
-                (int) seatRepository.findByRoomId(room.getId())
+                (int) seatRepository.findByRoom_Id(room.getId())
                         .stream()
                         .filter(seat ->
                                 Boolean.TRUE.equals(
@@ -142,13 +138,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     );
         }
 
-        LocalDate showDate =
-                request.showDate() != null
-                        ? request.showDate()
-                        : showtime.getShowDate();
-
-        validateShowDateWithinMoviePeriod(movie, showDate);
-
         boolean roomChanged = false;
 
         if (request.roomId() != null) {
@@ -176,12 +165,17 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         if (scheduleChanged) {
 
-            LocalDateTime startTime =
+            Instant showDate =
+                    request.showDate() != null
+                            ? request.showDate()
+                            : showtime.getShowDate();
+
+            Instant startTime =
                     request.startTime() != null
                             ? request.startTime()
                             : showtime.getStartTime();
 
-            LocalDateTime endTime =
+            Instant endTime =
                     request.endTime() != null
                             ? request.endTime()
                             : showtime.getEndTime();
@@ -215,7 +209,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         if (roomChanged) {
             int availableSeats =
                     (int) seatRepository
-                            .findByRoomId(room.getId())
+                            .findByRoom_Id(room.getId())
                             .stream()
                             .filter(seat ->
                                     Boolean.TRUE.equals(
@@ -362,9 +356,9 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     private void validateShowtimeTime(
-            LocalDate showDate,
-            LocalDateTime startTime,
-            LocalDateTime endTime
+            Instant showDate,
+            Instant startTime,
+            Instant endTime
     ) {
 
         if (!endTime.isAfter(startTime)) {
@@ -372,19 +366,13 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     "Thời gian kết thúc phải sau thời gian bắt đầu"
             );
         }
-
-        if (!showDate.equals(startTime.toLocalDate())) {
-            throw new IllegalArgumentException(
-                    "Ngày chiếu phải trùng với ngày bắt đầu suất chiếu"
-            );
-        }
     }
 
     private boolean hasOverlappingShowtime(
             UUID roomId,
-            LocalDate showDate,
-            LocalDateTime startTime,
-            LocalDateTime endTime,
+            Instant showDate,
+            Instant startTime,
+            Instant endTime,
             UUID excludedShowtimeId
     ) {
 
@@ -430,23 +418,192 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         return showtimeRepository.exists(overlapSpec);
     }
 
-    private void validateShowDateWithinMoviePeriod(
-            Movie movie,
-            LocalDate showDate
+    @Override
+    @Transactional(readOnly = true)
+    public MovieNearbyCinemasResponse getNearbyMovieShowtimes(
+            UUID movieId,
+            double latitude,
+            double longitude,
+            LocalDate date,
+            Double radiusKm
     ) {
-        if (movie.getReleaseDate() != null
-                && showDate.isBefore(movie.getReleaseDate())) {
-            throw new IllegalArgumentException(
-                    "Ngày chiếu không được trước ngày phát hành phim"
-            );
-        }
+        return getMovieSchedule(movieId, date, null, latitude, longitude, radiusKm);
+    }
 
-        if (movie.getEndDate() != null
-                && showDate.isAfter(movie.getEndDate())) {
-            throw new IllegalArgumentException(
-                    "Ngày chiếu không được sau ngày kết thúc chiếu phim"
-            );
-        }
+    @Override
+    @Transactional(readOnly = true)
+    public MovieNearbyCinemasResponse getMovieSchedule(
+            UUID movieId,
+            LocalDate date,
+            Integer regionId,
+            Double latitude,
+            Double longitude,
+            Double radiusKm
+    ) {
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
+
+        LocalDate targetDate = (date != null) ? date : LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        Instant startOfDay = targetDate.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+        Instant endOfDay = targetDate.plusDays(1).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).minusNanos(1).toInstant();
+
+        List<Showtime> showtimes = showtimeRepository.findActiveShowtimesByMovieAndDateRange(
+                movieId,
+                ShowtimeStatus.SCHEDULED,
+                startOfDay,
+                endOfDay
+        );
+
+        // Group showtimes by Cinema
+        Map<Cinema, List<Showtime>> showtimesByCinema = showtimes.stream()
+                .collect(Collectors.groupingBy(
+                        s -> s.getRoom().getCinema(),
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        List<CinemaWithShowtimesResponse> cinemaResponses = showtimesByCinema.entrySet().stream()
+                .map(entry -> {
+                    Cinema cinema = entry.getKey();
+                    Double dist = null;
+                    if (latitude != null && longitude != null && cinema.getLatitude() != null && cinema.getLongitude() != null) {
+                        dist = GeoUtils.calculateDistanceInKm(latitude, longitude, cinema.getLatitude(), cinema.getLongitude());
+                    }
+
+                    Integer cRegionId = cinema.getRegion() != null ? cinema.getRegion().getId() : null;
+                    String cRegionName = cinema.getRegion() != null ? cinema.getRegion().getName() : null;
+
+                    List<ShowtimeSlotResponse> slotResponses = entry.getValue().stream()
+                            .sorted(Comparator.comparing(Showtime::getStartTime))
+                            .map(s -> ShowtimeSlotResponse.builder()
+                                    .showtimeId(s.getId())
+                                    .roomId(s.getRoom().getId())
+                                    .roomName(s.getRoom().getName())
+                                    .startTime(s.getStartTime())
+                                    .endTime(s.getEndTime())
+                                    .format(s.getFormat())
+                                    .viewingMode(s.getViewingMode())
+                                    .language(s.getLanguage())
+                                    .subtitleLanguage(s.getSubtitleLanguage())
+                                    .basePrice(s.getBasePrice())
+                                    .availableSeats(s.getAvailableSeats())
+                                    .status(s.getStatus())
+                                    .build())
+                            .toList();
+
+                    return CinemaWithShowtimesResponse.builder()
+                            .cinemaId(cinema.getId())
+                            .cinemaName(cinema.getName())
+                            .address(cinema.getAddress())
+                            .regionId(cRegionId)
+                            .regionName(cRegionName)
+                            .latitude(cinema.getLatitude())
+                            .longitude(cinema.getLongitude())
+                            .distanceInKm(dist)
+                            .showtimes(slotResponses)
+                            .build();
+                })
+                .filter(res -> regionId == null || (res.regionId() != null && res.regionId().equals(regionId)))
+                .filter(res -> radiusKm == null || (res.distanceInKm() != null && res.distanceInKm() <= radiusKm))
+                .sorted((a, b) -> {
+                    if (latitude != null && longitude != null) {
+                        double distA = a.distanceInKm() != null ? a.distanceInKm() : Double.MAX_VALUE;
+                        double distB = b.distanceInKm() != null ? b.distanceInKm() : Double.MAX_VALUE;
+                        return Double.compare(distA, distB);
+                    }
+                    return String.CASE_INSENSITIVE_ORDER.compare(
+                            a.cinemaName() != null ? a.cinemaName() : "",
+                            b.cinemaName() != null ? b.cinemaName() : ""
+                    );
+                })
+                .toList();
+
+        List<RegionResponse> availableRegions = showtimeRepository.findDistinctRegionsByMovie(
+                movieId,
+                ShowtimeStatus.SCHEDULED
+        ).stream()
+                .map(r -> new RegionResponse(r.getId(), r.getName(), r.getSlug()))
+                .toList();
+
+        return MovieNearbyCinemasResponse.builder()
+                .movieId(movie.getId())
+                .movieTitle(movie.getTitle())
+                .posterUrl(movie.getPosterUrl())
+                .date(targetDate)
+                .availableRegions(availableRegions)
+                .cinemas(cinemaResponses)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CinemaScheduleResponse getCinemaSchedule(UUID cinemaId, LocalDate date) {
+        Cinema cinema = cinemaRepository.findById(cinemaId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy cinema với id: " + cinemaId));
+
+        LocalDate targetDate = (date != null) ? date : LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+        Instant startOfDay = targetDate.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
+        Instant endOfDay = targetDate.plusDays(1).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).minusNanos(1).toInstant();
+
+        List<Showtime> showtimes = showtimeRepository.findActiveShowtimesByCinemaAndDateRange(
+                cinemaId,
+                ShowtimeStatus.SCHEDULED,
+                startOfDay,
+                endOfDay
+        );
+
+        // Group showtimes by Movie
+        Map<Movie, List<Showtime>> showtimesByMovie = showtimes.stream()
+                .collect(Collectors.groupingBy(
+                        Showtime::getMovie,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        List<MovieWithShowtimesResponse> movieResponses = showtimesByMovie.entrySet().stream()
+                .map(entry -> {
+                    Movie movie = entry.getKey();
+
+                    List<ShowtimeSlotResponse> slotResponses = entry.getValue().stream()
+                            .sorted(Comparator.comparing(Showtime::getStartTime))
+                            .map(s -> ShowtimeSlotResponse.builder()
+                                    .showtimeId(s.getId())
+                                    .roomId(s.getRoom().getId())
+                                    .roomName(s.getRoom().getName())
+                                    .startTime(s.getStartTime())
+                                    .endTime(s.getEndTime())
+                                    .format(s.getFormat())
+                                    .viewingMode(s.getViewingMode())
+                                    .language(s.getLanguage())
+                                    .subtitleLanguage(s.getSubtitleLanguage())
+                                    .basePrice(s.getBasePrice())
+                                    .availableSeats(s.getAvailableSeats())
+                                    .status(s.getStatus())
+                                    .build())
+                            .toList();
+
+                    return MovieWithShowtimesResponse.builder()
+                            .movieId(movie.getId())
+                            .movieTitle(movie.getTitle())
+                            .posterUrl(movie.getPosterUrl())
+                            .ageRating(movie.getAgeRating())
+                            .durationMinutes(movie.getDurationMinutes())
+                            .language(movie.getLanguage())
+                            .supportedModes(movie.getSupportedModes())
+                            .showtimes(slotResponses)
+                            .build();
+                })
+                .toList();
+
+        return CinemaScheduleResponse.builder()
+                .cinemaId(cinema.getId())
+                .cinemaName(cinema.getName())
+                .address(cinema.getAddress())
+                .latitude(cinema.getLatitude())
+                .longitude(cinema.getLongitude())
+                .date(targetDate)
+                .movies(movieResponses)
+                .build();
     }
 }
 

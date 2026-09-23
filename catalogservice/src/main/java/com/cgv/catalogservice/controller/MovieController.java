@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -103,6 +104,19 @@ public class MovieController {
                 .status(HttpStatus.OK.value())
                 .data(movieResponsePage)
                 .message("Danh sách phim")
+                .build();
+    }
+
+    @GetMapping("/search")
+    public ApiResponse<List<MovieResponse>> search(
+            @RequestParam String keyword,
+            @PageableDefault(size = 20) Pageable pageable
+    ) {
+        List<MovieResponse> responses = movieService.searchMovies(keyword, pageable);
+        return ApiResponse.<List<MovieResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(responses)
+                .message("Kết quả tìm kiếm phim")
                 .build();
     }
 }

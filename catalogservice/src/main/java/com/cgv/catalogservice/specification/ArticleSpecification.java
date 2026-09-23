@@ -4,7 +4,7 @@ import com.cgv.catalogservice.entity.Article;
 import com.cgv.catalogservice.enums.ArticleCategory;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public final class ArticleSpecification {
@@ -103,7 +103,7 @@ public final class ArticleSpecification {
     }
 
     public static Specification<Article> publishedFrom(
-            LocalDateTime from
+            Instant from
     ) {
         return (root, query, cb) ->
                 from == null
@@ -115,7 +115,7 @@ public final class ArticleSpecification {
     }
 
     public static Specification<Article> publishedTo(
-            LocalDateTime to
+            Instant to
     ) {
         return (root, query, cb) ->
                 to == null

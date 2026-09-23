@@ -3,7 +3,7 @@ package com.cgv.catalogservice.dto.request.article;
 import com.cgv.catalogservice.enums.ArticleCategory;
 import jakarta.validation.constraints.Size;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ArticleUpdateRequest(
@@ -31,6 +31,6 @@ public record ArticleUpdateRequest(
 
         UUID movieId,
 
-        LocalDateTime publishedAt
+        Instant publishedAt
 ) {
 }

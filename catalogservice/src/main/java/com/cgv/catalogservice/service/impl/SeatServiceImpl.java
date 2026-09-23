@@ -26,7 +26,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,17 +46,6 @@ public class SeatServiceImpl implements SeatService {
     public SeatResponse createSeat(SeatCreateRequest request) {
 
         validateRoomHasNoScheduledShowtime(request.roomId());
-
-        if (seatRepository.existsByRoomIdAndRowCharAndSeatNumber(
-                request.roomId(),
-                request.rowChar(),
-                request.seatNumber()
-        )) {
-            throw new ResourceConflictException(
-                    "Ghế " + request.rowChar() + request.seatNumber()
-                            + " đã tồn tại trong phòng"
-            );
-        }
 
         Room room = roomRepository.findById(request.roomId())
                 .orElseThrow(() ->
@@ -90,7 +78,7 @@ public class SeatServiceImpl implements SeatService {
                 seatRepository.saveAndFlush(seat);
 
         room.setTotalSeats(
-                seatRepository.countByRoomId(room.getId())
+                seatRepository.countByRoom_Id(room.getId())
         );
 
         return seatMapper.toResponse(savedSeat);
@@ -109,33 +97,6 @@ public class SeatServiceImpl implements SeatService {
                                 "Không tìm thấy seat với id: " + seatId
                         )
                 );
-
-        UUID targetRoomId =
-                request.roomId() != null
-                        ? request.roomId()
-                        : seat.getRoom().getId();
-
-        String targetRowChar =
-                request.rowChar() != null
-                        ? request.rowChar()
-                        : seat.getRowChar();
-
-        Integer targetSeatNumber =
-                request.seatNumber() != null
-                        ? request.seatNumber()
-                        : seat.getSeatNumber();
-
-        if (seatRepository.existsByRoomIdAndRowCharAndSeatNumberAndIdNot(
-                targetRoomId,
-                targetRowChar,
-                targetSeatNumber,
-                seatId
-        )) {
-            throw new ResourceConflictException(
-                    "Ghế " + targetRowChar + targetSeatNumber
-                            + " đã tồn tại trong phòng"
-            );
-        }
 
         validateRoomHasNoScheduledShowtime(seat.getRoom().getId());
 
@@ -190,13 +151,13 @@ public class SeatServiceImpl implements SeatService {
         if (roomChanged) {
 
             oldRoom.setTotalSeats(
-                    seatRepository.countByRoomId(
+                    seatRepository.countByRoom_Id(
                             oldRoom.getId()
                     )
             );
 
             newRoom.setTotalSeats(
-                    seatRepository.countByRoomId(
+                    seatRepository.countByRoom_Id(
                             newRoom.getId()
                     )
             );
@@ -243,12 +204,10 @@ public class SeatServiceImpl implements SeatService {
     public PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable) {
 
         if (!roomRepository.existsById(roomId)) {
-            throw new EntityNotFoundException(
-                    "Không tồn tại phòng chiếu với id: " + roomId
-            );
+            throw new IllegalArgumentException("Không tồn tại phòng chiếu với id: " + roomId);
         }
 
-        Page<Seat> seatPage = seatRepository.findAllByRoomId(roomId, pageable);
+        Page<Seat> seatPage = seatRepository.findAllByRoom_Id(roomId, pageable);
         List<SeatResponse> seatResponses = seatMapper.toResponseList(seatPage.getContent());
 
         return PageResponse.<SeatResponse>builder()
@@ -264,10 +223,10 @@ public class SeatServiceImpl implements SeatService {
 
         boolean hasScheduledShowtime =
                 showtimeRepository
-                        .existsByRoomIdAndStatusAndEndTimeAfter(
+                        .existsByRoom_IdAndStatusAndEndTimeAfter(
                                 roomId,
                                 ShowtimeStatus.SCHEDULED,
-                                LocalDateTime.now()
+                                java.time.Instant.now()
                         );
 
         if (hasScheduledShowtime) {

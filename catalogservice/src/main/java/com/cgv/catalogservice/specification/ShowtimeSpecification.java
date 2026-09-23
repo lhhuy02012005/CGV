@@ -6,8 +6,7 @@ import com.cgv.catalogservice.enums.ShowtimeStatus;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public final class ShowtimeSpecification {
@@ -55,7 +54,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> hasShowDate(
-            LocalDate showDate
+            Instant showDate
     ) {
         return (root, query, cb) ->
                 showDate == null
@@ -67,7 +66,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> showDateFrom(
-            LocalDate from
+            Instant from
     ) {
         return (root, query, cb) ->
                 from == null
@@ -79,7 +78,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> showDateTo(
-            LocalDate to
+            Instant to
     ) {
         return (root, query, cb) ->
                 to == null
@@ -91,7 +90,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> startsAtOrAfter(
-            LocalDateTime startTime
+            Instant startTime
     ) {
         return (root, query, cb) ->
                 startTime == null
@@ -103,7 +102,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> startsAtOrBefore(
-            LocalDateTime startTime
+            Instant startTime
     ) {
         return (root, query, cb) ->
                 startTime == null

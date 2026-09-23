@@ -1,5 +1,6 @@
 package com.cgv.catalogservice.service.impl;
 
+import com.cgv.catalogservice.document.MovieDocument;
 import com.cgv.catalogservice.dto.request.movie.MovieCreateRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieFilterRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieUpdateRequest;
@@ -9,36 +10,40 @@ import com.cgv.catalogservice.entity.Movie;
 import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.MovieMapper;
 import com.cgv.catalogservice.repository.MovieRepository;
+import com.cgv.catalogservice.repository.search.MovieSearchRepository;
 import com.cgv.catalogservice.service.MovieService;
 import com.cgv.catalogservice.specification.MovieSpecification;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE , makeFinal = true)
+@Slf4j
 public class MovieServiceImpl implements MovieService {
 
     MovieRepository movieRepository;
     MovieMapper movieMapper;
+    MovieSearchRepository movieSearchRepository;
 
     @Override
     @Transactional
+    @CacheEvict(value = "movies:detail", allEntries = true)
     public MovieResponse createMovie(MovieCreateRequest request) {
-
-        validateMovieDates(request.releaseDate(), request.endDate());
 
         if (movieRepository.existsByTitleIgnoreCase(request.title().trim())) {
             throw new ResourceConflictException(
@@ -49,43 +54,32 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieMapper.toEntity(request);
 
         Movie savedMovie = movieRepository.save(movie);
+        MovieDocument doc = MovieDocument.builder()
+                .id(savedMovie.getId().toString())
+                .title(savedMovie.getTitle())
+                .originalTitle(savedMovie.getOriginalTitle())
+                .synopsis(savedMovie.getSynopsis())
+                .director(savedMovie.getDirector())
+                .ageRating(savedMovie.getAgeRating())
+                .showingStatus(savedMovie.getShowingStatus().name())
+                .build();
+        movieSearchRepository.save(doc);
 
         return movieMapper.toResponse(savedMovie);
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = "movies:detail", key = "#movieId")
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
 
-        Movie movie = movieRepository.findById(movieId)
-                .orElseThrow(() ->
-                        new EntityNotFoundException(
-                                "Không tìm thấy movie với id: " + movieId
-                        )
-                );
-
-        if (request.title() != null
-                && movieRepository.existsByTitleIgnoreCaseAndIdNot(
-                request.title().trim(),
-                movieId
-        )) {
-
+        if (movieRepository.existsByTitleIgnoreCaseAndIdNot(request.title().trim(), movieId)) {
             throw new ResourceConflictException(
                     "Phim với tên '" + request.title() + "' đã tồn tại"
             );
         }
 
-        LocalDate releaseDate =
-                request.releaseDate() != null
-                        ? request.releaseDate()
-                        : movie.getReleaseDate();
-
-        LocalDate endDate =
-                request.endDate() != null
-                        ? request.endDate()
-                        : movie.getEndDate();
-
-        validateMovieDates(releaseDate, endDate);
+        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
         movieMapper.updateEntity(request, movie);
 
@@ -96,6 +90,7 @@ public class MovieServiceImpl implements MovieService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "movies:detail", key = "#movieId")
     public MovieResponse updateMovieStatus(UUID movieId, MovieUpdateStatusRequest request) {
 
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
@@ -109,6 +104,7 @@ public class MovieServiceImpl implements MovieService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "movies:detail", key = "#movieId")
     public MovieResponse getMovieById(UUID movieId) {
 
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
@@ -151,6 +147,9 @@ public class MovieServiceImpl implements MovieService {
                         ),
                         MovieSpecification.hasAgeRating(
                                 filter.ageRating()
+                        ),
+                        MovieSpecification.isFeatured(
+                                filter.isFeatured()
                         )
                 );
 
@@ -167,17 +166,41 @@ public class MovieServiceImpl implements MovieService {
                 .build();
     }
 
-    private void validateMovieDates(
-            LocalDate releaseDate,
-            LocalDate endDate
-    ) {
-        if (releaseDate != null
-                && endDate != null
-                && endDate.isBefore(releaseDate)) {
-
-            throw new IllegalArgumentException(
-                    "Ngày kết thúc chiếu không được trước ngày phát hành"
-            );
+    @Override
+    @Transactional(readOnly = true)
+    public List<MovieResponse> searchMovies(String keyword, Pageable pageable) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return Collections.emptyList();
         }
+
+        try {
+            Page<MovieDocument> searchResult = movieSearchRepository.searchFuzzy(keyword.trim(), pageable);
+            List<UUID> movieIds = searchResult.getContent().stream()
+                    .map(doc -> {
+                        try {
+                            return UUID.fromString(doc.getId());
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            if (!movieIds.isEmpty()) {
+                List<Movie> movies = movieRepository.findAllById(movieIds);
+                Map<UUID, Movie> movieMap = movies.stream().collect(Collectors.toMap(Movie::getId, m -> m));
+                return movieIds.stream()
+                        .map(movieMap::get)
+                        .filter(Objects::nonNull)
+                        .map(movieMapper::toResponse)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("Elasticsearch search error, fallback to SQL LIKE query: {}", e.getMessage());
+        }
+
+        // Database fallback
+        Page<Movie> fallbackPage = movieRepository.findAll(MovieSpecification.containsKeyword(keyword.trim()), pageable);
+        return movieMapper.toResponseList(fallbackPage.getContent());
     }
 }

@@ -9,6 +9,7 @@ import java.math.BigDecimal;
 @Entity
 @Table(name = "membership_tiers")
 @Getter
+@Setter
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor

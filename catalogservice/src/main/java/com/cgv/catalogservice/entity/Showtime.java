@@ -8,8 +8,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -65,25 +64,29 @@ public class Showtime extends BaseEntity {
             name = "show_date",
             nullable = false
     )
-    LocalDate showDate;
+    Instant showDate;
 
     @Column(
             name = "start_time",
             nullable = false
     )
-    LocalDateTime startTime;
+    Instant startTime;
 
     @Column(
             name = "end_time",
             nullable = false
     )
-    LocalDateTime endTime;
+    Instant endTime;
 
     @Column(name = "language")
     String language;
 
     @Column(name = "subtitle_language")
     String subtitleLanguage;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "viewing_mode")
+    com.cgv.catalogservice.enums.ViewingMode viewingMode;
 
     @Convert(converter = FormatConverter.class)
     @Column(name = "format")

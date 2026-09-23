@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package com.cgv.grpc;
+option java_multiple_files = true;
+option java_package = "com.cgv.commondto.grpc";
+
+service PromotionGrpcService {
+  rpc ValidateAndApplyPromotion (PromotionApplyRequest) returns (PromotionApplyResponse);
+}
+
+message PromotionApplyRequest {
+  string promotion_id = 1;
+  string user_id = 2;
+  string user_tier = 3;       // "MEMBER", "SILVER", "GOLD", "PLATINUM"
+  double order_amount = 4;     // Tổng tiền trước khi giảm giá
+}
+
+message PromotionApplyResponse {
+  bool is_valid = 1;          // true: voucher hợp lệ, false: không hợp lệ
+  string message = 2;          // Thông báo lỗi nếu không hợp lệ (VD: Chưa đạt hạng GOLD)
+  double discount_amount = 3;  // Số tiền được giảm
+  double final_amount = 4;     // Số tiền còn lại sau giảm
+  string promotion_code = 5;   // Mã voucher (VD: CGVGOLD30)
+}

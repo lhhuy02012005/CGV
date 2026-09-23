@@ -7,13 +7,12 @@ import java.util.UUID;
 
 public record RoomResponse(
         UUID id,
-        UUID cinemaId,
-        String cinemaName,
         String name,
         Format format,
         Integer totalSeats,
         Integer rowCount,
         Integer columnCount,
-        RoomStatus status
+        RoomStatus status,
+        CinemaResponse cinemaResponse
 ) {
 }

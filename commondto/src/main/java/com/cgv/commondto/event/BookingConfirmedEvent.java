@@ -16,6 +16,8 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class BookingConfirmedEvent {
     UUID bookingId;
+    UUID promotionId;
+    BigDecimal discountAmount;
     String userId;
     String userEmail;
     String movieTitle;
@@ -24,6 +26,7 @@ public class BookingConfirmedEvent {
     String cinemaAddress;
     String roomName;
     Instant showtimeStart;
+    Instant usedAt;
     List<String> seatLabels; // VD: ["A1", "A2"]
     BigDecimal totalAmount;
     String qrCodeUrl;

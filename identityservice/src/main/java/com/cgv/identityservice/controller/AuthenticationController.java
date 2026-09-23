@@ -70,6 +70,14 @@ public class AuthenticationController {
                 .build();
     }
 
+    @PostMapping("/exchange-code")
+    public ApiResponse<AuthenticationResponse> exchangeCode(@RequestBody @Valid com.cgv.identityservice.dto.request.ExchangeCodeRequest request) {
+        return ApiResponse.<AuthenticationResponse>builder()
+                .status(HttpStatus.OK.value())
+                .data(authenticationService.exchangeCode(request))
+                .build();
+    }
+
     @PostMapping("/refresh")
     public ApiResponse<AuthenticationResponse> refreshToken(@RequestBody @Valid RefreshTokenRequest request) {
         return ApiResponse.<AuthenticationResponse>builder()

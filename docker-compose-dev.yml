@@ -5,6 +5,7 @@ networks:
 volumes:
   postgres_data:
   redis_data:
+  es_data:
   kafka_1_data:
   kafka_2_data:
   kafka_3_data:
@@ -276,6 +277,7 @@ services:
 
   debezium-connect:
     image: debezium/connect:2.5
+    platform: linux/amd64
     container_name: cgv-debezium
     ports:
       - "8088:8088" # Cổng REST API để điều khiển Debezium
@@ -407,29 +409,28 @@ services:
           - media-service
     restart: unless-stopped
 
-  marketing-service:
-    build:
-      context: ./marketingservice
-      dockerfile: Dockerfile
-    container_name: cgv-marketing-service
-    ports:
-      - "8084:8084"
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: cgv-elasticsearch
     environment:
-      SPRING_PROFILES_ACTIVE: dev
-      MARKETING_DB_URL: jdbc:postgresql://postgres:5432/cgv
-      MARKETING_DB_USERNAME: postgres
-      MARKETING_DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      KEYCLOAK_ISSUER: http://localhost:8180/realms/cgv-realm
-      KEYCLOAK_JWKS: http://keycloak:8080/realms/cgv-realm/protocol/openid-connect/certs
-    depends_on:
-      postgres:
-        condition: service_started
-      redis:
-        condition: service_healthy
-      keycloak:
-        condition: service_started
+      - discovery.type=single-node
+      - xpack.security.enabled=false # Tắt password trên dev cho tiện
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
     networks:
       - cgv-net
-    restart: unless-stopped
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: cgv-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - cgv-net
+    depends_on:
+      - elasticsearch

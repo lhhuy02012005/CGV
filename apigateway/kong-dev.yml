@@ -10,6 +10,7 @@ services:
           - /api/v1/auth
           - /api/v1/users
           - /api/v1/roles
+          - /api/v1/membership-tiers
           - /api/v1/swagger-ui
           - /api/v1/swagger-ui.html
           - /api/v1/v3/api-docs
@@ -34,12 +35,12 @@ services:
         strip_path: false
 
   - name: catalog-service
-    url: http://host.docker.internal:8083
+    url: http://host.docker.internal:8083/api/v1
     routes:
       - name: catalog-route
         paths:
           - /api/v1/catalogs
-        strip_path: false
+        strip_path: true
 
   - name: marketing-service
     url: http://host.docker.internal:8084
@@ -55,6 +56,7 @@ services:
       - name: payment-route
         paths:
           - /api/v1/payment
+          - /api/v1/payments
         strip_path: false
 
 #  - name: notification-service

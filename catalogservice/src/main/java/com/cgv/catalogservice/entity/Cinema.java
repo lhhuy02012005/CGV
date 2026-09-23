@@ -41,6 +41,12 @@ public class Cinema extends BaseEntity {
     @Column(name = "opening_hours")
     String openingHours;
 
+    @Column(name = "latitude")
+    Double latitude;
+
+    @Column(name = "longitude")
+    Double longitude;
+
     @Enumerated(EnumType.STRING)
     @Builder.Default
     CinemaStatus status = CinemaStatus.ACTIVE;

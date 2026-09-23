@@ -14,7 +14,10 @@ import java.util.UUID;
 @AllArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentCompletedEvent {
+    UUID paymentId;
     UUID bookingId;
+    UUID promotionId;
+    String userId;
     String transactionId;
     String paymentMethod; // "VNPAY", "MOMO", "ZALOPAY"
     BigDecimal amount;

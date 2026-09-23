@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -115,5 +115,5 @@ public class Article extends BaseEntity {
     Movie movie;
 
     @Column(name = "published_at")
-    LocalDateTime publishedAt;
+    Instant publishedAt;
 }

@@ -1,10 +1,8 @@
 package com.cgv.paymentservice.entity;
 
+import com.cgv.paymentservice.enums.PaymentStatus;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
@@ -23,6 +21,8 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
+@Getter
+@Setter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class Payment extends BaseEntity{
     @Id
@@ -32,10 +32,23 @@ public class Payment extends BaseEntity{
     @Column(nullable = false)
     String provider;
 
+    @Column(name = "booking_id", nullable = false)
+    UUID bookingId;
+
+    @Column(name = "user_id", nullable = false)
+    String userId;
+
     @Column(nullable = false)
+    BigDecimal amount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    PaymentStatus status;
+
+    @Column(name = "transaction_id")
     String transactionId;
 
-    @Column
+    @Column(name = "payment_method")
     String paymentMethod;
 
     @Builder.Default
@@ -51,10 +64,11 @@ public class Payment extends BaseEntity{
     @Column
     Instant refundedAt;
 
-    @Column(name = "payload" , columnDefinition = "TEXT" , nullable = false)
-    String raw;
+    @Builder.Default
+    @Column(name = "payload" , columnDefinition = "TEXT")
+    String raw = "";
 
-    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "payment",cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     List<PaymentLog> paymentLogs = new ArrayList<>();
 }
