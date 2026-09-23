@@ -1,5 +1,6 @@
 package com.cgv.marketingservice.entity;
 
+import com.cgv.commondto.enums.MembershipTier;
 import com.cgv.marketingservice.enums.DiscountType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -12,7 +13,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "promotions")
+@Table(
+        name = "promotions",
+        indexes = {
+                @Index(name = "idx_promotions_active_dates", columnList = "is_active, valid_from, valid_to"),
+                @Index(name = "idx_promotions_tier_min_order", columnList = "applicable_tier, min_order_value")
+        }
+)
 @Check(constraints = """
         discount_value > 0
         AND (discount_type <> 'PERCENT' OR discount_value <= 100)
@@ -72,8 +79,9 @@ public class Promotion extends BaseEntity {
     )
     BigDecimal minOrderValue =  BigDecimal.ZERO;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "applicable_tier", length = 20)
-    String applicableTier;
+    MembershipTier applicableTier;
 
     @Column(name = "valid_from", nullable = false)
     Instant validFrom;

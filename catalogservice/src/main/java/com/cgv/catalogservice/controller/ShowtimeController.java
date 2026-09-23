@@ -11,6 +11,7 @@ import com.cgv.catalogservice.dto.request.showtime.ShowtimeCreateRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeFilterRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeUpdateRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeUpdateStatusRequest;
+import com.cgv.catalogservice.dto.response.MovieNearbyCinemasResponse;
 import com.cgv.catalogservice.dto.response.ShowtimeResponse;
 import com.cgv.catalogservice.service.ShowtimeService;
 import com.cgv.commondto.dto.ApiResponse;
@@ -21,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -216,6 +218,43 @@ public class ShowtimeController {
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Danh sách suất chiếu")
+                .build();
+    }
+
+    @GetMapping("/nearby")
+    public ApiResponse<MovieNearbyCinemasResponse> getNearby(
+            @RequestParam UUID movieId,
+            @RequestParam double lat,
+            @RequestParam double lon,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Double radiusKm
+    ) {
+        MovieNearbyCinemasResponse response =
+                showtimeService.getNearbyMovieShowtimes(movieId, lat, lon, date, radiusKm);
+
+        return ApiResponse.<MovieNearbyCinemasResponse>builder()
+                .status(HttpStatus.OK.value())
+                .data(response)
+                .message("Danh sách rạp và suất chiếu gần bạn cho phim")
+                .build();
+    }
+
+    @GetMapping("/movie-schedule")
+    public ApiResponse<MovieNearbyCinemasResponse> getMovieSchedule(
+            @RequestParam UUID movieId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) Integer regionId,
+            @RequestParam(required = false) Double lat,
+            @RequestParam(required = false) Double lon,
+            @RequestParam(required = false) Double radiusKm
+    ) {
+        MovieNearbyCinemasResponse response =
+                showtimeService.getMovieSchedule(movieId, date, regionId, lat, lon, radiusKm);
+
+        return ApiResponse.<MovieNearbyCinemasResponse>builder()
+                .status(HttpStatus.OK.value())
+                .data(response)
+                .message("Lịch chiếu phim theo cụm rạp")
                 .build();
     }
 }

@@ -4,7 +4,8 @@ import com.cgv.catalogservice.dto.request.showtime.ShowtimeCreateRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeFilterRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeUpdateRequest;
 import com.cgv.catalogservice.dto.request.showtime.ShowtimeUpdateStatusRequest;
-import com.cgv.catalogservice.dto.response.ShowtimeResponse;
+import com.cgv.catalogservice.dto.response.*;
+import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Movie;
 import com.cgv.catalogservice.entity.Room;
 import com.cgv.catalogservice.entity.Showtime;
@@ -13,16 +14,13 @@ import com.cgv.catalogservice.mapper.ShowtimeMapper;
 import com.cgv.catalogservice.repository.*;
 import com.cgv.catalogservice.service.ShowtimeService;
 import com.cgv.catalogservice.specification.ShowtimeSpecification;
-import com.cgv.catalogservice.util.PageResponseUtils;
+import com.cgv.catalogservice.util.GeoUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -34,7 +32,6 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
-@Slf4j(topic = "SHOWTIME-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -49,24 +46,10 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     ShowtimeMapper showtimeMapper;
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(
-                            value = "showtimesByMovieAndDate",
-                            allEntries = true
-                    ),
-                    @CacheEvict(
-                            value = "showtimesByCinemaAndDate",
-                            allEntries = true
-                    )
-            }
-    )
     @Transactional
     public ShowtimeResponse createShowtime(
             ShowtimeCreateRequest request
     ) {
-
-        log.info("Creating showtime: movieId={}, roomId={}, showDate={}", request.movieId(), request.roomId(), request.showDate());
 
         Movie movie = movieRepository.findById(request.movieId())
                 .orElseThrow(() ->
@@ -75,11 +58,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                                         + request.movieId()
                         )
                 );
-
-        validateShowDateWithinMoviePeriod(
-                movie,
-                request.showDate()
-        );
 
         Room room = roomRepository.findById(request.roomId())
                 .orElseThrow(() ->
@@ -114,7 +92,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         showtime.setRoom(room);
 
         int availableSeats =
-                (int) seatRepository.findByRoomId(room.getId())
+                (int) seatRepository.findByRoom_Id(room.getId())
                         .stream()
                         .filter(seat ->
                                 Boolean.TRUE.equals(
@@ -132,25 +110,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(
-                            value = "showtimesByMovieAndDate",
-                            allEntries = true
-                    ),
-                    @CacheEvict(
-                            value = "showtimesByCinemaAndDate",
-                            allEntries = true
-                    )
-            }
-    )
     @Transactional
     public ShowtimeResponse updateShowtime(
             UUID showtimeId,
             ShowtimeUpdateRequest request
     ) {
-
-        log.info("Updating showtime: showtimeId={}", showtimeId);
 
         Showtime showtime =
                 showtimeRepository.findById(showtimeId)
@@ -173,13 +137,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                             )
                     );
         }
-
-        Instant showDate =
-                request.showDate() != null
-                        ? request.showDate()
-                        : showtime.getShowDate();
-
-        validateShowDateWithinMoviePeriod(movie, showDate);
 
         boolean roomChanged = false;
 
@@ -207,6 +164,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 timeChanged || roomChanged;
 
         if (scheduleChanged) {
+
+            Instant showDate =
+                    request.showDate() != null
+                            ? request.showDate()
+                            : showtime.getShowDate();
 
             Instant startTime =
                     request.startTime() != null
@@ -247,7 +209,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         if (roomChanged) {
             int availableSeats =
                     (int) seatRepository
-                            .findByRoomId(room.getId())
+                            .findByRoom_Id(room.getId())
                             .stream()
                             .filter(seat ->
                                     Boolean.TRUE.equals(
@@ -265,25 +227,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(
-                            value = "showtimesByMovieAndDate",
-                            allEntries = true
-                    ),
-                    @CacheEvict(
-                            value = "showtimesByCinemaAndDate",
-                            allEntries = true
-                    )
-            }
-    )
     @Transactional
     public ShowtimeResponse updateShowtimeStatus(
             UUID showtimeId,
             ShowtimeUpdateStatusRequest request
     ) {
-
-        log.info("Updating showtime status: showtimeId={}, status={}", showtimeId, request.status());
 
         Showtime showtime =
                 showtimeRepository.findById(showtimeId)
@@ -322,8 +270,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
             UUID showtimeId
     ) {
 
-        log.debug("Getting showtime by id: showtimeId={}", showtimeId);
-
         Showtime showtime =
                 showtimeRepository.findById(showtimeId)
                         .orElseThrow(() ->
@@ -337,87 +283,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     @Override
-    @Cacheable(
-            value = "showtimesByMovieAndDate",
-            key = "#movieId"
-                    + " + ':date=' + #showDate"
-                    + " + ':page=' + #pageable.pageNumber"
-                    + " + ':size=' + #pageable.pageSize"
-                    + " + ':sort=' + #pageable.sort.toString()"
-    )
-    @Transactional(readOnly = true)
-    public PageResponse<ShowtimeResponse> getShowtimesByMovieAndDate(
-            UUID movieId,
-            LocalDate showDate,
-            Pageable pageable
-    ) {
-
-        log.debug("Getting showtimes by movie and date: movieId={}, showDate={}, page={}, size={}", movieId, showDate, pageable.getPageNumber(), pageable.getPageSize());
-
-        if (!movieRepository.existsById(movieId)) {
-            throw new EntityNotFoundException(
-                    "Không tìm thấy movie với id: " + movieId
-            );
-        }
-
-        Specification<Showtime> spec =
-                Specification.allOf(
-                        ShowtimeSpecification.hasMovieId(movieId),
-                        ShowtimeSpecification.hasShowDate(showDate)
-                );
-
-        return PageResponseUtils.findAllAndMap(
-                p -> showtimeRepository.findAll(spec, p),
-                pageable,
-                showtimeMapper::toResponseList
-        );
-    }
-
-    @Override
-    @Cacheable(
-            value = "showtimesByCinemaAndDate",
-            key = "#cinemaId"
-                    + " + ':date=' + #showDate"
-                    + " + ':page=' + #pageable.pageNumber"
-                    + " + ':size=' + #pageable.pageSize"
-                    + " + ':sort=' + #pageable.sort.toString()"
-    )
-    @Transactional(readOnly = true)
-    public PageResponse<ShowtimeResponse> getShowtimesByCinemaAndDate(
-            UUID cinemaId,
-            LocalDate showDate,
-            Pageable pageable
-    ) {
-
-        log.debug("Getting showtimes by cinema and date: cinemaId={}, showDate={}, page={}, size={}", cinemaId, showDate, pageable.getPageNumber(), pageable.getPageSize());
-
-        if (!cinemaRepository.existsById(cinemaId)) {
-            throw new EntityNotFoundException(
-                    "Không tìm thấy cinema với id: " + cinemaId
-            );
-        }
-
-        Specification<Showtime> spec =
-                Specification.allOf(
-                        ShowtimeSpecification.hasCinemaId(cinemaId),
-                        ShowtimeSpecification.hasShowDate(showDate)
-                );
-
-        return PageResponseUtils.findAllAndMap(
-                p -> showtimeRepository.findAll(spec, p),
-                pageable,
-                showtimeMapper::toResponseList
-        );
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public PageResponse<ShowtimeResponse> getAllShowtimes(
             ShowtimeFilterRequest filter,
             Pageable pageable
     ) {
-
-        log.debug("Getting all showtimes: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Showtime> spec =
                 Specification.allOf(
@@ -468,17 +338,27 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                         )
                 );
 
-        return PageResponseUtils.findAllAndMap(
-                p -> showtimeRepository.findAll(spec, p),
-                pageable,
-                showtimeMapper::toResponseList
-        );
+        Page<Showtime> showtimePage =
+                showtimeRepository.findAll(spec, pageable);
+
+        List<ShowtimeResponse> responses =
+                showtimeMapper.toResponseList(
+                        showtimePage.getContent()
+                );
+
+        return PageResponse.<ShowtimeResponse>builder()
+                .data(responses)
+                .pageNumber(showtimePage.getNumber() + 1)
+                .pageSize(showtimePage.getSize())
+                .totalPages(showtimePage.getTotalPages())
+                .totalElements(showtimePage.getTotalElements())
+                .build();
     }
 
     private void validateShowtimeTime(
-            Instant  showDate,
-            Instant  startTime,
-            Instant  endTime
+            Instant showDate,
+            Instant startTime,
+            Instant endTime
     ) {
 
         if (!endTime.isAfter(startTime)) {
@@ -490,9 +370,9 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
     private boolean hasOverlappingShowtime(
             UUID roomId,
-            Instant  showDate,
-            Instant  startTime,
-            Instant  endTime,
+            Instant showDate,
+            Instant startTime,
+            Instant endTime,
             UUID excludedShowtimeId
     ) {
 
@@ -639,9 +519,9 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 .toList();
 
         List<RegionResponse> availableRegions = showtimeRepository.findDistinctRegionsByMovie(
-                        movieId,
-                        ShowtimeStatus.SCHEDULED
-                ).stream()
+                movieId,
+                ShowtimeStatus.SCHEDULED
+        ).stream()
                 .map(r -> new RegionResponse(r.getId(), r.getName(), r.getSlug()))
                 .toList();
 
@@ -724,25 +604,6 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 .date(targetDate)
                 .movies(movieResponses)
                 .build();
-    }
-
-    private void validateShowDateWithinMoviePeriod(
-            Movie movie,
-            Instant showDate
-    ) {
-        if (movie.getReleaseDate() != null
-                && showDate.isBefore(movie.getReleaseDate())) {
-            throw new IllegalArgumentException(
-                    "Ngày chiếu không được trước ngày phát hành phim"
-            );
-        }
-
-        if (movie.getEndDate() != null
-                && showDate.isAfter(movie.getEndDate())) {
-            throw new IllegalArgumentException(
-                    "Ngày chiếu không được sau ngày kết thúc chiếu phim"
-            );
-        }
     }
 }
 

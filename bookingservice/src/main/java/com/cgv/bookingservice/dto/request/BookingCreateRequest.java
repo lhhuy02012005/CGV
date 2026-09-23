@@ -2,6 +2,7 @@ package com.cgv.bookingservice.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
@@ -14,7 +15,7 @@ import java.util.UUID;
 @Setter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class BookingCreateRequest {
-    @NotBlank(message = "Vui lòng chọn suất chiếu !")
+    @NotNull(message = "Vui lòng chọn suất chiếu !")
     UUID showtimeId;
 
     @NotEmpty(message = "Danh sách ghế không được để trống !")

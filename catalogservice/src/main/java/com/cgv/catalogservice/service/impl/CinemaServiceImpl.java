@@ -9,24 +9,18 @@ import com.cgv.catalogservice.dto.response.NearbyCinemaResponse;
 import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Region;
 import com.cgv.catalogservice.enums.CinemaStatus;
-import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.CinemaMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RegionRepository;
 import com.cgv.catalogservice.service.CinemaService;
 import com.cgv.catalogservice.specification.CinemaSpecification;
 import com.cgv.catalogservice.util.GeoUtils;
-import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
-import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -36,7 +30,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-@Slf4j(topic = "CINEMA-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -47,21 +40,8 @@ public class CinemaServiceImpl implements CinemaService {
     CinemaMapper cinemaMapper;
 
     @Override
-    @CacheEvict(
-            value = "cinemasByRegion",
-            allEntries = true
-    )
     @Transactional
     public CinemaResponse createCinema(CinemaCreateRequest request) {
-
-        log.info("Creating cinema: name={}, regionId={}", request.name(), request.regionId());
-
-        if (cinemaRepository.existsByName(request.name())) {
-            throw new ResourceConflictException(
-                    "Rạp chiếu với tên '" + request.name() + "' đã tồn tại"
-            );
-        }
-
         Region region = regionRepository.findById(request.regionId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy region với id: " + request.regionId()
@@ -76,42 +56,12 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    @Caching(
-            put = {
-                    @CachePut(
-                            value = "cinema",
-                            key = "#cinemaId"
-                    )
-            },
-            evict = {
-                    @CacheEvict(
-                            value = "cinemasByRegion",
-                            allEntries = true
-                    )
-            }
-    )
     @Transactional
     public CinemaResponse updateCinema(UUID cinemaId, CinemaUpdateRequest request) {
-
-        log.info("Updating cinema: cinemaId={}", cinemaId);
-
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy cinema với id: " + cinemaId
                 ));
-
-        if (request.name() != null
-                && cinemaRepository.existsByNameAndIdNot(
-                request.name(),
-                cinemaId
-        )) {
-
-            throw new ResourceConflictException(
-                    "Rạp chiếu với tên '"
-                            + request.name()
-                            + "' đã tồn tại"
-            );
-        }
 
         cinemaMapper.updateEntity(request, cinema);
 
@@ -129,24 +79,8 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    @Caching(
-            put = {
-                    @CachePut(
-                            value = "cinema",
-                            key = "#cinemaId"
-                    )
-            },
-            evict = {
-                    @CacheEvict(
-                            value = "cinemasByRegion",
-                            allEntries = true
-                    )
-            }
-    )
     @Transactional
     public CinemaResponse updateCinemaStatus(UUID cinemaId, CinemaUpdateStatusRequest request) {
-
-        log.info("Updating cinema status: cinemaId={}, status={}", cinemaId, request.status());
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy cinema với id: " + cinemaId
@@ -160,14 +94,8 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    @Cacheable(
-            value = "cinema",
-            key = "#cinemaId"
-    )
     @Transactional(readOnly = true)
     public CinemaResponse getCinemaById(UUID cinemaId) {
-
-        log.debug("Getting cinema by id: cinemaId={}", cinemaId);
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy cinema với id: " + cinemaId
@@ -177,49 +105,11 @@ public class CinemaServiceImpl implements CinemaService {
     }
 
     @Override
-    @Cacheable(
-            value = "cinemasByRegion",
-            key = "#regionId"
-                    + " + ':page=' + #pageable.pageNumber"
-                    + " + ':size=' + #pageable.pageSize"
-                    + " + ':sort=' + #pageable.sort.toString()"
-    )
-    @Transactional(readOnly = true)
-    public PageResponse<CinemaResponse> getCinemasByRegionId(
-            Integer regionId,
-            Pageable pageable
-    ) {
-
-        log.debug("Getting cinemas by region: regionId={}, page={}, size={}", regionId, pageable.getPageNumber(), pageable.getPageSize());
-
-        if (!regionRepository.existsById(regionId)) {
-            throw new EntityNotFoundException(
-                    "Không tìm thấy region với id: " + regionId
-            );
-        }
-
-        Specification<Cinema> spec =
-                Specification.allOf(
-                        CinemaSpecification.hasRegionId(
-                                regionId
-                        )
-                );
-
-        return PageResponseUtils.findAllAndMap(
-                p -> cinemaRepository.findAll(spec, p),
-                pageable,
-                cinemaMapper::toResponseList
-        );
-    }
-
-    @Override
     @Transactional(readOnly = true)
     public PageResponse<CinemaResponse> getAllCinemas(
             CinemaFilterRequest filter,
             Pageable pageable
     ) {
-
-        log.debug("Getting all cinemas: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Cinema> specification =
                 Specification.allOf(
@@ -240,11 +130,24 @@ public class CinemaServiceImpl implements CinemaService {
                         )
                 );
 
-        return PageResponseUtils.findAllAndMap(
-                p -> cinemaRepository.findAll(specification, p),
-                pageable,
-                cinemaMapper::toResponseList
-        );
+        Page<Cinema> cinemaPage =
+                cinemaRepository.findAll(
+                        specification,
+                        pageable
+                );
+
+        List<CinemaResponse> cinemaResponses =
+                cinemaMapper.toResponseList(
+                        cinemaPage.getContent()
+                );
+
+        return PageResponse.<CinemaResponse>builder()
+                .data(cinemaResponses)
+                .pageNumber(cinemaPage.getNumber() + 1)
+                .pageSize(cinemaPage.getSize())
+                .totalPages(cinemaPage.getTotalPages())
+                .totalElements(cinemaPage.getTotalElements())
+                .build();
     }
 
     @Override

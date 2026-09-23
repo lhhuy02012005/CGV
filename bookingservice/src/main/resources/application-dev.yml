@@ -38,18 +38,19 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   kafka:
-    # Khai báo đủ 3 broker → client tự failover khi 1 broker down
-    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9094,localhost:9096}
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       properties:
-        # acks=all: chờ tất cả ISR replica xác nhận → zero data loss cho booking event
+        # acks=all: payment là business-critical nhất
+        # → không được mất payment.completed event dù bất kỳ lý do gì
         acks: all
         retries: 3
         retry.backoff.ms: 1000
-        # enable.idempotence=true: retry không tạo duplicate booking event
+        # idempotence: chống duplicate payment event khi retry
+        # → tránh scenario: thanh toán thành công 1 lần nhưng event bị gửi 2 lần
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
         batch.size: 16384
@@ -58,37 +59,36 @@ spring:
         buffer.memory: 33554432
         request.timeout.ms: 30000
         delivery.timeout.ms: 120000
-        # transaction.id.prefix=booking-tx-: đăng ký Kafka Transactions
-        # → "ghi booking vào DB + publish booking.created event" là 1 atomic operation
-        # → nếu service crash giữa chừng → Kafka rollback → consumer không thấy event
-        # Dùng với: @Transactional trên service method + KafkaTemplate tự động participate
-        transaction.id.prefix: ${KAFKA_TRANSACTION_ID_PREFIX:booking-tx-}
+        # transaction.id.prefix=payment-tx-: Payment transaction là critical nhất
+        # → "cập nhật trạng thái payment + publish payment.completed event" là atomic
+        # → booking service chỉ confirm booking khi payment event thực sự committed
+        transaction.id.prefix: ${KAFKA_TRANSACTION_ID_PREFIX:payment-tx-}
 
     consumer:
-      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092}
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9094,localhost:9096}
       group-id: ${KAFKA_CONSUMER_GROUP_ID:booking-service-group}
-      # earliest: không bỏ sót payment.completed event khi service restart
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      # ErrorHandlingDeserializer: message corrupt không crash cả consumer thread
-      value-deserializer: org.apache.kafka.common.serialization.ErrorHandlingDeserializer
-      # Manual commit: chỉ commit sau khi cập nhật trạng thái booking thành công
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       enable-auto-commit: false
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
         spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
-        max.poll.records: 100
-        max.poll.interval.ms: 300000
+        # 50 records/poll: payment cần xử lý cẩn thận từng record
+        # → batch nhỏ hơn để kiểm soát chặt, tránh xử lý quá nhiều payment cùng lúc
+        max.poll.records: 50
+        # 600s: payment có thể call VNPay/Momo/VNPT API
+        # → tăng interval để tránh rebalance khi đang chờ external payment gateway
+        max.poll.interval.ms: 600000
         session.timeout.ms: 30000
         heartbeat.interval.ms: 10000
         fetch.min.bytes: 1
         fetch.max.wait.ms: 500
-        # read_committed: chỉ đọc payment event đã commit
-        # → không cập nhật booking dựa trên payment event chưa hoàn thành
+        # read_committed: chỉ xử lý booking event đã commit hoàn toàn
+        # → không khởi tạo thanh toán cho booking đang bị rollback
         isolation.level: read_committed
 
     listener:
-      # concurrency=3: 3 thread xử lý 3 partition song song → throughput x3
       concurrency: 3
       ack-mode: MANUAL_IMMEDIATE
       poll-timeout: 3000
@@ -110,5 +110,12 @@ logging:
 grpc:
   client:
     catalog-service:
-      address: 'static://127.0.0.1:9098' # Khi chạy local
+      address: 'static://127.0.0.1:9090' # CatalogService gRPC server chạy ở port 9090
       negotiation-type: plaintext
+    marketing-service:
+      address: 'static://127.0.0.1:9099'
+      negotiation-type: plaintext
+
+booking:
+  seat-lock:
+    cooldown-enabled: ${SEAT_LOCK_COOLDOWN_ENABLED:false} # Bật/tắt tính năng phạt khóa giữ ghế 15 phút (mặc định: false)

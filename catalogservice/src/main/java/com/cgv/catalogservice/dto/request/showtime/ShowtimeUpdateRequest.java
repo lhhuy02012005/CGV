@@ -1,12 +1,11 @@
 package com.cgv.catalogservice.dto.request.showtime;
 
 import com.cgv.catalogservice.enums.Format;
-import com.cgv.catalogservice.enums.ShowtimeStatus;
+import com.cgv.catalogservice.enums.ViewingMode;
 import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.UUID;
 
 public record ShowtimeUpdateRequest(
@@ -15,15 +14,17 @@ public record ShowtimeUpdateRequest(
 
         UUID roomId,
 
-        LocalDate showDate,
+        Instant showDate,
 
-        LocalDateTime startTime,
+        Instant startTime,
 
-        LocalDateTime endTime,
+        Instant endTime,
 
         String language,
 
         String subtitleLanguage,
+
+        ViewingMode viewingMode,
 
         Format format,
 

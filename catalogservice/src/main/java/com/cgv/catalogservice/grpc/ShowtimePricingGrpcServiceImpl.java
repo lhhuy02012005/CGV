@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -26,17 +27,19 @@ public class ShowtimePricingGrpcServiceImpl extends ShowtimePricingGrpcServiceGr
     SeatRepository seatRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public void getShowtimePricing(ShowtimePricingRequest request, StreamObserver<ShowtimePricingResponse> responseObserver) {
         try {
             UUID showtimeId = UUID.fromString(request.getShowtimeId());
-            Showtime showtime = showtimeRepository.findById(showtimeId)
-                    .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy suất chiếu ID: " + showtimeId));
+            Showtime showtime = showtimeRepository.findByIdWithDetails(showtimeId)
+                    .orElseGet(() -> showtimeRepository.findById(showtimeId)
+                            .orElseThrow(() -> new IllegalArgumentException("Không tìm thấy suất chiếu ID: " + showtimeId)));
 
             Movie movie = showtime.getMovie();
             Room room = showtime.getRoom();
             Cinema cinema = room.getCinema();
 
-            List<Seat> seats = seatRepository.findByRoom_Id(room.getId());
+            List<Seat> seats = seatRepository.findByRoomIdWithSeatType(room.getId());
 
             List<SeatPricingInfo> seatProtos = seats.stream().map(seat ->
                     SeatPricingInfo.newBuilder()
@@ -44,6 +47,7 @@ public class ShowtimePricingGrpcServiceImpl extends ShowtimePricingGrpcServiceGr
                             .setSeatLabel(seat.getRowChar() + seat.getSeatNumber())
                             .setSeatType(seat.getSeatType().getName().name())
                             .setSurcharge(seat.getSeatType().getSurcharge().doubleValue())
+                            .setIsActive(seat.getIsActive() != null ? seat.getIsActive() : true)
                             .build()
             ).toList();
 
@@ -60,6 +64,7 @@ public class ShowtimePricingGrpcServiceImpl extends ShowtimePricingGrpcServiceGr
                     .setStartTime(showtime.getStartTime().toString())
                     .setEndTime(showtime.getEndTime().toString())
                     .addAllSeats(seatProtos)
+                    .setShowtimeStatus(showtime.getStatus() != null ? showtime.getStatus().name() : "SCHEDULED")
                     .build();
 
             responseObserver.onNext(response);

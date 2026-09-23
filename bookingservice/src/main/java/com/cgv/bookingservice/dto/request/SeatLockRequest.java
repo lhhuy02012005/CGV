@@ -15,7 +15,7 @@ import java.util.UUID;
 @Setter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class SeatLockRequest {
-    @NotBlank(message = "Vui lòng chọn suất chiếu !")
+    @NotNull(message = "Vui lòng chọn suất chiếu !")
     UUID showtimeId;
 
     @NotEmpty(message = "Vui lòng chọn danh sách ghế !")

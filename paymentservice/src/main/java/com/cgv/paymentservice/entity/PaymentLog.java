@@ -1,6 +1,8 @@
 package com.cgv.paymentservice.entity;
 
 import jakarta.persistence.*;
+import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.util.UUID;
 
@@ -9,6 +11,12 @@ import java.util.UUID;
         @Index(name = "idx_cgv_payment_log_payment_id", columnList = "payment_id"),
         @Index(name = "idx_cgv_payment_created_at", columnList = "created_at")
 })
+@Getter
+@Setter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class PaymentLog extends BaseEntity{
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

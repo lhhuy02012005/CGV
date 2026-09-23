@@ -15,6 +15,7 @@ public record MovieResponse(
         String director,
         String language,
         String subtitle,
+        String supportedModes,
         String ageRating,
         Integer durationMinutes,
         LocalDate releaseDate,
@@ -23,6 +24,7 @@ public record MovieResponse(
         String posterUrl,
         String backdropUrl,
         String trailerYoutubeUrl,
+        Boolean isFeatured,
         MovieStatus status,
         Instant createdAt,
         Instant updatedAt

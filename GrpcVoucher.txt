@@ -1,0 +1,22 @@
+[User App]
+    │
+    ▼ (1. POST /api/v1/bookings kèm promotionId)
+[BookingService]
+    │
+    ├──> (2. Lấy hạng thành viên từ Redis: user:tier:{userId})
+    │
+    ├──> (3. Gọi gRPC Port 9099) ─────────┐
+    │                                     ▼
+    │                           [MarketingService (gRPC)]
+    │                                     │
+    │                                     ├─ Check Hạng: promotion.applicableTier.canApply(userTier)
+    │                                     ├─ Check Đơn tối thiểu: orderAmount >= minOrderValue
+    │                                     ├─ Check Hạn dùng: validFrom <= now <= validTo
+    │                                     ├─ Check Lượt dùng user: count(userId) < maxUsesPerUser
+    │                                     └─ Redis Hold 10 phút (TTL Reservation) chống over-redeem
+    │                                     │
+    │ <────── (4. Trả kết quả gRPC) ──────┘
+    │           (isValid, discountAmount, finalAmount)
+    │
+    ├──> (5. Lưu Booking trạng thái PAYMENT_PENDING)
+    └──> (6. Trả BookingResponse về cho User thanh toán)

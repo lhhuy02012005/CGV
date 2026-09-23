@@ -8,6 +8,9 @@ import com.cgv.catalogservice.dto.response.CinemaResponse;
 import com.cgv.commondto.dto.PageResponse;
 import org.springframework.data.domain.Pageable;
 
+import com.cgv.catalogservice.dto.response.NearbyCinemaResponse;
+
+import java.util.List;
 import java.util.UUID;
 
 public interface CinemaService {
@@ -25,5 +28,11 @@ public interface CinemaService {
     PageResponse<CinemaResponse> getAllCinemas(
             CinemaFilterRequest filter,
             Pageable pageable
+    );
+
+    List<NearbyCinemaResponse> getNearbyCinemas(
+            double latitude,
+            double longitude,
+            Double radiusKm
     );
 }
