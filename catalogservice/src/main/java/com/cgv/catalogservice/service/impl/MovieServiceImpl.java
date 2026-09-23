@@ -41,18 +41,7 @@ public class MovieServiceImpl implements MovieService {
     MovieMapper movieMapper;
 
     @Override
-    @Caching(
-            evict = {
-                    @CacheEvict(
-                            value = "nowShowingMovies",
-                            allEntries = true
-                    ),
-                    @CacheEvict(
-                            value = "comingSoonMovies",
-                            allEntries = true
-                    )
-            }
-    )
+    @CacheEvict(value = "movies:detail", allEntries = true)
     @Transactional
     public MovieResponse createMovie(MovieCreateRequest request) {
 
@@ -69,29 +58,22 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieMapper.toEntity(request);
 
         Movie savedMovie = movieRepository.save(movie);
+        MovieDocument doc = MovieDocument.builder()
+                .id(savedMovie.getId().toString())
+                .title(savedMovie.getTitle())
+                .originalTitle(savedMovie.getOriginalTitle())
+                .synopsis(savedMovie.getSynopsis())
+                .director(savedMovie.getDirector())
+                .ageRating(savedMovie.getAgeRating())
+                .showingStatus(savedMovie.getShowingStatus().name())
+                .build();
+        movieSearchRepository.save(doc);
 
         return movieMapper.toResponse(savedMovie);
     }
 
     @Override
-    @Caching(
-            put = {
-                    @CachePut(
-                            value = "movie",
-                            key = "#movieId"
-                    )
-            },
-            evict = {
-                    @CacheEvict(
-                            value = "nowShowingMovies",
-                            allEntries = true
-                    ),
-                    @CacheEvict(
-                            value = "comingSoonMovies",
-                            allEntries = true
-                    )
-            }
-    )
+    @CacheEvict(value = "movies:detail", key = "#movieId")
     @Transactional
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
 
@@ -201,10 +183,7 @@ public class MovieServiceImpl implements MovieService {
     }
 
     @Override
-    @Cacheable(
-            value = "movie",
-            key = "#movieId"
-    )
+    @Cacheable(value = "movies:detail", key = "#movieId")
     @Transactional(readOnly = true)
     public MovieResponse getMovieById(UUID movieId) {
 
@@ -304,6 +283,9 @@ public class MovieServiceImpl implements MovieService {
                         ),
                         MovieSpecification.hasAgeRating(
                                 filter.ageRating()
+                        ),
+                        MovieSpecification.isFeatured(
+                            filter.isFeatured()
                         )
                 );
 
@@ -326,5 +308,43 @@ public class MovieServiceImpl implements MovieService {
                     "Ngày kết thúc chiếu không được trước ngày phát hành"
             );
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MovieResponse> searchMovies(String keyword, Pageable pageable) {
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        try {
+            Page<MovieDocument> searchResult = movieSearchRepository.searchFuzzy(keyword.trim(), pageable);
+            List<UUID> movieIds = searchResult.getContent().stream()
+                    .map(doc -> {
+                        try {
+                            return UUID.fromString(doc.getId());
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    })
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            if (!movieIds.isEmpty()) {
+                List<Movie> movies = movieRepository.findAllById(movieIds);
+                Map<UUID, Movie> movieMap = movies.stream().collect(Collectors.toMap(Movie::getId, m -> m));
+                return movieIds.stream()
+                        .map(movieMap::get)
+                        .filter(Objects::nonNull)
+                        .map(movieMapper::toResponse)
+                        .toList();
+            }
+        } catch (Exception e) {
+            log.warn("Elasticsearch search error, fallback to SQL LIKE query: {}", e.getMessage());
+        }
+
+        // Database fallback
+        Page<Movie> fallbackPage = movieRepository.findAll(MovieSpecification.containsKeyword(keyword.trim()), pageable);
+        return movieMapper.toResponseList(fallbackPage.getContent());
     }
 }

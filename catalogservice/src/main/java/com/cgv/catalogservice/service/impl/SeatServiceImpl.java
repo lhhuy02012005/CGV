@@ -30,7 +30,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Slf4j(topic = "SEAT-SERVICE")
@@ -298,7 +297,7 @@ public class SeatServiceImpl implements SeatService {
                         .existsByRoomIdAndStatusAndEndTimeAfter(
                                 roomId,
                                 ShowtimeStatus.SCHEDULED,
-                                LocalDateTime.now()
+                                java.time.Instant.now()
                         );
 
         if (hasScheduledShowtime) {

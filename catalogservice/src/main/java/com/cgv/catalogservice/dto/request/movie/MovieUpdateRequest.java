@@ -19,6 +19,8 @@ public record MovieUpdateRequest(
 
         String subtitle,
 
+        String supportedModes,
+
         @Size(max = 5, message = "Phân loại độ tuổi tối đa 5 ký tự")
         String ageRating,
 
@@ -33,6 +35,8 @@ public record MovieUpdateRequest(
 
         String backdropUrl,
 
-        String trailerYoutubeUrl
+        String trailerYoutubeUrl,
+
+        Boolean isFeatured
 ) {
 }
