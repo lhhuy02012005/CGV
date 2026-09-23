@@ -7,6 +7,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public final class ShowtimeSpecification {
@@ -54,7 +55,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> hasShowDate(
-            Instant showDate
+            LocalDate showDate
     ) {
         return (root, query, cb) ->
                 showDate == null
@@ -66,7 +67,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> showDateFrom(
-            Instant from
+            LocalDate from
     ) {
         return (root, query, cb) ->
                 from == null
@@ -78,7 +79,7 @@ public final class ShowtimeSpecification {
     }
 
     public static Specification<Showtime> showDateTo(
-            Instant to
+            LocalDate to
     ) {
         return (root, query, cb) ->
                 to == null

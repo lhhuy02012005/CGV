@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.time.LocalDate;
 
 public record MovieUpdateRequest(
 
@@ -27,9 +28,9 @@ public record MovieUpdateRequest(
         @Positive(message = "Thời lượng phim phải lớn hơn 0")
         Integer durationMinutes,
 
-        Instant releaseDate,
+        LocalDate releaseDate,
 
-        Instant endDate,
+        LocalDate endDate,
 
         String posterUrl,
 

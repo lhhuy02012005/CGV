@@ -8,6 +8,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record ShowtimeCreateRequest(
@@ -19,7 +20,7 @@ public record ShowtimeCreateRequest(
         UUID roomId,
 
         @NotNull(message = "Ngày chiếu không được để trống")
-        Instant showDate,
+        LocalDate showDate,
 
         @NotNull(message = "Thời gian bắt đầu không được để trống")
         Instant startTime,

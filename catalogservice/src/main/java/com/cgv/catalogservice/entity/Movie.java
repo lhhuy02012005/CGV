@@ -6,7 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -54,10 +54,10 @@ public class Movie extends BaseEntity {
     Integer durationMinutes;
 
     @Column(name = "release_date")
-    Instant releaseDate;
+    LocalDate releaseDate;
 
     @Column(name = "end_date")
-    Instant endDate;
+    LocalDate endDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "showing_status", nullable = false)
