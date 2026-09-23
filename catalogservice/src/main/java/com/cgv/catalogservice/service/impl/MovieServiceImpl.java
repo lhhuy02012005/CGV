@@ -29,7 +29,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -100,12 +100,12 @@ public class MovieServiceImpl implements MovieService {
             );
         }
 
-        Instant releaseDate =
+        LocalDate releaseDate =
                 request.releaseDate() != null
                         ? request.releaseDate()
                         : movie.getReleaseDate();
 
-        Instant endDate =
+        LocalDate endDate =
                 request.endDate() != null
                         ? request.endDate()
                         : movie.getEndDate();
@@ -281,8 +281,8 @@ public class MovieServiceImpl implements MovieService {
     }
 
     private void validateMovieDates(
-            Instant releaseDate,
-            Instant endDate
+            LocalDate releaseDate,
+            LocalDate endDate
     ) {
         if (releaseDate != null
                 && endDate != null

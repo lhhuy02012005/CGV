@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record ShowtimeFilterRequest(
@@ -16,11 +17,11 @@ public record ShowtimeFilterRequest(
 
         UUID cinemaId,
 
-        Instant showDate,
+        LocalDate showDate,
 
-        Instant showDateFrom,
+        LocalDate showDateFrom,
 
-        Instant showDateTo,
+        LocalDate showDateTo,
 
         Instant startTimeFrom,
 

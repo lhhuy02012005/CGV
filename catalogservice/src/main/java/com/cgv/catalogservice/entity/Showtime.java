@@ -9,6 +9,7 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -64,7 +65,7 @@ public class Showtime extends BaseEntity {
             name = "show_date",
             nullable = false
     )
-    Instant showDate;
+    LocalDate showDate;
 
     @Column(
             name = "start_time",

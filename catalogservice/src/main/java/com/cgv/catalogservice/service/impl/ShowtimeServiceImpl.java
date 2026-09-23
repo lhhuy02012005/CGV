@@ -42,6 +42,9 @@ import java.util.stream.Collectors;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class ShowtimeServiceImpl implements ShowtimeService {
 
+    private static final ZoneId VIETNAM_ZONE =
+            ZoneId.of("Asia/Ho_Chi_Minh");
+
     ShowtimeRepository showtimeRepository;
     MovieRepository movieRepository;
     RoomRepository roomRepository;
@@ -176,7 +179,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     );
         }
 
-        Instant showDate =
+        LocalDate showDate =
                 request.showDate() != null
                         ? request.showDate()
                         : showtime.getShowDate();
@@ -350,7 +353,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     @Transactional(readOnly = true)
     public PageResponse<ShowtimeResponse> getShowtimesByMovieAndDate(
             UUID movieId,
-            Instant showDate,
+            LocalDate showDate,
             Pageable pageable
     ) {
 
@@ -387,7 +390,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     @Transactional(readOnly = true)
     public PageResponse<ShowtimeResponse> getShowtimesByCinemaAndDate(
             UUID cinemaId,
-            Instant showDate,
+            LocalDate showDate,
             Pageable pageable
     ) {
 
@@ -478,21 +481,46 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     }
 
     private void validateShowtimeTime(
-            Instant showDate,
+            LocalDate showDate,
             Instant startTime,
             Instant endTime
     ) {
+
+        LocalDate today =
+                LocalDate.now(VIETNAM_ZONE);
+
+        if (showDate.isBefore(today)) {
+            throw new IllegalArgumentException(
+                    "Ngày chiếu không được nhỏ hơn ngày hiện tại"
+            );
+        }
 
         if (!endTime.isAfter(startTime)) {
             throw new IllegalArgumentException(
                     "Thời gian kết thúc phải sau thời gian bắt đầu"
             );
         }
+
+        LocalDate startDate =
+                startTime.atZone(VIETNAM_ZONE)
+                        .toLocalDate();
+
+        if (!showDate.equals(startDate)) {
+            throw new IllegalArgumentException(
+                    "Ngày chiếu phải trùng với ngày bắt đầu suất chiếu"
+            );
+        }
+
+        if (startTime.isBefore(Instant.now())) {
+            throw new IllegalArgumentException(
+                    "Thời gian bắt đầu suất chiếu không được ở trong quá khứ"
+            );
+        }
     }
 
     private boolean hasOverlappingShowtime(
             UUID roomId,
-            Instant showDate,
+            LocalDate showDate,
             Instant startTime,
             Instant endTime,
             UUID excludedShowtimeId
@@ -542,7 +570,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
     private void validateShowDateWithinMoviePeriod(
             Movie movie,
-            Instant showDate
+            LocalDate showDate
     ) {
         if (movie.getReleaseDate() != null
                 && showDate.isBefore(movie.getReleaseDate())) {
