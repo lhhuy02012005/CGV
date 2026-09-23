@@ -31,8 +31,8 @@ public class BookingSeat extends BaseEntity{
     @Column(nullable = false)
     UUID seatId;
 
-    @Column(nullable = false)
-    UUID showTimeId;
+    @Column(name = "showtime_id", nullable = false)
+    UUID showtimeId;
 
     @Column(nullable = false)
     BigDecimal price;

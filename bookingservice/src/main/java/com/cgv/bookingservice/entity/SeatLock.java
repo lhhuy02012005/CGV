@@ -1,5 +1,6 @@
 package com.cgv.bookingservice.entity;
 
+import com.cgv.bookingservice.enums.SeatLockStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
@@ -26,11 +27,18 @@ public class SeatLock extends BaseEntity{
     @GeneratedValue(strategy = GenerationType.UUID)
     UUID id;
 
-    @Column(nullable = false)
-    UUID showTimeId;
+    @Column(name = "showtime_id", nullable = false)
+    UUID showtimeId;
 
-    @Column(nullable = false)
+    @Column(name = "seat_id", nullable = false)
     UUID seatId;
+
+    @Column(name = "user_id")
+    String userId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    SeatLockStatus status;
 
     @Column
     String sessionId;

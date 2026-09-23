@@ -12,9 +12,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Date;
 import java.util.List;
@@ -135,6 +137,25 @@ public class GlobalExceptionHandler {
 //                .build();
 //        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
 //    }
+
+    @ExceptionHandler({
+            HttpMessageNotReadableException.class,
+            MethodArgumentTypeMismatchException.class
+    })
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleBadRequest(
+            Exception ex,
+            HttpServletRequest request
+    ) {
+        log.warn("Bad request / type mismatch: {}", ex.getMessage());
+        return ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .path(request.getRequestURI())
+                .error("Bad Request")
+                .message("Tham số không hợp lệ hoặc sai định dạng: " + ex.getMessage())
+                .build();
+    }
 
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
