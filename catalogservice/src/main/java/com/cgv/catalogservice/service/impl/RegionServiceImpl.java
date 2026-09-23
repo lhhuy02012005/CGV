@@ -13,6 +13,7 @@ import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.catalogservice.util.SlugUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j(topic = "REGION-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -38,6 +40,8 @@ public class RegionServiceImpl implements RegionService {
     public RegionResponse createRegion(
             RegionCreateRequest request
     ) {
+
+        log.info("Creating region: name={}", request.name());
         String name = request.name();
 
         if (regionRepository.existsByNameIgnoreCase(name)) {
@@ -69,6 +73,8 @@ public class RegionServiceImpl implements RegionService {
             Integer regionId,
             RegionUpdateRequest request
     ) {
+
+        log.info("Updating region: regionId={}", regionId);
         Region region = regionRepository.findById(regionId)
                 .orElseThrow(() ->
                         new EntityNotFoundException(
@@ -115,6 +121,8 @@ public class RegionServiceImpl implements RegionService {
     @Transactional
     public void deleteRegion(Integer regionId) {
 
+        log.info("Deleting region: regionId={}", regionId);
+
         if (cinemaRepository.existsByRegionId(regionId)) {
             throw new ResourceConflictException(
                     "Không thể xoá region vì đang có cinema thuộc region này"
@@ -132,6 +140,8 @@ public class RegionServiceImpl implements RegionService {
     @Override
     @Transactional(readOnly = true)
     public RegionResponse getRegionById(Integer regionId) {
+
+        log.debug("Getting region by id: regionId={}", regionId);
         Region region = regionRepository.findById(regionId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy region với id: " + regionId
@@ -143,6 +153,8 @@ public class RegionServiceImpl implements RegionService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<RegionResponse> getAllRegions(Pageable pageable) {
+
+        log.debug("Getting all regions: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         return PageResponseUtils.findAllAndMap(
                 regionRepository::findAll,

@@ -16,6 +16,7 @@ import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.catalogservice.util.SlugUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -29,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+@Slf4j(topic = "ARTICLE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -60,6 +62,8 @@ public class ArticleServiceImpl implements ArticleService {
     public ArticleResponse createArticle(
             ArticleCreateRequest request
     ) {
+
+        log.info("Creating article: title={}", request.title());
         String title = request.title();
 
         String slug = SlugUtils.generateUniqueSlug(
@@ -111,6 +115,8 @@ public class ArticleServiceImpl implements ArticleService {
             UUID articleId,
             ArticleUpdateRequest request
     ) {
+
+        log.info("Updating article: articleId={}", articleId);
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() ->
                         new EntityNotFoundException(
@@ -183,6 +189,8 @@ public class ArticleServiceImpl implements ArticleService {
     @Transactional
     public void deleteArticle(UUID articleId) {
 
+        log.info("Deleting article: articleId={}", articleId);
+
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() ->
                         new EntityNotFoundException(
@@ -196,6 +204,8 @@ public class ArticleServiceImpl implements ArticleService {
     @Override
     @Transactional
     public ArticleResponse getArticleById(UUID articleId) {
+
+        log.debug("Getting article by id: articleId={}", articleId);
 
         Article article = articleRepository.findById(articleId)
                 .orElseThrow(() ->
@@ -225,6 +235,8 @@ public class ArticleServiceImpl implements ArticleService {
     @Transactional(readOnly = true)
     public PageResponse<ArticleResponse> getArticlesByCategory(ArticleCategory category, Pageable pageable) {
 
+        log.debug("Getting articles by category: category={}, page={}, size={}", category, pageable.getPageNumber(), pageable.getPageSize());
+
         Specification<Article> spec =
                 Specification.allOf(
                         ArticleSpecification.hasCategory(category)
@@ -246,6 +258,8 @@ public class ArticleServiceImpl implements ArticleService {
     )
     @Transactional(readOnly = true)
     public PageResponse<ArticleResponse> getFeaturedArticles(Pageable pageable) {
+
+        log.debug("Getting featured articles: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Article> spec =
                 Specification.allOf(
@@ -269,6 +283,8 @@ public class ArticleServiceImpl implements ArticleService {
     @Transactional(readOnly = true)
     public PageResponse<ArticleResponse> getTrendingArticles(Pageable pageable) {
 
+        log.debug("Getting trending articles: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
         Specification<Article> spec =
                 Specification.allOf(
                         ArticleSpecification.isTrending(Boolean.TRUE)
@@ -287,6 +303,8 @@ public class ArticleServiceImpl implements ArticleService {
             ArticleFilterRequest filter,
             Pageable pageable
     ) {
+
+        log.debug("Getting all articles: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Article> spec =
                 Specification.allOf(

@@ -19,9 +19,13 @@ import com.cgv.catalogservice.service.SeatService;
 import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@Slf4j(topic = "SEAT-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -42,8 +47,22 @@ public class SeatServiceImpl implements SeatService {
     SeatMapper seatMapper;
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "seatsByRoom",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "roomsByCinema",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public SeatResponse createSeat(SeatCreateRequest request) {
+
+        log.info("Creating seat: roomId={}, row={}, number={}", request.roomId(), request.rowChar(), request.seatNumber());
 
         validateRoomHasNoScheduledShowtime(request.roomId());
 
@@ -96,11 +115,25 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "seatsByRoom",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "roomsByCinema",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public SeatResponse updateSeat(
             UUID seatId,
             SeatUpdateRequest request
     ) {
+
+        log.info("Updating seat: seatId={}", seatId);
 
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() ->
@@ -206,11 +239,17 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    @CacheEvict(
+            value = "seatsByRoom",
+            allEntries = true
+    )
     @Transactional
     public SeatResponse updateSeatStatus(
             UUID seatId,
             SeatUpdateStatusRequest request
     ) {
+
+        log.info("Updating seat status: seatId={}, active={}", seatId, request.isActive());
 
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() ->
@@ -227,19 +266,17 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public SeatResponse getSeatById(UUID seatId) {
-        Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy seat với id: " + seatId
-                ));
-
-        return seatMapper.toResponse(seat);
-    }
-
-    @Override
+    @Cacheable(
+            value = "seatsByRoom",
+            key = "#roomId"
+                    + " + ':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
     @Transactional(readOnly = true)
     public PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable) {
+
+        log.debug("Getting seats by room: roomId={}, page={}, size={}", roomId, pageable.getPageNumber(), pageable.getPageSize());
 
         if (!roomRepository.existsById(roomId)) {
             throw new EntityNotFoundException(

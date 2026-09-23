@@ -1,5 +1,12 @@
 package com.cgv.catalogservice.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
+
 import com.cgv.catalogservice.dto.request.room.RoomCreateRequest;
 import com.cgv.catalogservice.dto.request.room.RoomUpdateRequest;
 import com.cgv.catalogservice.dto.request.room.RoomUpdateStatusRequest;
@@ -18,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Tag(name = "Rooms", description = "API quản lý phòng chiếu và truy vấn phòng theo rạp.")
 @RestController
 @RequestMapping("/rooms")
 @RequiredArgsConstructor
@@ -26,10 +34,19 @@ public class RoomController {
 
     RoomService roomService;
 
+    @Operation(
+            summary = "Tạo phòng chiếu",
+            description = "Tạo phòng chiếu mới trong một rạp."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên liên quan"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
+    })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<RoomResponse> create(
-            @RequestBody @Valid RoomCreateRequest request
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu tạo phòng chiếu", required = true) @RequestBody @Valid RoomCreateRequest request
     ) {
         RoomResponse response = roomService.createRoom(request);
 
@@ -40,10 +57,19 @@ public class RoomController {
                 .build();
     }
 
+    @Operation(
+            summary = "Cập nhật phòng chiếu",
+            description = "Cập nhật một phần thông tin phòng chiếu theo ID."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên liên quan"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
+    })
     @PatchMapping("/{roomId}")
     public ApiResponse<RoomResponse> update(
-            @PathVariable UUID roomId,
-            @RequestBody @Valid RoomUpdateRequest request
+            @Parameter(description = "ID của phòng chiếu", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID roomId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật phòng chiếu", required = true) @RequestBody @Valid RoomUpdateRequest request
     ) {
         RoomResponse response = roomService.updateRoom(roomId, request);
 
@@ -54,10 +80,19 @@ public class RoomController {
                 .build();
     }
 
+    @Operation(
+            summary = "Cập nhật trạng thái phòng",
+            description = "Cập nhật trạng thái hoạt động của phòng chiếu."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên liên quan"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
+    })
     @PatchMapping("/{roomId}/status")
     public ApiResponse<RoomResponse> updateStatus(
-            @PathVariable UUID roomId,
-            @RequestBody @Valid RoomUpdateStatusRequest request
+            @Parameter(description = "ID của phòng chiếu", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID roomId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật trạng thái phòng chiếu", required = true) @RequestBody @Valid RoomUpdateStatusRequest request
     ) {
         RoomResponse response = roomService.updateRoomStatus(roomId, request);
 
@@ -68,8 +103,15 @@ public class RoomController {
                 .build();
     }
 
+    @Operation(
+            summary = "Xem chi tiết phòng chiếu",
+            description = "Lấy thông tin chi tiết phòng chiếu theo ID."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên")
+    })
     @GetMapping("/{roomId}")
-    public ApiResponse<RoomResponse> get(@PathVariable UUID roomId) {
+    public ApiResponse<RoomResponse> get(@Parameter(description = "ID của phòng chiếu", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID roomId) {
         RoomResponse response = roomService.getRoomById(roomId);
 
         return ApiResponse.<RoomResponse>builder()
@@ -79,10 +121,18 @@ public class RoomController {
                 .build();
     }
 
+    @Operation(
+            summary = "Lấy phòng theo rạp",
+            description = "Lấy danh sách phòng thuộc một rạp, có phân trang và sắp xếp."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Tham số truy vấn không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên cha được yêu cầu")
+    })
     @GetMapping("/cinema/{cinemaId}")
     public ApiResponse<PageResponse<RoomResponse>> findAllByCinemaId(
-            @PathVariable UUID cinemaId,
-            @PageableDefault Pageable pageable
+            @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId,
+            @ParameterObject @PageableDefault Pageable pageable
     ) {
         PageResponse<RoomResponse> response = roomService.getAllRoomsByCinemaId(cinemaId, pageable);
 

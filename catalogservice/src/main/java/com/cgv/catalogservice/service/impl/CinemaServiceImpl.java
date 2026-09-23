@@ -16,6 +16,7 @@ import com.cgv.catalogservice.specification.CinemaSpecification;
 import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+@Slf4j(topic = "CINEMA-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -46,6 +48,8 @@ public class CinemaServiceImpl implements CinemaService {
     )
     @Transactional
     public CinemaResponse createCinema(CinemaCreateRequest request) {
+
+        log.info("Creating cinema: name={}, regionId={}", request.name(), request.regionId());
 
         if (cinemaRepository.existsByName(request.name())) {
             throw new ResourceConflictException(
@@ -83,6 +87,8 @@ public class CinemaServiceImpl implements CinemaService {
     )
     @Transactional
     public CinemaResponse updateCinema(UUID cinemaId, CinemaUpdateRequest request) {
+
+        log.info("Updating cinema: cinemaId={}", cinemaId);
 
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -134,6 +140,8 @@ public class CinemaServiceImpl implements CinemaService {
     )
     @Transactional
     public CinemaResponse updateCinemaStatus(UUID cinemaId, CinemaUpdateStatusRequest request) {
+
+        log.info("Updating cinema status: cinemaId={}, status={}", cinemaId, request.status());
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy cinema với id: " + cinemaId
@@ -153,6 +161,8 @@ public class CinemaServiceImpl implements CinemaService {
     )
     @Transactional(readOnly = true)
     public CinemaResponse getCinemaById(UUID cinemaId) {
+
+        log.debug("Getting cinema by id: cinemaId={}", cinemaId);
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy cinema với id: " + cinemaId
@@ -174,6 +184,8 @@ public class CinemaServiceImpl implements CinemaService {
             Integer regionId,
             Pageable pageable
     ) {
+
+        log.debug("Getting cinemas by region: regionId={}, page={}, size={}", regionId, pageable.getPageNumber(), pageable.getPageSize());
 
         if (!regionRepository.existsById(regionId)) {
             throw new EntityNotFoundException(
@@ -201,6 +213,8 @@ public class CinemaServiceImpl implements CinemaService {
             CinemaFilterRequest filter,
             Pageable pageable
     ) {
+
+        log.debug("Getting all cinemas: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Cinema> specification =
                 Specification.allOf(

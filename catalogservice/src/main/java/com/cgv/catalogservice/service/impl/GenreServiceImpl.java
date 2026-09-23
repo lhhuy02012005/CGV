@@ -13,6 +13,7 @@ import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.catalogservice.util.SlugUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j(topic = "GENRE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -35,6 +37,8 @@ public class GenreServiceImpl implements GenreService {
     public GenreResponse createGenre(
             GenreCreateRequest request
     ) {
+
+        log.info("Creating genre: name={}", request.name());
         String name = request.name();
 
         if (genreRepository.existsByNameIgnoreCase(name)) {
@@ -66,6 +70,8 @@ public class GenreServiceImpl implements GenreService {
             Integer genreId,
             GenreUpdateRequest request
     ) {
+
+        log.info("Updating genre: genreId={}", genreId);
         Genre genre = genreRepository.findById(genreId)
                 .orElseThrow(() ->
                         new EntityNotFoundException(
@@ -112,6 +118,8 @@ public class GenreServiceImpl implements GenreService {
     @Transactional
     public void deleteGenre(Integer genreId) {
 
+        log.info("Deleting genre: genreId={}", genreId);
+
         if (movieGenreRepository.existsByIdGenreId(genreId)) {
             throw new ResourceConflictException(
                     "Không thể xoá genre vì đang có phim sử dụng thể loại này"
@@ -129,6 +137,8 @@ public class GenreServiceImpl implements GenreService {
     @Override
     @Transactional(readOnly = true)
     public GenreResponse getGenreById(Integer genreId) {
+
+        log.debug("Getting genre by id: genreId={}", genreId);
         Genre genre = genreRepository.findById(genreId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy genre với id: " + genreId
@@ -140,6 +150,8 @@ public class GenreServiceImpl implements GenreService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<GenreResponse> getAllGenres(Pageable pageable) {
+
+        log.debug("Getting all genres: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         return PageResponseUtils.findAllAndMap(
                 genreRepository::findAll,

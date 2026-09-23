@@ -20,6 +20,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -30,6 +31,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "MOVIE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE , makeFinal = true)
@@ -53,6 +55,8 @@ public class MovieServiceImpl implements MovieService {
     )
     @Transactional
     public MovieResponse createMovie(MovieCreateRequest request) {
+
+        log.info("Creating movie: title={}", request.title());
 
         validateMovieDates(request.releaseDate(), request.endDate());
 
@@ -90,6 +94,8 @@ public class MovieServiceImpl implements MovieService {
     )
     @Transactional
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
+
+        log.info("Updating movie: movieId={}", movieId);
 
         Movie movie = movieRepository.findById(movieId)
                 .orElseThrow(() ->
@@ -150,6 +156,8 @@ public class MovieServiceImpl implements MovieService {
     @Transactional
     public MovieResponse updateMovieStatus(UUID movieId, MovieUpdateStatusRequest request) {
 
+        log.info("Updating movie status: movieId={}, status={}", movieId, request.status());
+
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
         movie.setStatus(request.status());
@@ -181,6 +189,8 @@ public class MovieServiceImpl implements MovieService {
     @Transactional
     public MovieResponse updateMovieShowingStatus(UUID movieId, MovieUpdateShowingStatusRequest request) {
 
+        log.info("Updating movie showing status: movieId={}, showingStatus={}", movieId, request.showingStatus());
+
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy phim với id: " + movieId));
 
         movie.setShowingStatus(request.showingStatus());
@@ -198,6 +208,8 @@ public class MovieServiceImpl implements MovieService {
     @Transactional(readOnly = true)
     public MovieResponse getMovieById(UUID movieId) {
 
+        log.debug("Getting movie by id: movieId={}", movieId);
+
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
         return movieMapper.toResponse(movie);
@@ -213,6 +225,8 @@ public class MovieServiceImpl implements MovieService {
     )
     @Transactional(readOnly = true)
     public PageResponse<MovieResponse> getNowShowingMovies(Pageable pageable) {
+
+        log.debug("Getting now-showing movies: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Movie> spec =
                 Specification.allOf(
@@ -238,6 +252,8 @@ public class MovieServiceImpl implements MovieService {
     @Transactional(readOnly = true)
     public PageResponse<MovieResponse> getComingSoonMovies(Pageable pageable) {
 
+        log.debug("Getting coming-soon movies: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
         Specification<Movie> spec =
                 Specification.allOf(
                         MovieSpecification.hasShowingStatus(ShowingStatus.COMING_SOON),
@@ -254,6 +270,8 @@ public class MovieServiceImpl implements MovieService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<MovieResponse> getAllMovies(MovieFilterRequest filter, Pageable pageable) {
+
+        log.debug("Getting all movies: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Movie> specification =
                 Specification.allOf(

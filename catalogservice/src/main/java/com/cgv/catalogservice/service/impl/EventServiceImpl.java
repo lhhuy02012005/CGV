@@ -16,6 +16,7 @@ import com.cgv.catalogservice.specification.EventSpecification;
 import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+@Slf4j(topic = "EVENT-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -54,6 +56,8 @@ public class EventServiceImpl implements EventService {
     )
     @Transactional
     public EventResponse createEvent(EventCreateRequest request) {
+
+        log.info("Creating event: title={}", request.title());
         Event event = eventMapper.toEntity(request);
 
         if (request.cinemaId() != null) {
@@ -91,6 +95,8 @@ public class EventServiceImpl implements EventService {
     )
     @Transactional
     public EventResponse updateEvent(UUID eventId, EventUpdateRequest request) {
+
+        log.info("Updating event: eventId={}", eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy event với id: " + eventId
@@ -136,6 +142,8 @@ public class EventServiceImpl implements EventService {
             UUID eventId,
             EventUpdateStatusRequest request
     ) {
+
+        log.info("Updating event status: eventId={}, status={}", eventId, request.status());
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy event với id: " + eventId
@@ -155,6 +163,8 @@ public class EventServiceImpl implements EventService {
     )
     @Transactional(readOnly = true)
     public EventResponse getEventById(UUID eventId) {
+
+        log.debug("Getting event by id: eventId={}", eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy event với id: " + eventId
@@ -172,6 +182,8 @@ public class EventServiceImpl implements EventService {
     )
     @Transactional(readOnly = true)
     public PageResponse<EventResponse> getUpcomingEvents(Pageable pageable) {
+
+        log.debug("Getting upcoming events: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
 
         Specification<Event> spec =
                 Specification.allOf(
@@ -195,6 +207,8 @@ public class EventServiceImpl implements EventService {
     @Transactional(readOnly = true)
     public PageResponse<EventResponse> getOngoingEvents(Pageable pageable) {
 
+        log.debug("Getting ongoing events: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
         Specification<Event> spec =
                 Specification.allOf(
                         EventSpecification.hasStatus(EventStatus.ONGOING)
@@ -213,6 +227,8 @@ public class EventServiceImpl implements EventService {
             EventFilterRequest filter,
             Pageable pageable
     ) {
+
+        log.debug("Getting all events: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
         Specification<Event> specification = Specification.allOf(
                 EventSpecification.containsKeyword(filter.keyword()),
                 EventSpecification.hasStatus(filter.status()),

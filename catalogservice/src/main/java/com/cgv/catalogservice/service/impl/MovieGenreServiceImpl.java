@@ -13,6 +13,7 @@ import com.cgv.catalogservice.repository.MovieGenreRepository;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieGenreService;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "MOVIE-GENRE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -38,6 +40,8 @@ public class MovieGenreServiceImpl implements MovieGenreService {
     public MovieGenreResponse createMovieGenre(
             MovieGenreCreateRequest request
     ) {
+
+        log.info("Creating movie genre: movieId={}, genreId={}", request.movieId(), request.genreId());
 
         if (movieGenreRepository.existsByIdMovieIdAndIdGenreId(
                 request.movieId(),
@@ -80,6 +84,8 @@ public class MovieGenreServiceImpl implements MovieGenreService {
             Integer genreId
     ) {
 
+        log.info("Deleting movie genre: movieId={}, genreId={}", movieId, genreId);
+
         MovieGenreId movieGenreId =
                 new MovieGenreId(movieId, genreId);
 
@@ -100,6 +106,8 @@ public class MovieGenreServiceImpl implements MovieGenreService {
     public List<MovieGenreResponse> getGenresByMovieId(
             UUID movieId
     ) {
+
+        log.debug("Getting genres by movie: movieId={}", movieId);
         if (!movieRepository.existsById(movieId)) {
             throw new EntityNotFoundException(
                     "Không tìm thấy phim với id: " + movieId

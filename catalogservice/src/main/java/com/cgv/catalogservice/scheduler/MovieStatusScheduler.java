@@ -5,6 +5,7 @@ import com.cgv.catalogservice.repository.MovieRepository;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Caching;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.ZoneId;
 
+@Slf4j(topic = "MOVIE-STATUS-SCHEDULER")
 @Component
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -50,7 +52,18 @@ public class MovieStatusScheduler {
         LocalDate today =
                 LocalDate.now(VIETNAM_ZONE);
 
+        log.info(
+                "Starting expired movie status update: date={}",
+                today
+        );
+
         movieRepository.updateExpiredMoviesToEnded(
+                today,
+                ShowingStatus.ENDED
+        );
+
+        log.info(
+                "Finished expired movie status update: date={}, targetStatus={}",
                 today,
                 ShowingStatus.ENDED
         );

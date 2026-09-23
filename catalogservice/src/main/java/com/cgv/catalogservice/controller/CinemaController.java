@@ -1,5 +1,12 @@
 package com.cgv.catalogservice.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springdoc.core.annotations.ParameterObject;
+
 import com.cgv.catalogservice.dto.request.cinema.CinemaCreateRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaFilterRequest;
 import com.cgv.catalogservice.dto.request.cinema.CinemaUpdateRequest;
@@ -19,6 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Tag(name = "Cinemas", description = "API quản lý rạp chiếu phim và truy vấn danh sách rạp theo bộ lọc.")
 @RestController
 @RequestMapping("/cinemas")
 @RequiredArgsConstructor
@@ -27,10 +35,19 @@ public class CinemaController {
 
     CinemaService cinemaService;
 
+    @Operation(
+            summary = "Tạo rạp chiếu phim",
+            description = "Tạo rạp mới và liên kết rạp với khu vực tương ứng."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên liên quan"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
+    })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<CinemaResponse> create(
-            @RequestBody @Valid CinemaCreateRequest request
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu tạo rạp chiếu phim", required = true) @RequestBody @Valid CinemaCreateRequest request
     ) {
         CinemaResponse response = cinemaService.createCinema(request);
 
@@ -41,10 +58,19 @@ public class CinemaController {
                 .build();
     }
 
+    @Operation(
+            summary = "Cập nhật rạp chiếu phim",
+            description = "Cập nhật một phần thông tin của rạp theo ID."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên liên quan"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
+    })
     @PatchMapping("/{cinemaId}")
     public ApiResponse<CinemaResponse> update(
-            @PathVariable UUID cinemaId,
-            @RequestBody @Valid CinemaUpdateRequest request
+            @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật rạp chiếu phim", required = true) @RequestBody @Valid CinemaUpdateRequest request
     ) {
         CinemaResponse response = cinemaService.updateCinema(cinemaId, request);
 
@@ -55,10 +81,19 @@ public class CinemaController {
                 .build();
     }
 
+    @Operation(
+            summary = "Cập nhật trạng thái rạp",
+            description = "Cập nhật trạng thái hoạt động của rạp chiếu phim."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Dữ liệu yêu cầu không hợp lệ"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên liên quan"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
+    })
     @PatchMapping("/{cinemaId}/status")
     public ApiResponse<CinemaResponse> updateStatus(
-            @PathVariable UUID cinemaId,
-            @RequestBody @Valid CinemaUpdateStatusRequest request
+            @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật trạng thái rạp chiếu phim", required = true) @RequestBody @Valid CinemaUpdateStatusRequest request
     ) {
         CinemaResponse response = cinemaService.updateCinemaStatus(cinemaId, request);
 
@@ -69,8 +104,15 @@ public class CinemaController {
                 .build();
     }
 
+    @Operation(
+            summary = "Xem chi tiết rạp",
+            description = "Lấy thông tin chi tiết của một rạp chiếu phim theo ID."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy tài nguyên")
+    })
     @GetMapping("/{cinemaId}")
-    public ApiResponse<CinemaResponse> get(@PathVariable UUID cinemaId) {
+    public ApiResponse<CinemaResponse> get(@Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId) {
         CinemaResponse response = cinemaService.getCinemaById(cinemaId);
 
         return ApiResponse.<CinemaResponse>builder()
@@ -80,10 +122,17 @@ public class CinemaController {
                 .build();
     }
 
+    @Operation(
+            summary = "Tìm kiếm và lọc rạp",
+            description = "Lấy danh sách rạp theo từ khoá, khu vực, trạng thái, tiện ích và các điều kiện lọc khác, kèm phân trang."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Tham số truy vấn không hợp lệ")
+    })
     @GetMapping
     public ApiResponse<PageResponse<CinemaResponse>> findAll(
-            @Valid @ModelAttribute CinemaFilterRequest filter,
-            @PageableDefault Pageable pageable
+            @ParameterObject @Valid @ModelAttribute CinemaFilterRequest filter,
+            @ParameterObject @PageableDefault Pageable pageable
     ) {
 
         PageResponse<CinemaResponse> response =
