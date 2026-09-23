@@ -6,5 +6,6 @@ public enum BookingStatus {
     CONFIRMED,
     USED,
     CANCELLED,
+    CANCELLED_DUE_TO_MAINTENANCE, //Khi ghế/lịch bị Admin hủy trong lúc chờ thanh toán
     REFUNDED
 }

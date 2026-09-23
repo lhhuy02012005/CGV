@@ -20,6 +20,12 @@ public class SecurityConfig {
             "/auth/login",
             "/auth/register/verify",
             "/auth/refresh",
+            "/ws/**",
+            "/ws/seats",
+            "/ws/seats/**",
+            "/api/v1/ws/**",
+            "/bookings/seat-locks",
+            "/bookings/seat-locks/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html"

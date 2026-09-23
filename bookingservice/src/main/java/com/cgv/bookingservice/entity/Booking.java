@@ -34,8 +34,8 @@ public class Booking extends BaseEntity{
     @Column(nullable = false)
     String userId;
 
-    @Column(nullable = false)
-    String showTimeId;
+    @Column(name = "showtime_id", nullable = false)
+    UUID showtimeId;
 
     @Column
     UUID promotionId;
@@ -51,8 +51,8 @@ public class Booking extends BaseEntity{
     @Column(nullable = false)
     BigDecimal finalAmount;
 
-    @Column
-    Instant paymentDeadLine;
+    @Column(name = "payment_deadline")
+    Instant paymentDeadline;
 
     @Column
     String qrCodeUrl;
