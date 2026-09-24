@@ -176,6 +176,13 @@ public class GlobalExceptionHandler {
             NoResourceFoundException ex,
             HttpServletRequest request
     ) {
+
+        log.warn(
+                "Resource not found: path={}, message={}",
+                request.getRequestURI(),
+                ex.getMessage()
+        );
+
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(new Date())
                 .status(HttpStatus.NOT_FOUND.value())
@@ -203,6 +210,12 @@ public class GlobalExceptionHandler {
                 )
                 .toList();
 
+        log.warn(
+                "Validation failed: path={}, errors={}",
+                request.getRequestURI(),
+                errors
+        );
+
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(new Date())
                 .status(HttpStatus.BAD_REQUEST.value())
@@ -223,6 +236,13 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException ex,
             HttpServletRequest request
     ) {
+
+        log.warn(
+                "Invalid request body: path={}, message={}",
+                request.getRequestURI(),
+                ex.getMessage()
+        );
+
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(new Date())
                 .status(HttpStatus.BAD_REQUEST.value())

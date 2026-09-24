@@ -11,19 +11,22 @@ import com.cgv.catalogservice.mapper.RoomMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RoomRepository;
 import com.cgv.catalogservice.service.RoomService;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "ROOM-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -34,8 +37,14 @@ public class RoomServiceImpl implements RoomService {
     RoomMapper roomMapper;
 
     @Override
+    @CacheEvict(
+            value = "roomsByCinema",
+            allEntries = true
+    )
     @Transactional
     public RoomResponse createRoom(RoomCreateRequest request) {
+
+        log.info("Creating room: cinemaId={}, name={}", request.cinemaId(), request.name());
 
         if (roomRepository.existsByCinemaIdAndNameIgnoreCase(
                 request.cinemaId(),
@@ -61,8 +70,14 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @CacheEvict(
+            value = "roomsByCinema",
+            allEntries = true
+    )
     @Transactional
     public RoomResponse updateRoom(UUID roomId, RoomUpdateRequest request) {
+
+        log.info("Updating room: roomId={}", roomId);
 
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new EntityNotFoundException(
@@ -86,8 +101,14 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @CacheEvict(
+            value = "roomsByCinema",
+            allEntries = true
+    )
     @Transactional
     public RoomResponse updateRoomStatus(UUID roomId, RoomUpdateStatusRequest request) {
+
+        log.info("Updating room status: roomId={}, status={}", roomId, request.status());
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy room với id: " + roomId
@@ -101,6 +122,8 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public RoomResponse getRoomById(UUID roomId) {
+
+        log.debug("Getting room by id: roomId={}", roomId);
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy room với id: " + roomId
@@ -110,8 +133,17 @@ public class RoomServiceImpl implements RoomService {
     }
 
     @Override
+    @Cacheable(
+            value = "roomsByCinema",
+            key = "#cinemaId"
+                    + " + ':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
     @Transactional(readOnly = true)
     public PageResponse<RoomResponse> getAllRoomsByCinemaId(UUID cinemaId, Pageable pageable) {
+
+        log.debug("Getting rooms by cinema: cinemaId={}, page={}, size={}", cinemaId, pageable.getPageNumber(), pageable.getPageSize());
 
         if (!cinemaRepository.existsById(cinemaId)) {
             throw new EntityNotFoundException(
@@ -119,16 +151,10 @@ public class RoomServiceImpl implements RoomService {
             );
         }
 
-        Page<Room> roomPage = roomRepository.findAllByCinemaId(cinemaId, pageable);
-
-        List<RoomResponse> roomResponses = roomMapper.toResponseList(roomPage.getContent());
-
-        return PageResponse.<RoomResponse>builder()
-                .data(roomResponses)
-                .pageNumber(roomPage.getNumber() + 1)
-                .pageSize(roomPage.getSize())
-                .totalPages(roomPage.getTotalPages())
-                .totalElements(roomPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> roomRepository.findAllByCinemaId(cinemaId, p),
+                pageable,
+                roomMapper::toResponseList
+        );
     }
 }

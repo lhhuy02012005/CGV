@@ -9,19 +9,20 @@ import com.cgv.catalogservice.mapper.MovieCastMapper;
 import com.cgv.catalogservice.repository.MovieCastRepository;
 import com.cgv.catalogservice.repository.MovieRepository;
 import com.cgv.catalogservice.service.MovieCastService;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "MOVIE-CAST-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -34,6 +35,8 @@ public class MovieCastServiceImpl implements MovieCastService {
     @Override
     @Transactional
     public MovieCastResponse createMovieCast(MovieCastCreateRequest request) {
+
+        log.info("Creating movie cast");
         Movie movie = movieRepository.findById(request.movieId())
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy movie với id: " + request.movieId()
@@ -53,6 +56,8 @@ public class MovieCastServiceImpl implements MovieCastService {
             UUID movieCastId,
             MovieCastUpdateRequest request
     ) {
+
+        log.info("Updating movie cast: movieCastId={}", movieCastId);
         MovieCast movieCast = movieCastRepository.findById(movieCastId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy movie cast với id: " + movieCastId
@@ -74,6 +79,8 @@ public class MovieCastServiceImpl implements MovieCastService {
     @Override
     @Transactional
     public void deleteMovieCast(UUID movieCastId) {
+
+        log.info("Deleting movie cast: movieCastId={}", movieCastId);
         MovieCast movieCast = movieCastRepository.findById(movieCastId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy movie cast với id: " + movieCastId
@@ -85,6 +92,8 @@ public class MovieCastServiceImpl implements MovieCastService {
     @Override
     @Transactional(readOnly = true)
     public MovieCastResponse getMovieCastById(UUID movieCastId) {
+
+        log.debug("Getting movie cast by id: movieCastId={}", movieCastId);
         MovieCast movieCast = movieCastRepository.findById(movieCastId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy movie cast với id: " + movieCastId
@@ -96,17 +105,14 @@ public class MovieCastServiceImpl implements MovieCastService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<MovieCastResponse> getAllMovieCasts(Pageable pageable) {
-        Page<MovieCast> movieCastPage = movieCastRepository.findAll(pageable);
-        List<MovieCastResponse> movieCastResponses =
-                movieCastMapper.toResponseList(movieCastPage.getContent());
 
-        return PageResponse.<MovieCastResponse>builder()
-                .data(movieCastResponses)
-                .pageNumber(movieCastPage.getNumber() + 1)
-                .pageSize(movieCastPage.getSize())
-                .totalPages(movieCastPage.getTotalPages())
-                .totalElements(movieCastPage.getTotalElements())
-                .build();
+        log.debug("Getting all movie casts: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
+        return PageResponseUtils.findAllAndMap(
+                movieCastRepository::findAll,
+                pageable,
+                movieCastMapper::toResponseList
+        );
     }
 
     @Override

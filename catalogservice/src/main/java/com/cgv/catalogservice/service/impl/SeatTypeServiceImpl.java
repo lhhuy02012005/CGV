@@ -10,18 +10,17 @@ import com.cgv.catalogservice.mapper.SeatTypeMapper;
 import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.SeatTypeRepository;
 import com.cgv.catalogservice.service.SeatTypeService;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+@Slf4j(topic = "SEAT-TYPE-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -35,6 +34,8 @@ public class SeatTypeServiceImpl implements SeatTypeService {
     @Override
     @Transactional
     public SeatTypeResponse createSeatType(SeatTypeCreateRequest request) {
+
+        log.info("Creating seat type");
 
         if (seatTypeRepository.existsByName(request.name())) {
             throw new ResourceConflictException(
@@ -55,6 +56,8 @@ public class SeatTypeServiceImpl implements SeatTypeService {
             SeatTypeUpdateRequest request
     ) {
 
+        log.info("Updating seat type: seatTypeName={}", seatTypeName);
+
         SeatType seatType = seatTypeRepository.findById(seatTypeName)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy seat type với name: " + seatTypeName
@@ -68,6 +71,8 @@ public class SeatTypeServiceImpl implements SeatTypeService {
     @Override
     @Transactional
     public void deleteSeatType(SeatTypeName seatTypeName) {
+
+        log.info("Deleting seat type: seatTypeName={}", seatTypeName);
         SeatType seatType = seatTypeRepository.findById(seatTypeName)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy seat type với name: " + seatTypeName
@@ -90,6 +95,8 @@ public class SeatTypeServiceImpl implements SeatTypeService {
     @Override
     @Transactional(readOnly = true)
     public SeatTypeResponse getSeatTypeByName(SeatTypeName seatTypeName) {
+
+        log.debug("Getting seat type by name: seatTypeName={}", seatTypeName);
         SeatType seatType = seatTypeRepository.findById(seatTypeName)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy seat type với name: " + seatTypeName
@@ -100,17 +107,12 @@ public class SeatTypeServiceImpl implements SeatTypeService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<SeatTypeResponse> getAllSeatTypes(Pageable pageable) {
-        Page<SeatType> seatTypePage = seatTypeRepository.findAll(pageable);
-        List<SeatTypeResponse> seatTypeResponses =
-                seatTypeMapper.toResponseList(seatTypePage.getContent());
+    public List<SeatTypeResponse> getAllSeatTypes() {
 
-        return PageResponse.<SeatTypeResponse>builder()
-                .data(seatTypeResponses)
-                .pageNumber(seatTypePage.getNumber() + 1)
-                .pageSize(seatTypePage.getSize())
-                .totalPages(seatTypePage.getTotalPages())
-                .totalElements(seatTypePage.getTotalElements())
-                .build();
+        log.debug("Getting all seat types");
+
+        List<SeatType> seatTypeList = seatTypeRepository.findAll();
+
+        return seatTypeMapper.toResponseList(seatTypeList);
     }
 }

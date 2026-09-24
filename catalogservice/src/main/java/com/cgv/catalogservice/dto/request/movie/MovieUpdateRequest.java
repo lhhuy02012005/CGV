@@ -1,10 +1,9 @@
 package com.cgv.catalogservice.dto.request.movie;
 
-import com.cgv.catalogservice.enums.MovieStatus;
-import com.cgv.catalogservice.enums.ShowingStatus;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+import java.time.Instant;
 import java.time.LocalDate;
 
 public record MovieUpdateRequest(
@@ -33,16 +32,12 @@ public record MovieUpdateRequest(
 
         LocalDate endDate,
 
-        ShowingStatus showingStatus,
-
         String posterUrl,
 
         String backdropUrl,
 
         String trailerYoutubeUrl,
 
-        Boolean isFeatured,
-
-        MovieStatus status
+        Boolean isFeatured
 ) {
 }

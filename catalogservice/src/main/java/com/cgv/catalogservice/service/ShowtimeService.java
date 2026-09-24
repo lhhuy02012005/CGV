@@ -33,6 +33,18 @@ public interface ShowtimeService {
             UUID showtimeId
     );
 
+    PageResponse<ShowtimeResponse> getShowtimesByMovieAndDate(
+            UUID movieId,
+            LocalDate showDate,
+            Pageable pageable
+    );
+
+    PageResponse<ShowtimeResponse> getShowtimesByCinemaAndDate(
+            UUID cinemaId,
+            LocalDate showDate,
+            Pageable pageable
+    );
+
     PageResponse<ShowtimeResponse> getAllShowtimes(
             ShowtimeFilterRequest filter,
             Pageable pageable

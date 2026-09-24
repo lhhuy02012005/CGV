@@ -16,19 +16,23 @@ import com.cgv.catalogservice.repository.SeatRepository;
 import com.cgv.catalogservice.repository.SeatTypeRepository;
 import com.cgv.catalogservice.repository.ShowtimeRepository;
 import com.cgv.catalogservice.service.SeatService;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "SEAT-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -42,10 +46,36 @@ public class SeatServiceImpl implements SeatService {
     SeatMapper seatMapper;
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "seatsByRoom",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "roomsByCinema",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public SeatResponse createSeat(SeatCreateRequest request) {
 
+        log.info("Creating seat: roomId={}, row={}, number={}", request.roomId(), request.rowChar(), request.seatNumber());
+
         validateRoomHasNoScheduledShowtime(request.roomId());
+
+        if (seatRepository.existsByRoomIdAndRowCharAndSeatNumber(
+                request.roomId(),
+                request.rowChar(),
+                request.seatNumber()
+        )) {
+            throw new ResourceConflictException(
+                    "Ghế " + request.rowChar() + request.seatNumber()
+                            + " đã tồn tại trong phòng"
+            );
+        }
+
 
         Room room = roomRepository.findById(request.roomId())
                 .orElseThrow(() ->
@@ -78,18 +108,32 @@ public class SeatServiceImpl implements SeatService {
                 seatRepository.saveAndFlush(seat);
 
         room.setTotalSeats(
-                seatRepository.countByRoom_Id(room.getId())
+                seatRepository.countByRoomId(room.getId())
         );
 
         return seatMapper.toResponse(savedSeat);
     }
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "seatsByRoom",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "roomsByCinema",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public SeatResponse updateSeat(
             UUID seatId,
             SeatUpdateRequest request
     ) {
+
+        log.info("Updating seat: seatId={}", seatId);
 
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() ->
@@ -97,6 +141,33 @@ public class SeatServiceImpl implements SeatService {
                                 "Không tìm thấy seat với id: " + seatId
                         )
                 );
+
+        UUID targetRoomId =
+                request.roomId() != null
+                        ? request.roomId()
+                        : seat.getRoom().getId();
+
+        String targetRowChar =
+                request.rowChar() != null
+                        ? request.rowChar()
+                        : seat.getRowChar();
+
+        Integer targetSeatNumber =
+                request.seatNumber() != null
+                        ? request.seatNumber()
+                        : seat.getSeatNumber();
+
+        if (seatRepository.existsByRoomIdAndRowCharAndSeatNumberAndIdNot(
+                targetRoomId,
+                targetRowChar,
+                targetSeatNumber,
+                seatId
+        )) {
+            throw new ResourceConflictException(
+                    "Ghế " + targetRowChar + targetSeatNumber
+                            + " đã tồn tại trong phòng"
+            );
+        }
 
         validateRoomHasNoScheduledShowtime(seat.getRoom().getId());
 
@@ -151,13 +222,13 @@ public class SeatServiceImpl implements SeatService {
         if (roomChanged) {
 
             oldRoom.setTotalSeats(
-                    seatRepository.countByRoom_Id(
+                    seatRepository.countByRoomId(
                             oldRoom.getId()
                     )
             );
 
             newRoom.setTotalSeats(
-                    seatRepository.countByRoom_Id(
+                    seatRepository.countByRoomId(
                             newRoom.getId()
                     )
             );
@@ -168,11 +239,17 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    @CacheEvict(
+            value = "seatsByRoom",
+            allEntries = true
+    )
     @Transactional
     public SeatResponse updateSeatStatus(
             UUID seatId,
             SeatUpdateStatusRequest request
     ) {
+
+        log.info("Updating seat status: seatId={}, active={}", seatId, request.isActive());
 
         Seat seat = seatRepository.findById(seatId)
                 .orElseThrow(() ->
@@ -189,41 +266,36 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public SeatResponse getSeatById(UUID seatId) {
-        Seat seat = seatRepository.findById(seatId)
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Không tìm thấy seat với id: " + seatId
-                ));
-
-        return seatMapper.toResponse(seat);
-    }
-
-    @Override
+    @Cacheable(
+            value = "seatsByRoom",
+            key = "#roomId"
+                    + " + ':page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
     @Transactional(readOnly = true)
     public PageResponse<SeatResponse> getAllSeatsByRoomId(UUID roomId, Pageable pageable) {
 
+        log.debug("Getting seats by room: roomId={}, page={}, size={}", roomId, pageable.getPageNumber(), pageable.getPageSize());
+
         if (!roomRepository.existsById(roomId)) {
-            throw new IllegalArgumentException("Không tồn tại phòng chiếu với id: " + roomId);
+            throw new EntityNotFoundException(
+                    "Không tồn tại phòng chiếu với id: " + roomId
+            );
         }
 
-        Page<Seat> seatPage = seatRepository.findAllByRoom_Id(roomId, pageable);
-        List<SeatResponse> seatResponses = seatMapper.toResponseList(seatPage.getContent());
-
-        return PageResponse.<SeatResponse>builder()
-                .data(seatResponses)
-                .pageNumber(seatPage.getNumber() + 1)
-                .pageSize(seatPage.getSize())
-                .totalPages(seatPage.getTotalPages())
-                .totalElements(seatPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> seatRepository.findAllByRoomId(roomId, p),
+                pageable,
+                seatMapper::toResponseList
+        );
     }
 
     private void validateRoomHasNoScheduledShowtime(UUID roomId) {
 
         boolean hasScheduledShowtime =
                 showtimeRepository
-                        .existsByRoom_IdAndStatusAndEndTimeAfter(
+                        .existsByRoomIdAndStatusAndEndTimeAfter(
                                 roomId,
                                 ShowtimeStatus.SCHEDULED,
                                 java.time.Instant.now()

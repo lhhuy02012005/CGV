@@ -7,25 +7,31 @@ import com.cgv.catalogservice.dto.request.event.EventUpdateStatusRequest;
 import com.cgv.catalogservice.dto.response.EventResponse;
 import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Event;
+import com.cgv.catalogservice.enums.EventStatus;
 import com.cgv.catalogservice.mapper.EventMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.EventRepository;
 import com.cgv.catalogservice.service.EventService;
 import com.cgv.catalogservice.specification.EventSpecification;
+import com.cgv.catalogservice.util.PageResponseUtils;
 import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "EVENT-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -36,8 +42,22 @@ public class EventServiceImpl implements EventService {
     EventMapper eventMapper;
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "upcomingEvents",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "ongoingEvents",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public EventResponse createEvent(EventCreateRequest request) {
+
+        log.info("Creating event: title={}", request.title());
         Event event = eventMapper.toEntity(request);
 
         if (request.cinemaId() != null) {
@@ -55,8 +75,28 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "event",
+                            key = "#eventId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "upcomingEvents",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "ongoingEvents",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public EventResponse updateEvent(UUID eventId, EventUpdateRequest request) {
+
+        log.info("Updating event: eventId={}", eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy event với id: " + eventId
@@ -79,11 +119,31 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Caching(
+            put = {
+                    @CachePut(
+                            value = "event",
+                            key = "#eventId"
+                    )
+            },
+            evict = {
+                    @CacheEvict(
+                            value = "upcomingEvents",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "ongoingEvents",
+                            allEntries = true
+                    )
+            }
+    )
     @Transactional
     public EventResponse updateEventStatus(
             UUID eventId,
             EventUpdateStatusRequest request
     ) {
+
+        log.info("Updating event status: eventId={}, status={}", eventId, request.status());
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy event với id: " + eventId
@@ -97,8 +157,14 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Cacheable(
+            value = "event",
+            key = "#eventId"
+    )
     @Transactional(readOnly = true)
     public EventResponse getEventById(UUID eventId) {
+
+        log.debug("Getting event by id: eventId={}", eventId);
         Event event = eventRepository.findById(eventId)
                 .orElseThrow(() -> new EntityNotFoundException(
                         "Không tìm thấy event với id: " + eventId
@@ -108,11 +174,61 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
+    @Cacheable(
+            value = "upcomingEvents",
+            key = "'page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<EventResponse> getUpcomingEvents(Pageable pageable) {
+
+        log.debug("Getting upcoming events: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
+        Specification<Event> spec =
+                Specification.allOf(
+                        EventSpecification.hasStatus(EventStatus.UPCOMING)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p -> eventRepository.findAll(spec, p),
+                pageable,
+                eventMapper::toResponseList
+        );
+    }
+
+    @Override
+    @Cacheable(
+            value = "ongoingEvents",
+            key = "'page=' + #pageable.pageNumber"
+                    + " + ':size=' + #pageable.pageSize"
+                    + " + ':sort=' + #pageable.sort.toString()"
+    )
+    @Transactional(readOnly = true)
+    public PageResponse<EventResponse> getOngoingEvents(Pageable pageable) {
+
+        log.debug("Getting ongoing events: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
+
+        Specification<Event> spec =
+                Specification.allOf(
+                        EventSpecification.hasStatus(EventStatus.ONGOING)
+                );
+
+        return PageResponseUtils.findAllAndMap(
+                p -> eventRepository.findAll(spec, p),
+                pageable,
+                eventMapper::toResponseList
+        );
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PageResponse<EventResponse> getAllEvents(
             EventFilterRequest filter,
             Pageable pageable
     ) {
+
+        log.debug("Getting all events: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());
         Specification<Event> specification = Specification.allOf(
                 EventSpecification.containsKeyword(filter.keyword()),
                 EventSpecification.hasStatus(filter.status()),
@@ -122,16 +238,10 @@ public class EventServiceImpl implements EventService {
                 EventSpecification.eventDateTo(filter.eventDateTo())
         );
 
-        Page<Event> eventPage = eventRepository.findAll(specification, pageable);
-
-        List<EventResponse> eventResponses = eventMapper.toResponseList(eventPage.getContent());
-
-        return PageResponse.<EventResponse>builder()
-                .data(eventResponses)
-                .pageNumber(eventPage.getNumber() + 1)
-                .pageSize(eventPage.getSize())
-                .totalPages(eventPage.getTotalPages())
-                .totalElements(eventPage.getTotalElements())
-                .build();
+        return PageResponseUtils.findAllAndMap(
+                p -> eventRepository.findAll(specification, p),
+                pageable,
+                eventMapper::toResponseList
+        );
     }
 }

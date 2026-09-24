@@ -11,19 +11,18 @@ import com.cgv.catalogservice.mapper.CinemaAmenityMapper;
 import com.cgv.catalogservice.repository.CinemaAmenityRepository;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.service.CinemaAmenityService;
-import com.cgv.commondto.dto.PageResponse;
 import jakarta.persistence.EntityNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j(topic = "CINEMA-AMENITY-SERVICE")
 @Service
 @RequiredArgsConstructor
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
@@ -40,6 +39,8 @@ public class CinemaAmenityServiceImpl
     public CinemaAmenityResponse createCinemaAmenity(
             CinemaAmenityCreateRequest request
     ) {
+
+        log.info("Creating cinema amenity: cinemaId={}, amenity={}", request.cinemaId(), request.amenity());
 
         if (cinemaAmenityRepository.existsByIdCinemaIdAndIdAmenity(
                 request.cinemaId(),
@@ -77,6 +78,8 @@ public class CinemaAmenityServiceImpl
             Amenity amenity
     ) {
 
+        log.info("Deleting cinema amenity: cinemaId={}, amenity={}", cinemaId, amenity);
+
         CinemaAmenityId cinemaAmenityId =
                 new CinemaAmenityId(cinemaId, amenity);
 
@@ -100,45 +103,16 @@ public class CinemaAmenityServiceImpl
             UUID cinemaId
     ) {
 
+        log.debug("Getting amenities by cinema: cinemaId={}", cinemaId);
         if (!cinemaRepository.existsById(cinemaId)) {
             throw new EntityNotFoundException(
-                    "Không tìm thấy rạp chiếu phim với id: "
-                            + cinemaId
+                    "Không tìm thấy rạp chiếu phim với id: " + cinemaId
             );
         }
 
-        List<CinemaAmenity> cinemaAmenityList =
-                cinemaAmenityRepository
-                        .findByIdCinemaId(cinemaId);
+        List<CinemaAmenity> amenities =
+                cinemaAmenityRepository.findByIdCinemaId(cinemaId);
 
-        return cinemaAmenityMapper
-                .toResponseList(cinemaAmenityList);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public PageResponse<CinemaAmenityResponse> getCinemasByAmenity(
-            Amenity amenity,
-            Pageable pageable
-    ) {
-
-        Page<CinemaAmenity> cinemaAmenityPage =
-                cinemaAmenityRepository.findByIdAmenity(
-                        amenity,
-                        pageable
-                );
-
-        List<CinemaAmenityResponse> responses =
-                cinemaAmenityMapper.toResponseList(
-                        cinemaAmenityPage.getContent()
-                );
-
-        return PageResponse.<CinemaAmenityResponse>builder()
-                .data(responses)
-                .pageNumber(cinemaAmenityPage.getNumber() + 1)
-                .pageSize(cinemaAmenityPage.getSize())
-                .totalPages(cinemaAmenityPage.getTotalPages())
-                .totalElements(cinemaAmenityPage.getTotalElements())
-                .build();
+        return cinemaAmenityMapper.toResponseList(amenities);
     }
 }

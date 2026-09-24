@@ -6,6 +6,7 @@ import jakarta.validation.constraints.PositiveOrZero;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record ShowtimeUpdateRequest(
@@ -14,7 +15,7 @@ public record ShowtimeUpdateRequest(
 
         UUID roomId,
 
-        Instant showDate,
+        LocalDate showDate,
 
         Instant startTime,
 

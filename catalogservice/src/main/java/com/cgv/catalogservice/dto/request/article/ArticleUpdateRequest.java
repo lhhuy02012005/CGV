@@ -10,8 +10,6 @@ public record ArticleUpdateRequest(
 
         String title,
 
-        String slug,
-
         String thumbnailUrl,
 
         String content,
