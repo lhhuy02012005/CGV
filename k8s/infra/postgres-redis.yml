@@ -1,0 +1,100 @@
+# ==============================================================================
+# HẠ TẦNG CƠ SỞ DỮ LIỆU POSTGRESQL & REDIS CHO K8S LOCAL / STAGING
+# (Nếu chạy trên AWS Production dùng RDS & ElastiCache thì không cần apply file này)
+# ==============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-db
+  namespace: cgv-prod
+  labels:
+    app: postgres-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-db
+  template:
+    metadata:
+      labels:
+        app: postgres-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:15-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: "cgv"
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: cgv-global-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "150Mi"
+            limits:
+              cpu: "500m"
+              memory: "350Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+  namespace: cgv-prod
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+---
+# --- REDIS CACHE & LOCK ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-service
+  namespace: cgv-prod
+  labels:
+    app: redis-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-service
+  template:
+    metadata:
+      labels:
+        app: redis-service
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "60Mi"
+            limits:
+              cpu: "200m"
+              memory: "150Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: cgv-prod
+spec:
+  type: ClusterIP
+  selector:
+    app: redis-service
+  ports:
+    - port: 6379
+      targetPort: 6379

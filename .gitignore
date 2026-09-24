@@ -56,8 +56,9 @@ build/
 *.jks
 *.keystore
 *.truststore
-application-prod.yml
-**/application-prod.yml
+# application-prod.yml (Allow template config in src/main/resources)
+!**/src/main/resources/application-prod.yml
+!**/src/main/resources/application-prod.yaml
 application-secret.yml
 **/application-secret.yml
 
@@ -87,3 +88,11 @@ docker-data/
 postgres-data/
 redis-data/
 kafka-data/
+
+# ==========================================
+# Frontend & k6 Node Modules
+# ==========================================
+node_modules/
+**/node_modules/
+k6/*.html
+

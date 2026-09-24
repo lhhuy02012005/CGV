@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: media-service
+  namespace: cgv-prod
+  labels:
+    app: media-service
+spec:
+  replicas: 1 # Chạy 1 Pod (Chỉ phục vụ upload ảnh/video banner S3)
+  selector:
+    matchLabels:
+      app: media-service
+  template:
+    metadata:
+      labels:
+        app: media-service
+    spec:
+      containers:
+        - name: media-service
+          image: cgv/media-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8087
+          envFrom:
+            - configMapRef:
+                name: cgv-global-config
+            - secretRef:
+                name: cgv-global-secrets
+          resources:
+            requests:
+              cpu: "80m"
+              memory: "150Mi"
+            limits:
+              cpu: "400m"
+              memory: "300Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/actuator/health/readiness
+              port: 8087
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/actuator/health/liveness
+              port: 8087
+            initialDelaySeconds: 40
+            periodSeconds: 15

@@ -1,0 +1,113 @@
+server:
+  port: ${SERVER_PORT:8084}
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: marketing-service
+
+  datasource:
+    url: ${MARKETING_DB_URL:${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://postgres-db.cgv-prod.svc.cluster.local:5432/cgv}}}
+    username: ${MARKETING_DB_USERNAME:${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:postgres}}}
+    password: ${MARKETING_DB_PASSWORD:${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:postgrespassword}}}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  flyway:
+    enabled: false
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:kafka-1.cgv-prod.svc.cluster.local:9092,kafka-2.cgv-prod.svc.cluster.local:9092,kafka-3.cgv-prod.svc.cluster.local:9092}}
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        acks: all
+        retries: 3
+        retry.backoff.ms: 1000
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        batch.size: 16384
+        linger.ms: 5
+        compression.type: snappy
+        buffer.memory: 33554432
+        request.timeout.ms: 30000
+        delivery.timeout.ms: 120000
+        transaction.id.prefix: ${KAFKA_TRANSACTION_ID_PREFIX:marketing-tx-}
+
+    consumer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:kafka-1.cgv-prod.svc.cluster.local:9092,kafka-2.cgv-prod.svc.cluster.local:9092,kafka-3.cgv-prod.svc.cluster.local:9092}}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:promotion-service-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      enable-auto-commit: false
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+        max.poll.records: 100
+        max.poll.interval.ms: 300000
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        fetch.min.bytes: 1
+        fetch.max.wait.ms: 500
+        isolation.level: read_committed
+
+    listener:
+      concurrency: 3
+      ack-mode: MANUAL_IMMEDIATE
+      poll-timeout: 3000
+      missing-topics-fatal: false
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:${REDIS_HOST:redis-service.cgv-prod.svc.cluster.local}}
+      port: ${SPRING_DATA_REDIS_PORT:${REDIS_PORT:6379}}
+      password: ${SPRING_DATA_REDIS_PASSWORD:${REDIS_PASSWORD:}}
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${KEYCLOAK_JWKS:${KEYCLOAK_URL:http://keycloak.cgv-prod.svc.cluster.local:8080}/realms/${REALM:cgv-realm}/protocol/openid-connect/certs}
+
+grpc:
+  server:
+    port: ${GRPC_SERVER_PORT:9099}
+
+logging:
+  level:
+    root: INFO
+    com.cgv.marketingservice: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.apache.kafka: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+    tryItOutEnabled: true
+

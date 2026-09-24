@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cgv-global-config
+  namespace: cgv-prod
+data:
+  # Cấu hình môi trường chạy
+  SPRING_PROFILES_ACTIVE: "prod"
+  JAVA_TOOL_OPTIONS: "-Xmx220m -Xms100m -XX:+UseSerialGC -XX:MaxRAMPercentage=75.0"
+
+  # Endpoint cơ sở dữ liệu (Trỏ vào RDS PostgreSQL)
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-db.cgv-prod.svc.cluster.local:5432/cgv"
+  SPRING_DATASOURCE_USERNAME: "postgres"
+
+  # Cụm Redis phân tán & Kafka KRaft (Cluster 3 Broker)
+  SPRING_DATA_REDIS_HOST: "redis-service.cgv-prod.svc.cluster.local"
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka-1.cgv-prod.svc.cluster.local:9092,kafka-2.cgv-prod.svc.cluster.local:9092,kafka-3.cgv-prod.svc.cluster.local:9092"
+
+  # Giao tiếp gRPC nội bộ giữa Booking Service -> Catalog Service & Marketing Service
+  CATALOG_GRPC_HOST: "catalog-service.cgv-prod.svc.cluster.local"
+  CATALOG_GRPC_PORT: "9090"
+  MARKETING_GRPC_HOST: "marketing-service.cgv-prod.svc.cluster.local"
+  MARKETING_GRPC_PORT: "9099"
+
+  # Keycloak & Elasticsearch nội bộ
+  KEYCLOAK_URL: "http://keycloak.cgv-prod.svc.cluster.local:8080"
+  SPRING_ELASTICSEARCH_URIS: "elasticsearch.cgv-prod.svc.cluster.local:9200"
+
+#  VÌ SAO & MỤC ĐÍCH:
+#  Mục đích: Tách biệt hoàn toàn code với cấu hình môi trường.
+#  Vì sao dùng *.cgv-prod.svc.cluster.local?:
+#    Đây là chuẩn Kube-DNS. Trong K8s, các Pod không gọi nhau qua IP tĩnh mà gọi qua DNS nội bộ theo cú pháp: <Tên-Service>.<Tên-Namespace>.svc.cluster.local. Nhờ đó, dù Pod có chết đi sống lại hay đổi IP thì các dịch vụ khác vẫn tự động tìm thấy nhau.
+#  Vì sao -XX:+UseSerialGC?: Garbage Collector mặc định của Java (G1GC) ngốn thêm ~70MB RAM. SerialGC là thuật toán gom rác nhẹ nhất của HotSpot JVM, dành riêng cho máy 1 vCPU và môi trường ít RAM, giúp Spring Boot khởi động êm ái mà không bị hệ điều hành "bắn tỉa" (OOMKill).

@@ -23,6 +23,12 @@ spring:
     enabled: false
     baseline-on-migrate: true
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -90,11 +96,11 @@ spring:
       missing-topics-fatal: false
 
   vnpay:
-    pay-url: https://sandbox.vnpayment.vn/paymentv2/vpcpay.html
-    vnpay_api_url: https://sandbox.vnpayment.vn/merchant_webapi/api/transaction
+    pay-url: ${VNPAY_PAY_URL:https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+    vnpay_api_url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
     tmn-code: ${VNPAY_TMNCODE:CGVTEST1}
-    secret-key: ${VNPAY_SECRECTKEY:RAI8NW2N2VY4ENY5ALOMCH4KX9Z5S54M}
-    return-url: http://localhost:5173/payment/vnpay-return
+    secret-key: ${VNPAY_SECRECTKEY:${VNPAY_SECRET_KEY:${VNPAY_HASH_SECRET:RAI8NW2N2VY4ENY5ALOMCH4KX9Z5S54M}}}
+    return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/vnpay-return}
     version: "2.1.0"
     command: "pay"
 
@@ -103,12 +109,23 @@ spring:
       resourceserver:
         jwt:
           jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}/protocol/openid-connect/certs
-          issuer-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}
 
 logging:
   level:
     com.cgv.paymentservice: INFO
     org.springframework.kafka: INFO
     org.apache.kafka: WARN
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+    tryItOutEnabled: true
+
 
 

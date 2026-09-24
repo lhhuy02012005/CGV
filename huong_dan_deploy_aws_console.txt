@@ -1,0 +1,570 @@
+================================================================================
+HƯỚNG DẪN DEPLOY TOÀN BỘ HỆ THỐNG CGV LÊN AWS (CHUẨN 100% FREE TIER - KHÔNG MẤT PHÍ)
+KÈM CHIẾN LƯỢC CHẠY ĐA MÁY ẢO EC2 VÀ GIẢI THÍCH "VÌ SAO / MỤC ĐÍCH" TỪNG BƯỚC
+================================================================================
+Tài liệu hướng dẫn trực quan từng cú nhấp chuột (Click-by-Click) trên AWS Web Console.
+Tối ưu hóa: Tránh tuyệt đối các bẫy tính phí của AWS (như NAT Gateway, Fargate, Multi-AZ).
+
+--------------------------------------------------------------------------------
+BẢNG ĐỐI CHIẾU DỊCH VỤ FREE TIER CHUẨN CỦA AWS (12 THÁNG ĐẦU & ALWAYS FREE)
+--------------------------------------------------------------------------------
+1. EC2: 750 giờ/tháng máy ảo `t2.micro` hoặc `t3.micro` (1 vCPU, 1 GB RAM).
+2. RDS PostgreSQL: 750 giờ/tháng `db.t3.micro` hoặc `db.t4g.micro` (Single-AZ, 20GB SSD).
+3. ElastiCache Redis: 750 giờ/tháng `cache.t2.micro` hoặc `cache.t3.micro`.
+4. S3 Storage: 5 GB dung lượng lưu trữ, 20.000 lượt đọc GET.
+5. CloudFront CDN: 1 TB băng thông truyền dữ liệu/tháng (Gói Miễn phí vĩnh viễn - Always Free).
+6. Tuyệt đối KHÔNG DÙNG:
+   - KHÔNG dùng NAT Gateway (Tốn ~32$/tháng).
+   - KHÔNG dùng AWS Fargate (Không thuộc Free Tier, tính tiền theo từng giây vCPU).
+   - KHÔNG dùng Amazon MSK (Kafka có phí ~50-70$/tháng -> Thay bằng Kafka Docker trên EC2).
+   - KHÔNG bật Multi-AZ trên RDS (Chỉ Free cho Single-AZ).
+
+--------------------------------------------------------------------------------
+VÌ SAO PHẢI DÙNG NHIỀU MÁY ẢO EC2 FREE TIER & CÁCH PHÂN BỔ TÀI NGUYÊN
+--------------------------------------------------------------------------------
+- Vấn đề: Mỗi máy ảo `t2.micro`/`t3.micro` Free Tier chỉ có đúng **1 GB RAM**.
+  Trong khi đó, 1 ứng dụng Spring Boot Java khi chạy chiếm khoảng 250MB - 350MB RAM.
+  Nếu bạn cố nhét cả 4 microservices + Kong Gateway + Kafka vào 1 con EC2 1GB RAM,
+  hệ thống Linux sẽ bị tràn bộ nhớ và tiến trình OOM Killer sẽ tự động "bắn hạ"
+  các tiến trình Java ngay khi khởi động!
+- Giải pháp:
+  Chúng ta chia tải thông minh ra 2 máy ảo EC2 Free Tier (kèm kỹ thuật Swap Memory):
+
+  + MÁY ẢO 1 (`cgv-ec2-infra`):
+    * Đảm nhận: Kong API Gateway (Port 8000) + Apache Kafka (KRaft mode - Port 9092).
+    * Bộ nhớ: Kong (~150MB) + Kafka nhẹ (~350MB).
+    * Tạo thêm 2GB Swap Memory (RAM ảo từ SSD) để đảm bảo không bao giờ bị tràn RAM.
+
+  + MÁY ẢO 2 (`cgv-ec2-services`):
+    * Đảm nhận: Cụm 4 Microservices Spring Boot:
+      - `identity-service` (Port 8081) - Giới hạn JVM: `-Xmx200m`
+      - `booking-service`  (Port 8082) - Giới hạn JVM: `-Xmx250m`
+      - `catalog-service`  (Port 8083) - Giới hạn JVM: `-Xmx200m`
+      - `payment-service`  (Port 8085) - Giới hạn JVM: `-Xmx200m`
+    * Tạo thêm 2GB Swap Memory để chạy mượt mà cả 4 service cùng lúc.
+
+--------------------------------------------------------------------------------
+MỤC LỤC
+--------------------------------------------------------------------------------
+BƯỚC 1: TẠO MẠNG VPC KHÔNG TỐN TIỀN (LOẠI BỎ HOÀN TOÀN NAT GATEWAY)
+BƯỚC 2: TẠO DATABASE POSTGRESQL CHUẨN FREE TIER TRÊN AMAZON RDS
+BƯỚC 3: TẠO REDIS CACHE CHUẨN FREE TIER TRÊN ELASTICACHE
+BƯỚC 4: KHỞI TẠO 2 MÁY ẢO EC2 FREE TIER (T2.MICRO / T3.MICRO)
+BƯỚC 5: THIẾT LẬP SWAP MEMORY (RAM ẢO) ĐỂ CHỐNG TRÀN BỘ NHỚ TRÊN EC2
+BƯỚC 6: TRIỂN KHAI KAFKA & KONG GATEWAY TRÊN MÁY ẢO EC2 1
+BƯỚC 7: TRIỂN KHAI 4 MICROSERVICES SPRING BOOT TRÊN MÁY ẢO EC2 2
+BƯỚC 8: DEPLOY REACT FRONTEND LÊN S3 + CLOUDFRONT CDN (MIỄN PHÍ)
+BƯỚC 9: KIỂM TRA TOÀN DIỆN & TỔNG KẾT VẬN HÀNH 0 ĐỒNG
+
+================================================================================
+BƯỚC 1: TẠO MẠNG VPC KHÔNG TỐN TIỀN (LOẠI BỎ HOÀN TOÀN NAT GATEWAY)
+================================================================================
+
+1.1. Thao tác trên AWS Console:
+1. Đăng nhập https://console.aws.amazon.com/ -> Chọn Region `ap-southeast-1 (Singapore)`.
+2. Tìm dịch vụ `VPC` -> Bấm nút cam **Create VPC**.
+3. Tại mục **Resources to create**: Chọn **VPC only** (Không chọn VPC and more để tránh bị AWS tự nhét NAT Gateway tính tiền).
+   - **Name tag**: `cgv-free-vpc`.
+   - **IPv4 CIDR block**: `10.0.0.0/16`.
+   - Bấm **Create VPC**.
+4. Vào menu bên trái chọn **Internet Gateways** -> Bấm **Create internet gateway**:
+   - Tên: `cgv-free-igw` -> Bấm **Create**.
+   - Bấm **Actions** -> Chọn **Attach to VPC** -> Chọn `cgv-free-vpc`.
+5. Vào menu **Subnets** -> Bấm **Create subnet**:
+   - Chọn VPC: `cgv-free-vpc`.
+   - **Subnet 1 (Public Subnet A)**: Name: `cgv-public-1a`, AZ: `ap-southeast-1a`, CIDR: `10.0.1.0/24`.
+   - Bấm **Add new subnet**:
+   - **Subnet 2 (Public Subnet B)**: Name: `cgv-public-1b`, AZ: `ap-southeast-1b`, CIDR: `10.0.2.0/24`.
+   - Bấm **Create subnet**.
+   - Chọn cả 2 subnet vừa tạo -> Bấm **Actions** -> **Edit subnet settings** -> Tích chọn: **Enable auto-assign public IPv4 address** -> Bấm **Save**.
+6. Vào menu **Route Tables** -> Chọn Route Table chính của VPC:
+   - Chọn tab **Routes** -> Bấm **Edit routes** -> Bấm **Add route**:
+     + Destination: `0.0.0.0/0`
+     + Target: Chọn `Internet Gateway` (`cgv-free-igw`).
+   - Bấm **Save changes**.
+
+1.2. Tạo Security Groups:
+Vào **Security Groups** -> Bấm **Create security group**:
+- **SG 1: `cgv-ec2-sg` (Dành cho 2 máy ảo EC2)**:
+  + Inbound Rules:
+    * SSH (Port 22) -> Source: `My IP` (Chỉ IP nhà/công ty bạn được remote vào).
+    * Custom TCP (Port 8000 - Kong Gateway) -> Source: `0.0.0.0/0` (Mở cho web/app gọi API).
+    * All traffic (Tất cả cổng) -> Source: Chọn chính nó `cgv-ec2-sg` (Cho phép 2 con EC2 giao tiếp với nhau qua IP nội bộ).
+- **SG 2: `cgv-db-sg` (Dành cho RDS PostgreSQL & Redis)**:
+  + Inbound Rules:
+    * PostgreSQL (Port 5432) -> Source: `cgv-ec2-sg`.
+    * Custom TCP (Port 6379) -> Source: `cgv-ec2-sg`.
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Vì sao không dùng NAT Gateway?
+  + Mục đích: Tiết kiệm chi phí. NAT Gateway tốn tối thiểu 32$/tháng dù bạn không dùng gì. Bằng cách
+    cấp Public IP trực tiếp cho EC2 nhưng dùng Security Group khóa chặt cổng (chỉ mở cổng 8000 cho
+    Kong Gateway, cổng 22 chỉ cho IP của bạn), hệ thống vẫn bảo mật tuyệt đối mà hoàn toàn 0 ĐỒNG!
+
+================================================================================
+BƯỚC 2: TẠO DATABASE POSTGRESQL CHUẨN FREE TIER TRÊN AMAZON RDS
+================================================================================
+
+2.1. Thao tác trên AWS Console:
+1. Vào dịch vụ `RDS` -> Menu bên trái chọn **Subnet groups** -> Bấm **Create DB Subnet Group**:
+   - Tên: `cgv-rds-subnet-group`.
+   - VPC: Chọn `cgv-free-vpc`.
+   - Add subnets: Chọn 2 AZ `ap-southeast-1a` và `ap-southeast-1b`, tích chọn cả 2 subnet.
+   - Bấm **Create**.
+2. Menu bên trái chọn **Databases** -> Bấm **Create database**:
+   - Phương thức: `Standard create`.
+   - Engine: `PostgreSQL` (Version: `PostgreSQL 16.x`).
+   - **Templates**: TÍCH CHỌN **Free tier** (RẤT QUAN TRỌNG: AWS sẽ tự động khóa các tùy chọn tính phí).
+3. **Settings**:
+   - DB instance identifier: `cgv-db-free`.
+   - Master username: `postgres`.
+   - Master password: Nhập mật khẩu (Ví dụ: `CgvFreeTier2026!`).
+4. **Instance configuration**:
+   - Giữ nguyên `db.t3.micro` hoặc `db.t4g.micro` (1 vCPU, 1 GB RAM - Đạt chuẩn Free Tier).
+5. **Storage**:
+   - Allocated storage: `20 GiB` (Mức tối đa miễn phí).
+   - BỎ TÍCH ô **Enable storage autoscaling** (Để tránh trường hợp dữ liệu phình to bị tính phí).
+6. **Connectivity**:
+   - Virtual private cloud (VPC): Chọn `cgv-free-vpc`.
+   - DB subnet group: Chọn `cgv-rds-subnet-group`.
+   - Public access: **No** (Chỉ cho phép EC2 nội bộ kết nối).
+   - Existing VPC security groups: Chọn `cgv-db-sg` (Xóa bỏ default SG).
+7. **Additional configuration**:
+   - Initial database name: Nhập `cgv`.
+   - Backup: Giữ nguyên mặc định.
+8. Bấm **Create database** (Chờ 5 phút).
+9. Copy chuỗi **Endpoint** (Ví dụ: `cgv-db-free.c12345.ap-southeast-1.rds.amazonaws.com`).
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Vì sao chọn Template "Free tier" và Storage 20GB?
+  + Mục đích: AWS miễn phí 750 giờ/tháng cho 1 DB Single-AZ dung lượng <= 20GB. Nếu bạn chọn
+    Template Production hoặc bật Multi-AZ, bạn sẽ bị tính phí hàng chục USD ngay lập tức.
+
+================================================================================
+BƯỚC 3: TẠO REDIS CACHE CHUẨN FREE TIER TRÊN ELASTICACHE
+================================================================================
+
+3.1. Thao tác trên AWS Console:
+1. Vào dịch vụ `ElastiCache` -> Menu bên trái chọn **Subnet groups** -> Tạo subnet group trỏ vào 2 subnet của `cgv-free-vpc`.
+2. Vào **Redis clusters** -> Bấm **Create Redis cluster**:
+   - Chọn `Configure and create a new cluster`.
+   - **Deployment option**: Chọn **Cluster Mode Disabled**.
+   - **Cluster name**: `cgv-redis-free`.
+   - **Node type**: Chọn `cache.t2.micro` hoặc `cache.t3.micro` (1 vCPU, 0.5 GB RAM - Thuộc Free Tier).
+   - **Number of replicas**: Nhập `0` (Không tạo node phụ để không bị vượt quá 750 giờ free/tháng).
+   - **Subnet group**: Chọn subnet group vừa tạo.
+   - **Security group**: Chọn `cgv-db-sg`.
+3. Bấm **Create** -> Copy **Primary Endpoint** (Ví dụ: `cgv-redis-free.xxxx.cache.amazonaws.com:6379`).
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Vì sao Number of Replicas = 0?
+  + Mục đích: Gói Free Tier cho phép 750 giờ node cache/tháng. Nếu tạo 1 Primary + 1 Replica
+    nghĩa là bạn chạy 2 node đồng thời (750 x 2 = 1500 giờ) -> Bạn sẽ bị tính phí cho 750 giờ vượt mức.
+    Để 0 replica sẽ đảm bảo 100% không tốn 1 xu.
+
+================================================================================
+BƯỚC 4: KHỞI TẠO 2 MÁY ẢO EC2 FREE TIER (T2.MICRO / T3.MICRO)
+================================================================================
+
+4.1. Tạo Key Pair để SSH:
+Vào dịch vụ `EC2` -> Menu bên trái chọn **Key Pairs** -> Bấm **Create key pair**:
+- Name: `cgv-keypair`.
+- Key pair type: `RSA`.
+- Private key file format: `.pem` (cho Mac/Linux) hoặc `.ppk` (cho Windows PuTTY).
+- Bấm **Create key pair** -> File `cgv-keypair.pem` sẽ được tải về máy bạn.
+
+4.2. Khởi tạo MÁY ẢO 1: `cgv-ec2-infra` (Chạy Kong + Kafka)
+1. Vào **Instances** -> Bấm nút cam **Launch instances**:
+   - **Name**: `cgv-ec2-infra`.
+   - **Application and OS Images**: Chọn **Ubuntu** -> **Ubuntu Server 24.04 LTS (HVM), SSD Volume Type** (Tích nhãn Free Tier eligible).
+   - **Instance type**: Chọn `t2.micro` hoặc `t3.micro` (Free Tier eligible).
+   - **Key pair**: Chọn `cgv-keypair`.
+   - **Network settings** -> Bấm **Edit**:
+     + VPC: Chọn `cgv-free-vpc`.
+     + Subnet: Chọn `cgv-public-1a`.
+     + Auto-assign public IP: **Enable**.
+     + Select existing security group: Chọn `cgv-ec2-sg`.
+   - **Configure storage**: Đổi từ `8 GiB` lên `14 GiB` `gp3` (AWS cho phép tối đa 30GB SSD miễn phí chia cho các EC2).
+2. Bấm **Launch instance**.
+
+4.3. Khởi tạo MÁY ẢO 2: `cgv-ec2-services` (Chạy 4 Spring Boot Microservices)
+Lặp lại thao tác y hệt máy 1:
+- Name: `cgv-ec2-services`.
+- OS: `Ubuntu 24.04 LTS`.
+- Instance type: `t2.micro` hoặc `t3.micro`.
+- Subnet: `cgv-public-1a`.
+- Security group: `cgv-ec2-sg`.
+- Storage: `14 GiB` `gp3` (Tổng 14GB + 14GB = 28GB <= 30GB Free Tier!).
+- Bấm **Launch instance**.
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Vì sao chọn Ubuntu 24.04 LTS?
+  + Mục đích: Hệ điều hành Linux ổn định nhất, cộng đồng hỗ trợ lớn, hỗ trợ cài đặt Docker
+    và Java 17/21 cực kỳ dễ dàng qua lệnh `apt`.
+- Vì sao ổ cứng mỗi con là 14GB?
+  + Mục đích: AWS miễn phí 30GB ổ cứng EBS mỗi tháng cho tài khoản Free Tier. Chia 14GB cho máy 1
+    và 14GB cho máy 2 giúp tận dụng tối đa dung lượng để chứa Docker images mà không bị vượt quá 30GB.
+
+================================================================================
+BƯỚC 5: THIẾT LẬP SWAP MEMORY (RAM ẢO) ĐỂ CHỐNG TRÀN BỘ NHỚ TRÊN CẢ 2 EC2
+================================================================================
+
+ĐÂY LÀ BÍ KÍP QUAN TRỌNG NHẤT CỦA DEVOPS ĐỂ CHẠY JAVA TRÊN EC2 FREE TIER!
+Vì EC2 chỉ có 1GB RAM thật, ta sẽ trích 2GB từ ổ cứng SSD để làm RAM ảo (Swap).
+Khi các ứng dụng Java chạy lên, phần bộ nhớ ít dùng sẽ được đẩy sang SSD, giúp máy ảo
+sở hữu tổng cộng 3GB RAM (1GB thật + 2GB ảo), không bao giờ bị đứng máy hay văng lỗi OOM!
+
+Thực hiện trên CẢ 2 MÁY ẢO EC2:
+
+1. Mở Terminal máy cá nhân, SSH vào máy ảo:
+   chmod 400 cgv-keypair.pem
+   ssh -i cgv-keypair.pem ubuntu@<PUBLIC_IP_CUA_EC2>
+
+2. Chạy lần lượt các lệnh sau trên terminal của EC2:
+```bash
+# 1. Tạo file swap 2GB
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+
+# 2. Cấu hình tự động nạp Swap khi khởi động lại máy
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# 3. Tinh chỉnh độ ưu tiên dùng RAM thật (chỉ dùng Swap khi RAM thật còn < 15%)
+sudo sysctl vm.swappiness=15
+echo 'vm.swappiness=15' | sudo tee -a /etc/sysctl.conf
+
+# 4. Kiểm tra thành quả
+free -h
+```
+-> Kết quả hiện ra: `Mem: 960Mi`, `Swap: 2.0Gi` -> Máy ảo của bạn giờ đã có sức mạnh tương đương gói 3GB RAM!
+
+================================================================================
+BƯỚC 6: TRIỂN KHAI KAFKA & KONG GATEWAY TRÊN MÁY ẢO 1 (`cgv-ec2-infra`)
+================================================================================
+
+1. SSH vào máy 1 (`cgv-ec2-infra`):
+   ssh -i cgv-keypair.pem ubuntu@<IP_MAY_1>
+
+2. Cài đặt Docker & Docker Compose:
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose
+sudo usermod -aG docker ubuntu
+newgrp docker
+```
+
+3. Tạo file `docker-compose.yml` để chạy Kafka (chế độ KRaft không cần Zookeeper để tiết kiệm RAM) và Kong Gateway:
+```bash
+cat << 'EOF' > docker-compose.yml
+version: '3.8'
+services:
+  # Apache Kafka KRaft (Siêu nhẹ, chỉ ăn ~250MB RAM)
+  kafka:
+    image: bashj79/kafka-kraft:latest
+    container_name: cgv-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://10.0.1.X:9092" # <-- Thay bằng PRIVATE IP của Máy 1!
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_HEAP_OPTS: "-Xmx256m -Xms128m" # Giới hạn RAM cho Kafka
+    restart: always
+
+  # Kong API Gateway
+  kong:
+    image: kong:3.6
+    container_name: cgv-kong
+    ports:
+      - "8000:8000" # Cổng nhận request từ ngoài Internet
+      - "8001:8001" # Cổng Admin nội bộ
+    environment:
+      KONG_DATABASE: "off" # Chạy dbless bằng file declarative để không tốn RAM
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+    volumes:
+      - ./kong.yml:/etc/kong/kong.yml
+    restart: always
+EOF
+```
+
+4. Tạo file cấu hình định tuyến `kong.yml`:
+File này chuyển tiếp request từ cổng 8000 sang Private IP của Máy 2 (nơi chạy 4 microservices):
+```bash
+cat << 'EOF' > kong.yml
+_format_version: "3.0"
+services:
+  - name: booking-service
+    url: http://10.0.1.Y:8082 # <-- Thay bằng PRIVATE IP của Máy 2!
+    routes:
+      - name: booking-route
+        paths:
+          - /api/v1/bookings
+
+  - name: catalog-service
+    url: http://10.0.1.Y:8083 # <-- Thay bằng PRIVATE IP của Máy 2!
+    routes:
+      - name: catalog-route
+        paths:
+          - /api/v1/movies
+          - /api/v1/cinemas
+          - /api/v1/showtimes
+
+  - name: identity-service
+    url: http://10.0.1.Y:8081 # <-- Thay bằng PRIVATE IP của Máy 2!
+    routes:
+      - name: identity-route
+        paths:
+          - /api/v1/auth
+          - /api/v1/users
+
+  - name: payment-service
+    url: http://10.0.1.Y:8085 # <-- Thay bằng PRIVATE IP của Máy 2!
+    routes:
+      - name: payment-route
+        paths:
+          - /api/v1/payments
+EOF
+```
+
+5. Khởi động Máy 1:
+   docker-compose up -d
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Vì sao dùng Kafka KRaft thay vì Kafka + Zookeeper truyền thống?
+  + Mục đích: Tiết kiệm tối đa bộ nhớ. Bản Kafka cũ cần 1 cụm Zookeeper chạy song song tốn thêm
+    500MB RAM. Chuẩn KRaft mới loại bỏ hoàn toàn Zookeeper, giúp Kafka chạy êm ái chỉ với 256MB RAM.
+- Vì sao dùng Kong DB-less mode (`KONG_DATABASE: "off"`)?
+  + Mục đích: Kong thông thường cần 1 database PostgreSQL riêng để lưu cấu hình route. Chế độ
+    DB-less đọc trực tiếp từ file `kong.yml`, khởi động trong 1 giây và tiết kiệm 100% dung lượng DB.
+
+================================================================================
+BƯỚC 7: TRIỂN KHAI 4 MICROSERVICES SPRING BOOT TRÊN MÁY ẢO 2 (`cgv-ec2-services`)
+================================================================================
+
+1. SSH vào máy 2 (`cgv-ec2-services`):
+   ssh -i cgv-keypair.pem ubuntu@<IP_MAY_2>
+
+2. Cài đặt Docker & Docker Compose:
+```bash
+sudo apt update && sudo apt install -y docker.io docker-compose
+sudo usermod -aG docker ubuntu
+newgrp docker
+```
+
+3. Tạo file `docker-compose.yml` trên Máy 2:
+CHÚ Ý CỰC KỲ QUAN TRỌNG: Cấu hình biến môi trường `JAVA_TOOL_OPTIONS: "-Xmx200m -Xms100m"`
+cho từng service để Java không chiếm quá 200MB RAM mỗi con!
+```bash
+cat << 'EOF' > docker-compose.yml
+version: '3.8'
+services:
+  identity-service:
+    image: cgv/identity-service:latest
+    container_name: cgv-identity
+    ports:
+      - "8081:8081"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx200m -Xms100m -XX:+UseSerialGC"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://<RDS_ENDPOINT>:5432/cgv
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: CgvFreeTier2026!
+    restart: always
+
+  booking-service:
+    image: cgv/booking-service:latest
+    container_name: cgv-booking
+    ports:
+      - "8082:8082"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx250m -Xms128m -XX:+UseSerialGC"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://<RDS_ENDPOINT>:5432/cgv
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: CgvFreeTier2026!
+      SPRING_DATA_REDIS_HOST: <REDIS_ENDPOINT>
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: 10.0.1.X:9092 # Private IP Máy 1
+      CATALOG_GRPC_HOST: 127.0.0.1
+      CATALOG_GRPC_PORT: 9090
+    restart: always
+
+  catalog-service:
+    image: cgv/catalog-service:latest
+    container_name: cgv-catalog
+    ports:
+      - "8083:8083"
+      - "9090:9090" # Cổng gRPC
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx200m -Xms100m -XX:+UseSerialGC"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://<RDS_ENDPOINT>:5432/cgv
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: CgvFreeTier2026!
+      SPRING_DATA_REDIS_HOST: <REDIS_ENDPOINT>
+      SPRING_DATA_REDIS_PORT: 6379
+    restart: always
+
+  payment-service:
+    image: cgv/payment-service:latest
+    container_name: cgv-payment
+    ports:
+      - "8085:8085"
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx200m -Xms100m -XX:+UseSerialGC"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://<RDS_ENDPOINT>:5432/cgv
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: CgvFreeTier2026!
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: 10.0.1.X:9092 # Private IP Máy 1
+    restart: always
+EOF
+```
+
+4. Khởi động 4 Microservices:
+   docker-compose up -d
+
+5. Kiểm tra trạng thái bộ nhớ tiêu thụ:
+   docker stats
+-> Bạn sẽ thấy mỗi container Spring Boot chỉ tiêu tốn đúng ~180MB - 220MB RAM. Tổng 4 con chỉ khoảng
+850MB RAM, vừa khít 1GB RAM thật và 2GB Swap bảo vệ phía sau!
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Vì sao cấu hình `-XX:+UseSerialGC`?
+  + Mục đích: Tiết kiệm CPU và RAM tối đa. Mặc định Java dùng G1GC tiêu tốn thêm 50-100MB RAM
+    chỉ để quản lý bộ nhớ dọn rác. SerialGC cực kỳ gọn nhẹ, phù hợp hoàn hảo cho các container
+    chạy trên máy ảo 1 vCPU và RAM nhỏ của gói Free Tier.
+- Vì sao các container giao tiếp qua Private IP `10.0.1.X` thay vì Public IP?
+  + Mục đích: Miễn phí tiền mạng và tăng tốc độ. Lưu lượng truyền tải giữa các máy ảo trong cùng
+    VPC qua Private IP được AWS miễn phí hoàn toàn (0$), và độ trễ chỉ dưới 0.5 mili-giây.
+
+================================================================================
+BƯỚC 8: DEPLOY REACT FRONTEND LÊN S3 + CLOUDFRONT CDN (MIỄN PHÍ)
+================================================================================
+
+8.1. Cấu hình biến môi trường API cho Frontend:
+Trên máy tính cá nhân, mở file `.env` hoặc cấu hình API trong React:
+VITE_API_BASE_URL=http://<PUBLIC_IP_MAY_1>:8000
+(Trỏ thẳng vào cổng Kong Gateway của Máy ảo 1).
+
+8.2. Build và đẩy lên S3:
+1. Chạy lệnh build:
+   npm run build
+2. Vào AWS Console -> Dịch vụ `S3` -> Tạo Bucket `cgv-fe-free-storage`.
+   - Tích chọn: **Block all public access** (Bảo mật).
+   - Bấm **Create bucket**.
+3. Mở bucket vừa tạo -> Bấm **Upload** -> Kéo toàn bộ file trong thư mục `dist/` thả vào -> Bấm **Upload**.
+
+8.3. Tạo CloudFront CDN:
+1. Dịch vụ `CloudFront` -> Bấm **Create distribution**:
+   - Origin domain: Chọn bucket `cgv-fe-free-storage`.
+   - Origin access: Chọn **Origin access control settings (recommended)** -> Bấm **Create new OAC**.
+   - Default root object: `index.html`.
+2. Bấm **Create distribution**.
+3. Bấm vào nút vàng **Copy policy** do CloudFront gợi ý -> Vào S3 Bucket -> Tab **Permissions** -> Dán vào ô **Bucket policy** để cấp quyền cho CloudFront đọc file.
+4. Tại CloudFront, vào tab **Error pages** -> Tạo 2 rule chuyển hướng lỗi:
+   - Rule 1: HTTP Error `403` -> Response page: `/index.html` -> Code: `200: OK`.
+   - Rule 2: HTTP Error `404` -> Response page: `/index.html` -> Code: `200: OK`.
+5. Đợi 3 phút -> Copy link CloudFront (Ví dụ: `https://d3xxxx.cloudfront.net`).
+
+--------------------------------------------------------------------------------
+GIẢI THÍCH VÌ SAO & MỤC ĐÍCH:
+- Mục đích: CloudFront nằm trong gói Always Free (Miễn phí 1TB băng thông/tháng). Không cần thuê
+  máy chủ chạy web tĩnh, người dùng truy cập web với tốc độ cực nhanh và bạn không mất 1 đồng nào.
+
+================================================================================
+BƯỚC 9: KIỂM TRA TOÀN DIỆN & TỔNG KẾT VẬN HÀNH 0 ĐỒNG
+================================================================================
+
+1. Kiểm tra luồng gọi API từ bên ngoài:
+Mở Terminal trên máy bạn, chạy thử:
+curl http://<PUBLIC_IP_MAY_1>:8000/api/v1/movies/now-showing
+-> Nhận về JSON danh sách phim từ `catalog-service` chạy trên Máy 2 qua cổng Kong của Máy 1!
+
+2. Truy cập web:
+Mở trình duyệt gõ link CloudFront `https://d3xxxx.cloudfront.net`:
+- Đăng nhập tài khoản.
+- Xem lịch chiếu, chọn ghế và bấm Thanh toán.
+- Đơn vé chuyển sang VNPay và WebSocket realtime nhảy ghế trên Redis hoàn hảo!
+
+3. Tóm tắt chi phí mỗi tháng:
+- 2 máy ảo EC2 t2.micro / t3.micro (Chạy luân phiên hoặc dừng khi không dùng): ~0$ - 3$/tháng.
+- 1 Database RDS PostgreSQL t3.micro: 0$ (Free Tier 750h/tháng).
+- 1 Redis ElastiCache t3.micro: 0$ (Free Tier 750h/tháng).
+- S3 + CloudFront CDN: 0$ (Always Free).
+- Tổng chi phí: Gần như 0 ĐỒNG / THÁNG!
+
+================================================================================
+BƯỚC 10: TRIỂN KHAI BẰNG KUBERNETES (K8S) TRÊN EC2 FREE TIER VỚI K3S (MIỄN PHÍ)
+================================================================================
+
+10.1. Vì sao chọn K3s thay vì Kubeadm / EKS cho Free Tier?
+- AWS EKS tính phí ~73$/tháng cho cụm Control Plane (Không hề có Free Tier).
+- Kubeadm nguyên bản cần tối thiểu 2 vCPU và 2GB RAM cho riêng Master Node.
+- K3s (bởi Rancher/CNCF): Là bản phân phối Kubernetes chính thức siêu nhẹ, toàn bộ
+  Control Plane đóng gói trong 1 file binary duy nhất chỉ tốn ~50MB RAM! Chạy hoàn hảo
+  trên EC2 `t2.micro`/`t3.micro` (1GB RAM + 2GB Swap) mà vẫn hỗ trợ 100% chuẩn K8s
+  (Pods, Services, Ingress, HPA, ConfigMaps, Secrets).
+
+10.2. Cài đặt K3s trên EC2 (Chỉ 1 câu lệnh duy nhất):
+SSH vào máy ảo EC2 và chạy lệnh cài K3s:
+```bash
+# Cài đặt K3s (bỏ qua traefik mặc định để dùng Kong API Gateway)
+curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik" sh -
+
+# Cấp quyền cho user ubuntu dùng lệnh kubectl không cần sudo
+sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+echo 'export KUBECONFIG=/etc/rancher/k3s/k3s.yaml' >> ~/.bashrc
+
+# Kiểm tra node K8s đã sẵn sàng:
+kubectl get nodes
+```
+-> Kết quả hiện: `STATUS: Ready`! Bạn đã có một cụm Kubernetes Production hoàn chỉnh trên AWS 0 đồng!
+
+10.3. Triển khai toàn bộ hệ thống bằng thư mục `k8s/`:
+Clone source code CGV về EC2 và thực thi theo đúng thứ tự:
+```bash
+# 1. Tạo Namespace cách ly
+kubectl apply -f k8s/00-namespace.yml
+
+# 2. Tạo Cấu hình & Mật khẩu
+kubectl apply -f k8s/01-configmap.yml
+kubectl apply -f k8s/02-secrets.yml
+
+# 3. Khởi động Kong Gateway
+kubectl apply -f k8s/kong/
+
+# 4. Triển khai các Microservices
+kubectl apply -f k8s/services/identity-service/
+kubectl apply -f k8s/services/catalog-service/
+kubectl apply -f k8s/services/booking-service/
+kubectl apply -f k8s/services/payment-service/
+
+# 5. Mở Ingress đón khách
+kubectl apply -f k8s/ingress/ingress.yml
+
+# 6. Kiểm tra toàn bộ Pods đang chạy
+kubectl get pods -n cgv-prod -o wide
+```
+
+10.4. Giải thích vì sao & Mục đích của việc dùng K8s K3s trên Free Tier:
+- Mục đích: Trải nghiệm và làm chủ quy trình DevOps / Kubernetes thực tế của doanh nghiệp
+  ngay trên nền tảng AWS với chi phí 0 ĐỒNG.
+- Khi cần chuyển sang môi trường Production của tập đoàn lớn (AWS EKS hay Google GKE),
+  toàn bộ các file `.yml` trong thư mục `k8s/` này sẽ được giữ nguyên 100% mà không
+  cần sửa đổi bất kỳ dòng code nào!
+================================================================================

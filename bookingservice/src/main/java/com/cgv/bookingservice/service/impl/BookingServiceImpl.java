@@ -9,6 +9,7 @@ import com.cgv.bookingservice.enums.BookingStatus;
 import com.cgv.bookingservice.grpc.CatalogGrpcClient;
 import com.cgv.bookingservice.grpc.MarketingGrpcClient;
 import com.cgv.bookingservice.repository.BookingRepository;
+import com.cgv.bookingservice.repository.BookingSeatRepository;
 import com.cgv.bookingservice.repository.OutboxEventRepository;
 import com.cgv.bookingservice.service.BookingService;
 import com.cgv.commondto.event.BookingConfirmedEvent;
@@ -38,10 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.cgv.bookingservice.dto.event.SeatRealtimeEvent;
@@ -53,6 +51,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 @FieldDefaults(level = AccessLevel.PRIVATE , makeFinal = true)
 public class BookingServiceImpl implements BookingService {
     BookingRepository bookingRepository;
+    BookingSeatRepository bookingSeatRepository;
     OutboxEventRepository outboxEventRepository;
     CatalogGrpcClient catalogGrpcClient;
     StringRedisTemplate redisTemplate;
@@ -81,6 +80,16 @@ public class BookingServiceImpl implements BookingService {
             String currentHolder = redisTemplate.opsForValue().get(seatKey);
             if(currentHolder == null || !currentHolder.equals(userId)){
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã hết hạn giữ hoặc không thuộc quyền sở hữu của bạn. Vui lòng chọn lại ghế!");
+            }
+        }
+
+        List<UUID> activeBookedSeatIds = bookingSeatRepository.findBookedSeatIdsByShowtimeId(
+                showtimeId,
+                List.of(BookingStatus.CONFIRMED, BookingStatus.PAYMENT_PENDING)
+        );
+        for (UUID seatId : seatIds) {
+            if (activeBookedSeatIds.contains(seatId)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã có người đặt hoặc đang trong quá trình thanh toán. Vui lòng chọn ghế khác!");
             }
         }
 
@@ -331,6 +340,8 @@ public class BookingServiceImpl implements BookingService {
         Specification<Booking> spec = BookingSpecification.filterMyBookings(userId, filter);
         Page<Booking> bookingPage = bookingRepository.findAll(spec, pageable);
 
+        Map<UUID, ShowtimePricingResponse> showtimeCache = new HashMap<>();
+
         List<BookingResponse> bookingResponses = bookingPage.getContent().stream()
                 .map(b -> {
                     List<String> seatLabels = b.getBookingSeats() != null
@@ -354,7 +365,7 @@ public class BookingServiceImpl implements BookingService {
                             .qrCodeUrl(b.getQrCodeUrl())
                             .createdAt(b.getCreatedAt());
 
-                    enrichShowtimeDetails(resBuilder, b.getShowtimeId());
+                    enrichShowtimeDetailsWithCache(resBuilder, b.getShowtimeId(), showtimeCache);
                     return resBuilder.build();
                 })
                 .toList();
@@ -369,9 +380,26 @@ public class BookingServiceImpl implements BookingService {
     }
 
     private void enrichShowtimeDetails(BookingResponse.BookingResponseBuilder builder, UUID showtimeId) {
+        enrichShowtimeDetailsWithCache(builder, showtimeId, null);
+    }
+
+    private void enrichShowtimeDetailsWithCache(BookingResponse.BookingResponseBuilder builder, UUID showtimeId, Map<UUID, ShowtimePricingResponse> cache) {
         if (showtimeId == null) return;
         try {
-            ShowtimePricingResponse pricing = catalogGrpcClient.getShowtimePricing(showtimeId);
+            ShowtimePricingResponse pricing;
+            if (cache != null) {
+                pricing = cache.computeIfAbsent(showtimeId, id -> {
+                    try {
+                        return catalogGrpcClient.getShowtimePricing(id);
+                    } catch (Exception e) {
+                        log.warn("Không thể lấy thông tin showtime {} qua gRPC: {}", id, e.getMessage());
+                        return null;
+                    }
+                });
+            } else {
+                pricing = catalogGrpcClient.getShowtimePricing(showtimeId);
+            }
+
             if (pricing != null) {
                 builder.movieTitle(pricing.getMovieTitle())
                         .posterUrl(pricing.getPosterUrl())
@@ -414,6 +442,7 @@ public class BookingServiceImpl implements BookingService {
             redisTemplate.delete(lockKey);
             releasedSeatIds.add(seat.getSeatId());
         }
+        redisTemplate.delete("user:active_showtime:" + userId);
         log.info("Khách hàng {} đã chủ động hủy đơn vé {} và giải phóng ghế Redis.", userId, bookingId);
 
         // Broadcast WebSocket RELEASE event

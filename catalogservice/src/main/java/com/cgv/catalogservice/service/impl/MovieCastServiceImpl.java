@@ -108,4 +108,11 @@ public class MovieCastServiceImpl implements MovieCastService {
                 .totalElements(movieCastPage.getTotalElements())
                 .build();
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MovieCastResponse> getMovieCastsByMovieId(UUID movieId) {
+        List<MovieCast> movieCasts = movieCastRepository.findByMovieIdOrderByDisplayOrderAsc(movieId);
+        return movieCastMapper.toResponseList(movieCasts);
+    }
 }

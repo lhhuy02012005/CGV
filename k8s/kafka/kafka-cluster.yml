@@ -1,0 +1,251 @@
+# ==============================================================================
+# CỤM KAFKA CLUSTER 3 BROKER (KRAFT MODE - KHÔNG DÙNG ZOOKEEPER)
+# Đảm bảo nhân bản 3 bản sao (Replication Factor = 3) & Không mất dữ liệu
+# ==============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: cgv-prod
+spec:
+  type: ClusterIP
+  selector:
+    app: cgv-kafka
+  ports:
+    - name: client
+      port: 9092
+      targetPort: 9092
+---
+# --- BROKER 1 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-1
+  namespace: cgv-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cgv-kafka
+      broker-id: "1"
+  template:
+    metadata:
+      labels:
+        app: cgv-kafka
+        broker-id: "1"
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:latest
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_NODE_ID
+              value: "1"
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka-1.cgv-prod.svc.cluster.local:9092"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-1.cgv-prod.svc.cluster.local:9093,2@kafka-2.cgv-prod.svc.cluster.local:9093,3@kafka-3.cgv-prod.svc.cluster.local:9093"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: "AbCdEfGhIjKlMnOpQrStUv"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "2"
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: "2"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx180m -Xms90m"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "150Mi"
+            limits:
+              cpu: "300m"
+              memory: "250Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-1
+  namespace: cgv-prod
+spec:
+  clusterIP: None
+  selector:
+    broker-id: "1"
+  ports:
+    - name: client
+      port: 9092
+    - name: controller
+      port: 9093
+---
+# --- BROKER 2 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-2
+  namespace: cgv-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cgv-kafka
+      broker-id: "2"
+  template:
+    metadata:
+      labels:
+        app: cgv-kafka
+        broker-id: "2"
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:latest
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_NODE_ID
+              value: "2"
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka-2.cgv-prod.svc.cluster.local:9092"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-1.cgv-prod.svc.cluster.local:9093,2@kafka-2.cgv-prod.svc.cluster.local:9093,3@kafka-3.cgv-prod.svc.cluster.local:9093"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: "AbCdEfGhIjKlMnOpQrStUv"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "2"
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: "2"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx180m -Xms90m"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "150Mi"
+            limits:
+              cpu: "300m"
+              memory: "250Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-2
+  namespace: cgv-prod
+spec:
+  clusterIP: None
+  selector:
+    broker-id: "2"
+  ports:
+    - name: client
+      port: 9092
+    - name: controller
+      port: 9093
+---
+# --- BROKER 3 ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-3
+  namespace: cgv-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cgv-kafka
+      broker-id: "3"
+  template:
+    metadata:
+      labels:
+        app: cgv-kafka
+        broker-id: "3"
+    spec:
+      containers:
+        - name: kafka
+          image: apache/kafka:latest
+          ports:
+            - containerPort: 9092
+            - containerPort: 9093
+          env:
+            - name: KAFKA_NODE_ID
+              value: "3"
+            - name: KAFKA_PROCESS_ROLES
+              value: "broker,controller"
+            - name: KAFKA_LISTENERS
+              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
+            - name: KAFKA_ADVERTISED_LISTENERS
+              value: "PLAINTEXT://kafka-3.cgv-prod.svc.cluster.local:9092"
+            - name: KAFKA_CONTROLLER_LISTENER_NAMES
+              value: "CONTROLLER"
+            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
+              value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
+              value: "1@kafka-1.cgv-prod.svc.cluster.local:9093,2@kafka-2.cgv-prod.svc.cluster.local:9093,3@kafka-3.cgv-prod.svc.cluster.local:9093"
+            - name: KAFKA_INTER_BROKER_LISTENER_NAME
+              value: "PLAINTEXT"
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: "AbCdEfGhIjKlMnOpQrStUv"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "2"
+            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
+              value: "3"
+            - name: KAFKA_MIN_INSYNC_REPLICAS
+              value: "2"
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xmx180m -Xms90m"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "150Mi"
+            limits:
+              cpu: "300m"
+              memory: "250Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-3
+  namespace: cgv-prod
+spec:
+  clusterIP: None
+  selector:
+    broker-id: "3"
+  ports:
+    - name: client
+      port: 9092
+    - name: controller
+      port: 9093

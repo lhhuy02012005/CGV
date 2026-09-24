@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kong-declarative-config
+  namespace: cgv-prod
+data:
+  kong.yml: |
+    _format_version: "3.0"
+    services:
+      - name: booking-service
+        url: http://booking-service.cgv-prod.svc.cluster.local:8082
+        routes:
+          - name: booking-route
+            paths:
+              - /api/v1/bookings
+              - /api/v1/ws
+            strip_path: false
+      - name: catalog-service
+        url: http://catalog-service.cgv-prod.svc.cluster.local:8083/api/v1
+        routes:
+          - name: catalog-route
+            paths:
+              - /api/v1/catalogs
+            strip_path: true
+          - name: catalog-direct-route
+            paths:
+              - /api/v1/movies
+              - /api/v1/cinemas
+              - /api/v1/showtimes
+            strip_path: false
+      - name: identity-service
+        url: http://identity-service.cgv-prod.svc.cluster.local:8081
+        routes:
+          - name: identity-route
+            paths:
+              - /api/v1/auth
+              - /api/v1/users
+              - /api/v1/roles
+              - /api/v1/membership-tiers
+            strip_path: false
+      - name: payment-service
+        url: http://payment-service.cgv-prod.svc.cluster.local:8085
+        routes:
+          - name: payment-route
+            paths:
+              - /api/v1/payment
+              - /api/v1/payments
+            strip_path: false
+      - name: marketing-service
+        url: http://marketing-service.cgv-prod.svc.cluster.local:8084
+        routes:
+          - name: marketing-route
+            paths:
+              - /api/v1/marketings
+            strip_path: false
+      - name: notification-service
+        url: http://notification-service.cgv-prod.svc.cluster.local:8086
+        routes:
+          - name: notification-route
+            paths:
+              - /api/v1/notification
+            strip_path: false
+      - name: media-service
+        url: http://media-service.cgv-prod.svc.cluster.local:8087
+        routes:
+          - name: media-route
+            paths:
+              - /api/v1/media
+            strip_path: false
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - OPTIONS
+            - PATCH
+          headers:
+            - "*"
+          exposed_headers:
+            - Authorization
+            - X-Device-List-Outdated
+            - Set-Cookie
+          credentials: true
+          max_age: 3600

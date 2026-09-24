@@ -6,6 +6,8 @@ import com.cgv.bookingservice.dto.response.BookingResponse;
 import com.cgv.bookingservice.service.BookingService;
 import com.cgv.commondto.dto.ApiResponse;
 import com.cgv.commondto.dto.PageResponse;
+import com.cgv.commondto.exception.BusinessException;
+import com.cgv.commondto.exception.ErrorCode;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
@@ -26,12 +28,19 @@ import java.util.UUID;
 public class BookingController {
     BookingService bookingService;
 
+    private String getUserId(Jwt jwt) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập trước khi thực hiện thao tác này!");
+        }
+        return jwt.getSubject();
+    }
+
     @PostMapping
     public ApiResponse<BookingResponse> create(
             @AuthenticationPrincipal Jwt jwt,
             @RequestBody BookingCreateRequest request
     ){
-        String userId = jwt.getSubject();
+        String userId = getUserId(jwt);
         var result  = bookingService.createBooking(userId , request);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.CREATED.value())
@@ -45,7 +54,7 @@ public class BookingController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id
     ) {
-        String userId = jwt.getSubject();
+        String userId = getUserId(jwt);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.OK.value())
                 .data(bookingService.getBookingById(id, userId))
@@ -59,7 +68,7 @@ public class BookingController {
             @ModelAttribute BookingFilterRequest filter,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        String userId = jwt.getSubject();
+        String userId = getUserId(jwt);
         return ApiResponse.<PageResponse<BookingResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(bookingService.getMyBookings(userId, filter, pageable))
@@ -72,7 +81,7 @@ public class BookingController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID id
     ) {
-        String userId = jwt.getSubject();
+        String userId = getUserId(jwt);
         bookingService.cancelBooking(id, userId);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())

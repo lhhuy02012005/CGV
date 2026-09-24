@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong-gateway
+  namespace: cgv-prod
+  labels:
+    app: kong-gateway
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      #Khi bạn sửa file cấu hình và nạp lại, K8s sẽ bật 1 con Kong mới lên trước.
+      maxSurge: 1        # Cho phép tạm thời tạo thêm tối đa 1 Pod mới khi cập nhật
+      #K8s cam kết không bao giờ tắt con cũ khi con mới chưa chạy thành công, đảm bảo khách hàng bên ngoài không bị đứt mạng một giây nào.
+      maxUnavailable: 0  # Luôn đảm bảo không có Pod nào bị thiếu hụt lúc update
+  selector:
+    matchLabels:
+      app: kong-gateway
+  template:
+    metadata:
+      labels:
+        app: kong-gateway
+    spec:
+      containers:
+        - name: kong
+          image: kong:3.4-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: KONG_DATABASE #Chạy chế độ DB-less (không dùng PostgreSQL cho Kong), tiết kiệm 100% RAM và CPU của DB.
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG #: Báo cho Kong đọc các route từ file này.
+              value: "/etc/kong/kong.yml"
+            - name: KONG_PROXY_ACCESS_LOG # Xuất toàn bộ lịch sử request ra màn hình console để bạn dùng lệnh kubectl logs kiểm tra.
+              value: "/dev/stdout"
+            - name: KONG_ADMIN_ACCESS_LOG #Xuất toàn bộ lịch sử request ra màn hình console để bạn dùng lệnh kubectl logs kiểm tra.
+              value: "/dev/stdout"
+            - name: KONG_PROXY_ERROR_LOG  # Xuất log lỗi ra luồng lỗi hệ thống.
+              value: "/dev/stderr"
+            - name: KONG_ADMIN_ERROR_LOG  # Xuất log lỗi ra luồng lỗi hệ thống.
+              value: "/dev/stderr"
+            - name: KONG_ADMIN_LISTEN # Cổng quản trị nội bộ để kiểm tra trạng thái sức khoẻ.
+              value: "0.0.0.0:8001"
+          ports:
+            - name: proxy
+              containerPort: 8000
+            - name: admin
+              containerPort: 8001
+          resources:
+            requests: # Cam kết tối thiểu
+              cpu: "80m" #(0.08 CPU): Mức chiếm dụng CPU lúc rảnh rỗi.
+              memory: "90Mi" #Mỗi con chỉ cần 90MB RAM là chạy được. (2 con ~= 180MB ram)
+            limits: # Tối đa
+              cpu: "300m"
+              memory: "200Mi" #Giới hạn an toàn. Nếu 1 con Kong bị tràn bộ nhớ vượt quá 200MB, K8s sẽ tự reset lại con đó, không để ảnh hưởng đến máy chủ.
+
+          readinessProbe:
+            httpGet:
+              path: /status #Kiểm tra xem Kong đã sẵn sàng đón khách chưa qua endpoint http://localhost:8001/status.
+              port: 8001
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 15 #Định kỳ mỗi 15 giây gõ cửa con Kong một lần. Nếu Kong bị đơ hay treo tiến trình, K8s sẽ tự động giết và bật lại con mới.
+          volumeMounts:
+            - name: kong-config-vol # Chọn chiếc USB vừa tạo ở Bước 2
+              mountPath: /etc/kong # Cắm thẳng vào thư mục /etc/kong của container Kong
+      volumes:
+        - name: kong-config-vol # Đặt tên cho chiếc USB ảo này
+          configMap:
+            name: kong-declarative-config # Lấy dữ liệu từ ConfigMap ở Bước 1 chép vào USB
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-proxy
+  namespace: cgv-prod
+spec:
+  type: NodePort #Mở cổng từ ngoài máy chủ vật lý / máy ảo EC2 vào trong cụm K8s.
+  selector:
+    app: kong-gateway #Tự động gom 2 con Kong Pod ở trên vào làm việc cho Service này. Service sẽ chia đều request luân phiên (Round-Robin) cho 2 con
+  ports:
+    - name: proxy
+      port: 8000 #Cổng nội bộ của Service bên trong mạng K8s.
+      targetPort: 8000 #Cổng thực tế bên trong container Kong nhận request.
+      nodePort: 30080 #Cổng thật trên máy chủ. Bạn truy cập qua http://<IP_MAY>:30080

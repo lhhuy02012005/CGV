@@ -28,6 +28,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     @EntityGraph(attributePaths = {"bookingSeats"})
     Page<Booking> findAll(Specification<Booking> spec, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"bookingSeats"})
     List<Booking> findByUserIdOrderByCreatedAtDesc(String userId);
 
     @Modifying
@@ -44,6 +45,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
             @Param("now") Instant now
     );
 
+    @EntityGraph(attributePaths = {"bookingSeats"})
     Page<Booking> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
 
     List<Booking> findByStatusAndPaymentDeadlineBefore(BookingStatus status, Instant deadline);

@@ -82,4 +82,15 @@ public class SeatLockController {
                 .data(seatLockService.getActiveLockedSeatIds(showtimeId))
                 .build();
     }
+
+    @GetMapping("/booked/{showtimeId}")
+    public ApiResponse<java.util.List<java.util.UUID>> getBookedSeats(
+            @PathVariable java.util.UUID showtimeId
+    ) {
+        return ApiResponse.<java.util.List<java.util.UUID>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Danh sách ghế đã được đặt")
+                .data(seatLockService.getBookedSeatIds(showtimeId))
+                .build();
+    }
 }

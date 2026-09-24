@@ -3,6 +3,10 @@ package com.cgv.catalogservice.repository;
 import com.cgv.catalogservice.entity.Region;
 import com.cgv.catalogservice.entity.Showtime;
 import com.cgv.catalogservice.enums.ShowtimeStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
@@ -18,7 +22,21 @@ public interface ShowtimeRepository
         extends JpaRepository<Showtime, UUID>,
         JpaSpecificationExecutor<Showtime> {
 
+    @Override
+    @EntityGraph(attributePaths = {"movie", "room", "room.cinema", "room.cinema.region"})
+    Optional<Showtime> findById(UUID id);
+
+    @Override
+    @EntityGraph(attributePaths = {"movie", "room", "room.cinema", "room.cinema.region"})
+    Page<Showtime> findAll(Specification<Showtime> spec, Pageable pageable);
+
     boolean existsByRoomIdAndStatusAndEndTimeAfter(
+            UUID roomId,
+            ShowtimeStatus status,
+            Instant endTime
+    );
+
+    boolean existsByRoom_IdAndStatusAndEndTimeAfter(
             UUID roomId,
             ShowtimeStatus status,
             Instant endTime
@@ -28,6 +46,7 @@ public interface ShowtimeRepository
         SELECT s FROM Showtime s
         JOIN FETCH s.room r
         JOIN FETCH r.cinema c
+        LEFT JOIN FETCH c.region reg
         JOIN FETCH s.movie m
         WHERE s.id = :id
     """)

@@ -86,4 +86,13 @@ public class MovieCastController {
                 .message("Danh sách diễn viên phim")
                 .build();
     }
+
+    @GetMapping("/movie/{movieId}")
+    public ApiResponse<java.util.List<MovieCastResponse>> getByMovieId(@PathVariable UUID movieId) {
+        return ApiResponse.<java.util.List<MovieCastResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(movieCastService.getMovieCastsByMovieId(movieId))
+                .message("Danh sách diễn viên của phim thành công")
+                .build();
+    }
 }

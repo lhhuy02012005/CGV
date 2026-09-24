@@ -12,6 +12,9 @@ import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import com.cgv.bookingservice.repository.BookingSeatRepository;
+import com.cgv.bookingservice.enums.BookingStatus;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -30,6 +33,7 @@ public class SeatLockServiceImpl implements SeatLockService {
     StringRedisTemplate redisTemplate;
     DefaultRedisScript<Long> seatLockScript;
     SimpMessagingTemplate messagingTemplate;
+    BookingSeatRepository bookingSeatRepository;
     long LOCK_TTL_SECONDS = 240; // Phase 1: 4 phút (240s) giữ ghế
     String seatLockKey = "showtime:lock:";
 
@@ -177,6 +181,20 @@ public class SeatLockServiceImpl implements SeatLockService {
             }
         }
         return lockedSeats;
+    }
+
+    @Override
+    public List<UUID> getBookedSeatIds(UUID showtimeId) {
+        if (showtimeId == null) {
+            return Collections.emptyList();
+        }
+        List<BookingStatus> activeStatuses = List.of(
+                BookingStatus.CONFIRMED,
+                BookingStatus.PAYMENT_PENDING,
+                BookingStatus.SEAT_RESERVED,
+                BookingStatus.USED
+        );
+        return bookingSeatRepository.findBookedSeatIdsByShowtimeId(showtimeId, activeStatuses);
     }
 
     private void broadcastSeatEvent(String type, UUID showtimeId, List<UUID> seatIds, String userId) {

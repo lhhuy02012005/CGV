@@ -107,9 +107,10 @@ public class MovieServiceImpl implements MovieService {
     @Cacheable(value = "movies:detail", key = "#movieId")
     public MovieResponse getMovieById(UUID movieId) {
 
-        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
+        Movie movie = movieRepository.findByIdWithCasts(movieId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
-        return movieMapper.toResponse(movie);
+        return movieMapper.toDetailResponse(movie);
     }
 
     @Override
