@@ -6,6 +6,7 @@ option java_package = "com.cgv.commondto.grpc";
 
 service PromotionGrpcService {
   rpc ValidateAndApplyPromotion (PromotionApplyRequest) returns (PromotionApplyResponse);
+  rpc ReleasePromotion (PromotionReleaseRequest) returns (PromotionReleaseResponse);
 }
 
 message PromotionApplyRequest {
@@ -21,4 +22,14 @@ message PromotionApplyResponse {
   double discount_amount = 3;  // Số tiền được giảm
   double final_amount = 4;     // Số tiền còn lại sau giảm
   string promotion_code = 5;   // Mã voucher (VD: CGVGOLD30)
+}
+
+message PromotionReleaseRequest {
+  string promotion_id = 1;
+  string user_id = 2;
+}
+
+message PromotionReleaseResponse {
+  bool success = 1;
+  string message = 2;
 }

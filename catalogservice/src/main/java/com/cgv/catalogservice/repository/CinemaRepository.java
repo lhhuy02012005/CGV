@@ -36,6 +36,10 @@ public interface CinemaRepository
 
     boolean existsByRegion_Id(Integer regionId);
 
+    boolean existsByName(String name);
+
+    boolean existsByNameAndIdNot(String name, UUID id);
+
     @Query("SELECT c FROM Cinema c JOIN FETCH c.region WHERE c.status = :status")
     List<Cinema> findByStatusWithRegion(CinemaStatus status);
 }

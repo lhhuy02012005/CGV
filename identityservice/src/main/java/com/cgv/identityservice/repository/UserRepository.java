@@ -24,6 +24,11 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByEmail(String email);
 
     @EntityGraph(attributePaths = {"membershipTier"})
-    @Query("SELECT u FROM User u WHERE u.fullName LIKE :keyword OR u.email LIKE :keyword")
+    Optional<User> findByPhone(String phone);
+
+    boolean existsByPhone(String phone);
+
+    @EntityGraph(attributePaths = {"membershipTier"})
+    @Query("SELECT u FROM User u WHERE LOWER(u.fullName) LIKE LOWER(:keyword) OR LOWER(u.email) LIKE LOWER(:keyword) OR (u.phone IS NOT NULL AND u.phone LIKE :keyword)")
     Page<User> findByKeyword(@Param("keyword") String keyword, Pageable pageable);
 }

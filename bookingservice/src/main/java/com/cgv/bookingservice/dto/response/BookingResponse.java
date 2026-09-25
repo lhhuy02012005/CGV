@@ -17,6 +17,9 @@ import java.util.UUID;
 public class BookingResponse {
     UUID bookingId;
     String userId;
+    String guestName;
+    String guestEmail;
+    String guestPhone;
     UUID showtimeId;
     BigDecimal totalBaseAmount;
     BigDecimal discountAmount;
@@ -35,4 +38,3 @@ public class BookingResponse {
     Instant showtimeStart;
     String posterUrl;
 }
-

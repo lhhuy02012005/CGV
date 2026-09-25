@@ -5,6 +5,7 @@ import com.cgv.catalogservice.dto.request.movie.MovieCreateRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieFilterRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieUpdateRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieUpdateStatusRequest;
+import com.cgv.catalogservice.dto.request.movie.MovieUpdateShowingStatusRequest;
 import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.catalogservice.entity.Movie;
 import com.cgv.catalogservice.exception.ResourceConflictException;
@@ -39,10 +40,11 @@ public class MovieServiceImpl implements MovieService {
     MovieRepository movieRepository;
     MovieMapper movieMapper;
     MovieSearchRepository movieSearchRepository;
+    com.cgv.catalogservice.service.CatalogRealtimeService catalogRealtimeService;
 
     @Override
     @Transactional
-    @CacheEvict(value = "movies:detail", allEntries = true)
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieResponse createMovie(MovieCreateRequest request) {
 
         if (movieRepository.existsByTitleIgnoreCase(request.title().trim())) {
@@ -65,12 +67,23 @@ public class MovieServiceImpl implements MovieService {
                 .build();
         movieSearchRepository.save(doc);
 
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
+                    "movieId", savedMovie.getId().toString(),
+                    "title", savedMovie.getTitle(),
+                    "showingStatus", savedMovie.getShowingStatus().name(),
+                    "action", "CREATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
+        }
+
         return movieMapper.toResponse(savedMovie);
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = "movies:detail", key = "#movieId")
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieResponse updateMovie(UUID movieId, MovieUpdateRequest request) {
 
         if (movieRepository.existsByTitleIgnoreCaseAndIdNot(request.title().trim(), movieId)) {
@@ -85,12 +98,23 @@ public class MovieServiceImpl implements MovieService {
 
         movieRepository.saveAndFlush(movie);
 
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
+                    "movieId", movieId.toString(),
+                    "title", movie.getTitle(),
+                    "showingStatus", movie.getShowingStatus().name(),
+                    "action", "UPDATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
+        }
+
         return movieMapper.toResponse(movie);
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = "movies:detail", key = "#movieId")
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieResponse updateMovieStatus(UUID movieId, MovieUpdateStatusRequest request) {
 
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
@@ -98,6 +122,37 @@ public class MovieServiceImpl implements MovieService {
         movie.setStatus(request.status());
 
         movieRepository.saveAndFlush(movie);
+
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
+                    "movieId", movieId.toString(),
+                    "title", movie.getTitle(),
+                    "status", movie.getStatus().name()
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
+        }
+
+        return movieMapper.toResponse(movie);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
+    public MovieResponse updateMovieShowingStatus(UUID movieId, MovieUpdateShowingStatusRequest request) {
+        Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
+        movie.setShowingStatus(request.showingStatus());
+        movieRepository.saveAndFlush(movie);
+
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
+                    "movieId", movieId.toString(),
+                    "title", movie.getTitle(),
+                    "showingStatus", movie.getShowingStatus().name()
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
+        }
 
         return movieMapper.toResponse(movie);
     }
@@ -164,6 +219,40 @@ public class MovieServiceImpl implements MovieService {
                 .pageSize(moviePage.getSize())
                 .totalPages(moviePage.getTotalPages())
                 .totalElements(moviePage.getTotalElements())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @Cacheable(value = "movies:now-showing", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
+    public PageResponse<MovieResponse> getNowShowingMovies(Pageable pageable) {
+        Specification<Movie> spec = Specification.where(MovieSpecification.hasStatus(com.cgv.catalogservice.enums.MovieStatus.ACTIVE))
+                .and(MovieSpecification.hasShowingStatus(com.cgv.catalogservice.enums.ShowingStatus.NOW_SHOWING));
+        Page<Movie> page = movieRepository.findAll(spec, pageable);
+        List<MovieResponse> list = movieMapper.toResponseList(page.getContent());
+        return PageResponse.<MovieResponse>builder()
+                .data(list)
+                .pageNumber(page.getNumber() + 1)
+                .pageSize(page.getSize())
+                .totalPages(page.getTotalPages())
+                .totalElements(page.getTotalElements())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    @Cacheable(value = "movies:coming-soon", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
+    public PageResponse<MovieResponse> getComingSoonMovies(Pageable pageable) {
+        Specification<Movie> spec = Specification.where(MovieSpecification.hasStatus(com.cgv.catalogservice.enums.MovieStatus.ACTIVE))
+                .and(MovieSpecification.hasShowingStatus(com.cgv.catalogservice.enums.ShowingStatus.COMING_SOON));
+        Page<Movie> page = movieRepository.findAll(spec, pageable);
+        List<MovieResponse> list = movieMapper.toResponseList(page.getContent());
+        return PageResponse.<MovieResponse>builder()
+                .data(list)
+                .pageNumber(page.getNumber() + 1)
+                .pageSize(page.getSize())
+                .totalPages(page.getTotalPages())
+                .totalElements(page.getTotalElements())
                 .build();
     }
 

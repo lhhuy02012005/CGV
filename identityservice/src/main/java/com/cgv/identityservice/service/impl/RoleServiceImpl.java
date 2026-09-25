@@ -16,7 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -55,6 +56,7 @@ public class RoleServiceImpl implements RoleService {
 
     @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
+    @CacheEvict(value = "roles:all", allEntries = true)
     public void createRole(RoleRepresentation request) {
         try {
             String accessToken = getAdminAccessToken();
@@ -80,9 +82,9 @@ public class RoleServiceImpl implements RoleService {
 
     @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
+    @Cacheable(value = "roles:all")
     public List<RoleRepresentation> getAllRoles() {
         try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             String token = getAdminAccessToken();
             return keycloakClient.getAllRoles(token, realm);
         } catch (Exception e) {
@@ -93,6 +95,7 @@ public class RoleServiceImpl implements RoleService {
 
     @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
+    @CacheEvict(value = "roles:all", allEntries = true)
     public void updateRole(String roleName, RoleRepresentation request) {
         try {
             String token = getAdminAccessToken();
@@ -105,6 +108,7 @@ public class RoleServiceImpl implements RoleService {
 
     @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
+    @CacheEvict(value = "roles:all", allEntries = true)
     public void deleteRole(String roleName) {
         try {
             String accessToken = getAdminAccessToken();

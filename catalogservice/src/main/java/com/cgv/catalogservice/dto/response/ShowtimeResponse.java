@@ -7,6 +7,7 @@ import com.cgv.catalogservice.enums.ViewingMode;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record ShowtimeResponse(
@@ -14,7 +15,7 @@ public record ShowtimeResponse(
         UUID movieId,
         String movieTitle,
         RoomResponse roomResponse,
-        Instant showDate,
+        LocalDate showDate,
         Instant startTime,
         Instant endTime,
         String language,

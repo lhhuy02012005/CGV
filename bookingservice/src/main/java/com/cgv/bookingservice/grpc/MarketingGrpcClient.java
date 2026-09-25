@@ -37,4 +37,18 @@ public class MarketingGrpcClient {
                     .build();
         }
     }
+
+    public void releasePromotion(UUID promotionId, String userId) {
+        if (promotionId == null || userId == null) return;
+        try {
+            com.cgv.commondto.grpc.PromotionReleaseRequest request = com.cgv.commondto.grpc.PromotionReleaseRequest.newBuilder()
+                    .setPromotionId(promotionId.toString())
+                    .setUserId(userId)
+                    .build();
+            promotionGrpcServiceBlockingStub.releasePromotion(request);
+            log.info("Đã yêu cầu release voucher {} cho user {}", promotionId, userId);
+        } catch (Exception e) {
+            log.warn("Không thể release voucher {} qua gRPC: {}", promotionId, e.getMessage());
+        }
+    }
 }

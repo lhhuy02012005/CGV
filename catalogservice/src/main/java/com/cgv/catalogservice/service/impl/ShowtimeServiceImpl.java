@@ -52,6 +52,7 @@ public class ShowtimeServiceImpl implements ShowtimeService {
     CinemaRepository cinemaRepository;
 
     ShowtimeMapper showtimeMapper;
+    com.cgv.catalogservice.service.CatalogRealtimeService catalogRealtimeService;
 
     @Override
     @Caching(
@@ -62,6 +63,10 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     ),
                     @CacheEvict(
                             value = "showtimesByCinemaAndDate",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "cinemaSchedule",
                             allEntries = true
                     )
             }
@@ -114,6 +119,9 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         Showtime showtime =
                 showtimeMapper.toEntity(request);
+        if (showtime.getStatus() == null) {
+            showtime.setStatus(ShowtimeStatus.SCHEDULED);
+        }
 
         showtime.setMovie(movie);
         showtime.setRoom(room);
@@ -133,6 +141,17 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         Showtime savedShowtime =
                 showtimeRepository.save(showtime);
 
+        try {
+            catalogRealtimeService.broadcast("SHOWTIME_CHANGED", java.util.Map.of(
+                    "showtimeId", savedShowtime.getId().toString(),
+                    "movieId", savedShowtime.getMovie() != null ? savedShowtime.getMovie().getId().toString() : "",
+                    "roomId", savedShowtime.getRoom() != null ? savedShowtime.getRoom().getId().toString() : "",
+                    "action", "CREATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast SHOWTIME_CHANGED on create: {}", e.getMessage());
+        }
+
         return showtimeMapper.toResponse(savedShowtime);
     }
 
@@ -145,6 +164,10 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     ),
                     @CacheEvict(
                             value = "showtimesByCinemaAndDate",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "cinemaSchedule",
                             allEntries = true
                     )
             }
@@ -208,6 +231,22 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                         || request.startTime() != null
                         || request.endTime() != null;
 
+        long activeBookings = showtimeRepository.countActiveBookingsByShowtimeId(showtimeId);
+        if (activeBookings > 0) {
+            if (request.movieId() != null && !request.movieId().equals(showtime.getMovie().getId())) {
+                throw new IllegalStateException("Không thể đổi phim cho suất chiếu này vì đã có " + activeBookings + " vé đang được đặt/đã xuất bill!");
+            }
+            if (request.roomId() != null && !request.roomId().equals(showtime.getRoom().getId())) {
+                throw new IllegalStateException("Không thể đổi phòng chiếu vì đã có " + activeBookings + " vé đang được đặt/đã xuất bill (sơ đồ ghế của khán giả đã chốt)! Vui lòng hủy suất (CANCELLED) để hoàn vé theo quy trình.");
+            }
+            boolean dateChanged = request.showDate() != null && !request.showDate().equals(showtime.getShowDate());
+            boolean startChanged = request.startTime() != null && !request.startTime().equals(showtime.getStartTime());
+            boolean endChanged = request.endTime() != null && !request.endTime().equals(showtime.getEndTime());
+            if (dateChanged || startChanged || endChanged) {
+                throw new IllegalStateException("Không thể đổi ngày/giờ chiếu vì đã có " + activeBookings + " vé đang được đặt/đã xuất bill. Vui lòng chuyển trạng thái suất sang CANCELLED để thực hiện quy trình hủy suất và hoàn tiền tự động!");
+            }
+        }
+
         boolean scheduleChanged =
                 timeChanged || roomChanged;
 
@@ -266,6 +305,16 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
         showtimeRepository.saveAndFlush(showtime);
 
+        try {
+            catalogRealtimeService.broadcast("SHOWTIME_CHANGED", java.util.Map.of(
+                    "showtimeId", showtimeId.toString(),
+                    "movieId", showtime.getMovie() != null ? showtime.getMovie().getId().toString() : "",
+                    "action", "UPDATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast SHOWTIME_CHANGED on update: {}", e.getMessage());
+        }
+
         return showtimeMapper.toResponse(showtime);
     }
 
@@ -278,6 +327,10 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                     ),
                     @CacheEvict(
                             value = "showtimesByCinemaAndDate",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "cinemaSchedule",
                             allEntries = true
                     )
             }
@@ -299,8 +352,11 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                                 )
                         );
 
-        if (request.status() != ShowtimeStatus.CANCELLED) {
-
+        if (request.status() == ShowtimeStatus.CANCELLED) {
+            if (showtime.getEndTime() != null && showtime.getEndTime().isBefore(Instant.now())) {
+                throw new IllegalStateException("Không thể hủy suất chiếu đã kết thúc trong quá khứ!");
+            }
+        } else {
             if (hasOverlappingShowtime(
                     showtime.getRoom().getId(),
                     showtime.getShowDate(),
@@ -317,6 +373,17 @@ public class ShowtimeServiceImpl implements ShowtimeService {
         showtime.setStatus(request.status());
 
         showtimeRepository.saveAndFlush(showtime);
+
+        try {
+            catalogRealtimeService.broadcast("SHOWTIME_CHANGED", java.util.Map.of(
+                    "showtimeId", showtimeId.toString(),
+                    "movieId", showtime.getMovie() != null ? showtime.getMovie().getId().toString() : "",
+                    "status", request.status() != null ? request.status().name() : "",
+                    "action", "STATUS_UPDATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast SHOWTIME_CHANGED on status update: {}", e.getMessage());
+        }
 
         return showtimeMapper.toResponse(showtime);
     }
@@ -613,14 +680,12 @@ public class ShowtimeServiceImpl implements ShowtimeService {
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
         LocalDate targetDate = (date != null) ? date : LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
-        Instant startOfDay = targetDate.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
-        Instant endOfDay = targetDate.plusDays(1).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).minusNanos(1).toInstant();
 
         List<Showtime> showtimes = showtimeRepository.findActiveShowtimesByMovieAndDateRange(
                 movieId,
                 ShowtimeStatus.SCHEDULED,
-                startOfDay,
-                endOfDay
+                targetDate,
+                targetDate
         );
 
         // Group showtimes by Cinema
@@ -706,19 +771,18 @@ public class ShowtimeServiceImpl implements ShowtimeService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "cinemaSchedule", key = "#cinemaId + ':' + (#date != null ? #date.toString() : 'today')")
     public CinemaScheduleResponse getCinemaSchedule(UUID cinemaId, LocalDate date) {
         Cinema cinema = cinemaRepository.findById(cinemaId)
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy cinema với id: " + cinemaId));
 
         LocalDate targetDate = (date != null) ? date : LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
-        Instant startOfDay = targetDate.atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).toInstant();
-        Instant endOfDay = targetDate.plusDays(1).atStartOfDay(ZoneId.of("Asia/Ho_Chi_Minh")).minusNanos(1).toInstant();
 
         List<Showtime> showtimes = showtimeRepository.findActiveShowtimesByCinemaAndDateRange(
                 cinemaId,
                 ShowtimeStatus.SCHEDULED,
-                startOfDay,
-                endOfDay
+                targetDate,
+                targetDate
         );
 
         // Group showtimes by Movie

@@ -14,6 +14,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,8 @@ public interface ShowtimeRepository
     @EntityGraph(attributePaths = {"movie", "room", "room.cinema", "room.cinema.region"})
     Page<Showtime> findAll(Specification<Showtime> spec, Pageable pageable);
 
+    boolean existsByRoomId(UUID roomId);
+
     boolean existsByRoomIdAndStatusAndEndTimeAfter(
             UUID roomId,
             ShowtimeStatus status,
@@ -41,6 +44,14 @@ public interface ShowtimeRepository
             ShowtimeStatus status,
             Instant endTime
     );
+
+    @Query(value = """
+        SELECT COUNT(b.id) 
+        FROM bookings b 
+        WHERE b.showtime_id = :showtimeId 
+          AND b.status IN ('PAYMENT_PENDING', 'CONFIRMED', 'USED')
+    """, nativeQuery = true)
+    long countActiveBookingsByShowtimeId(@Param("showtimeId") UUID showtimeId);
 
     @Query("""
         SELECT s FROM Showtime s
@@ -60,15 +71,17 @@ public interface ShowtimeRepository
         JOIN FETCH s.movie m
         WHERE s.movie.id = :movieId
           AND s.status = :status
-          AND s.showDate >= :fromTime
-          AND s.showDate <= :toTime
+          AND r.status = com.cgv.catalogservice.enums.RoomStatus.ACTIVE
+          AND c.status = com.cgv.catalogservice.enums.CinemaStatus.ACTIVE
+          AND s.showDate >= :fromDate
+          AND s.showDate <= :toDate
         ORDER BY s.startTime ASC
     """)
     List<Showtime> findActiveShowtimesByMovieAndDateRange(
             @Param("movieId") UUID movieId,
             @Param("status") ShowtimeStatus status,
-            @Param("fromTime") Instant fromTime,
-            @Param("toTime") Instant toTime
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate
     );
 
     @Query("""
@@ -79,15 +92,17 @@ public interface ShowtimeRepository
         JOIN FETCH s.movie m
         WHERE c.id = :cinemaId
           AND s.status = :status
-          AND s.showDate >= :fromTime
-          AND s.showDate <= :toTime
+          AND r.status = com.cgv.catalogservice.enums.RoomStatus.ACTIVE
+          AND c.status = com.cgv.catalogservice.enums.CinemaStatus.ACTIVE
+          AND s.showDate >= :fromDate
+          AND s.showDate <= :toDate
         ORDER BY s.startTime ASC
     """)
     List<Showtime> findActiveShowtimesByCinemaAndDateRange(
             @Param("cinemaId") UUID cinemaId,
             @Param("status") ShowtimeStatus status,
-            @Param("fromTime") Instant fromTime,
-            @Param("toTime") Instant toTime
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate
     );
 
     @Query("""
@@ -97,6 +112,8 @@ public interface ShowtimeRepository
         JOIN c.region reg
         WHERE s.movie.id = :movieId
           AND s.status = :status
+          AND r.status = com.cgv.catalogservice.enums.RoomStatus.ACTIVE
+          AND c.status = com.cgv.catalogservice.enums.CinemaStatus.ACTIVE
         ORDER BY reg.name ASC
     """)
     List<Region> findDistinctRegionsByMovie(

@@ -142,4 +142,25 @@ public class RoomController {
                 .message("Danh sách phòng chiếu theo rạp")
                 .build();
     }
+
+    @Operation(
+            summary = "Xóa phòng chiếu",
+            description = "Xóa phòng chiếu theo ID."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Xóa phòng chiếu thành công"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy phòng chiếu"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Phòng chiếu đang có suất chiếu hoặc không thể xóa")
+    })
+    @DeleteMapping("/{roomId}")
+    public ApiResponse<Void> delete(
+            @Parameter(description = "ID của phòng chiếu", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID roomId
+    ) {
+        roomService.deleteRoom(roomId);
+
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Xóa phòng chiếu thành công")
+                .build();
+    }
 }

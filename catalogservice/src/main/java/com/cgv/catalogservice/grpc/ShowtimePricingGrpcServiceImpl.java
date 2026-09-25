@@ -39,6 +39,21 @@ public class ShowtimePricingGrpcServiceImpl extends ShowtimePricingGrpcServiceGr
             Room room = showtime.getRoom();
             Cinema cinema = room.getCinema();
 
+            if (room.getStatus() == com.cgv.catalogservice.enums.RoomStatus.MAINTENANCE) {
+                log.warn("gRPC Reject: Phòng chiếu {} đang trong trạng thái bảo trì", room.getName());
+                responseObserver.onError(io.grpc.Status.FAILED_PRECONDITION
+                        .withDescription("Phòng chiếu '" + room.getName() + "' hiện đang bảo trì kỹ thuật, tạm ngưng nhận đặt vé!")
+                        .asRuntimeException());
+                return;
+            }
+            if (cinema.getStatus() != com.cgv.catalogservice.enums.CinemaStatus.ACTIVE) {
+                log.warn("gRPC Reject: Rạp chiếu {} đang tạm ngưng hoạt động", cinema.getName());
+                responseObserver.onError(io.grpc.Status.FAILED_PRECONDITION
+                        .withDescription("Rạp chiếu '" + cinema.getName() + "' hiện đang tạm ngưng hoạt động!")
+                        .asRuntimeException());
+                return;
+            }
+
             List<Seat> seats = seatRepository.findByRoomIdWithSeatType(room.getId());
 
             List<SeatPricingInfo> seatProtos = seats.stream().map(seat ->

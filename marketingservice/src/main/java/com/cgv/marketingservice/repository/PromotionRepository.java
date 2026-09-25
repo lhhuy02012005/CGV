@@ -43,4 +43,14 @@ public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
             @Param("eligibleTiers") Collection<MembershipTier> eligibleTiers,
             @Param("totalAmount") BigDecimal totalAmount
     );
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+        UPDATE Promotion p 
+        SET p.usageLimit = p.usageLimit - 1, 
+            p.isActive = CASE WHEN (p.usageLimit - 1) <= 0 THEN false ELSE p.isActive END,
+            p.version = p.version + 1 
+        WHERE p.id = :id AND p.usageLimit > 0
+    """)
+    int decrementUsageLimit(@Param("id") UUID id);
 }

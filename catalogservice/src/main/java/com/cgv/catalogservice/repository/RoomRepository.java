@@ -22,6 +22,9 @@ public interface RoomRepository
     Page<Room> findAllByCinemaId(UUID cinemaId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"cinema", "cinema.region"})
+    List<Room> findByCinemaId(UUID cinemaId);
+
+    @EntityGraph(attributePaths = {"cinema", "cinema.region"})
     List<Room> findByCinemaIdAndStatus(
             UUID cinemaId,
             RoomStatus status

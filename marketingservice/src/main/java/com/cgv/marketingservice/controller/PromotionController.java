@@ -69,7 +69,7 @@ public class PromotionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('promotion:manage')")
+    @PreAuthorize("hasAnyAuthority('promotion:manage', 'SUPER_ADMIN')")
     public ApiResponse<PageResponse<PromotionResponse>> getAll(
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
@@ -77,6 +77,30 @@ public class PromotionController {
                 .status(HttpStatus.OK.value())
                 .message("Danh sách toàn bộ khuyến mãi")
                 .data(promotionService.getAllPromotions(pageable))
+                .build();
+    }
+
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('promotion:manage', 'SUPER_ADMIN')")
+    public ApiResponse<PromotionResponse> update(
+            @PathVariable("id") UUID id,
+            @RequestBody @Valid com.cgv.marketingservice.dto.request.PromotionUpdateRequest request
+    ) {
+        PromotionResponse response = promotionService.updatePromotion(id, request);
+        return ApiResponse.<PromotionResponse>builder()
+                .status(HttpStatus.OK.value())
+                .message("Cập nhật khuyến mãi thành công")
+                .data(response)
+                .build();
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('promotion:manage', 'SUPER_ADMIN')")
+    public ApiResponse<Void> delete(@PathVariable("id") UUID id) {
+        promotionService.deletePromotion(id);
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Xóa mã khuyến mãi thành công")
                 .build();
     }
 }

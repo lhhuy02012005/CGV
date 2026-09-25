@@ -22,6 +22,7 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE , makeFinal = true)
 public class BookingConfirmedConsumer {
     PromotionUsageRepository promotionUsageRepository;
+    com.cgv.marketingservice.repository.PromotionRepository promotionRepository;
 
     @KafkaListener(topics = "booking.confirmed" , groupId = "${spring.kafka.consumer.group-id}")
     @Transactional
@@ -42,8 +43,11 @@ public class BookingConfirmedConsumer {
                         .usedAt(event.getConfirmedAt())
                         .build();
                 promotionUsageRepository.save(usage);
-                log.info("Thành công: Đã lưu vết sử dụng Voucher {} cho User {} với số tiền giảm {}",
-                        event.getPromotionId(), event.getUserId(), event.getDiscountAmount());
+
+                // Cập nhật Optimistic Locking decrement số lượng trong database
+                int updatedRows = promotionRepository.decrementUsageLimit(event.getPromotionId());
+                log.info("Thành công: Đã lưu vết sử dụng Voucher {} cho User {} với số tiền giảm {}. DB usage_limit updated: {}",
+                        event.getPromotionId(), event.getUserId(), event.getDiscountAmount(), updatedRows > 0);
             }else {
                 log.info("Đơn vé {} không sử dụng mã khuyến mãi nào, bỏ qua.", event.getBookingId());
             }

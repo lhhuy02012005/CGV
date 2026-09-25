@@ -4,7 +4,6 @@ import com.cgv.bookingservice.enums.BookingStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.FieldDefaults;
-import org.hibernate.validator.cfg.defs.UUIDDef;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -13,12 +12,14 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "bookings" , indexes = {
-        @Index(name = "idx_cgv_booking_user_id" , columnList = "user_id"),
+@Table(name = "bookings", indexes = {
+        @Index(name = "idx_cgv_booking_user_id", columnList = "user_id"),
         @Index(name = "idx_cgv_booking_showtime_id", columnList = "showtime_id"),
-        @Index(name = "idx_cgv_booking_status" , columnList = "status"),
+        @Index(name = "idx_cgv_booking_status", columnList = "status"),
         @Index(name = "idx_cgv_booking_payment_deadline", columnList = "payment_deadline"),
-        @Index(name = "idx_cgv_booking_created_at", columnList = "created_at")
+        @Index(name = "idx_cgv_booking_created_at", columnList = "created_at"),
+        @Index(name = "idx_cgv_booking_guest_email", columnList = "guest_email"),
+        @Index(name = "idx_cgv_booking_guest_phone", columnList = "guest_phone")
 })
 @Getter
 @Setter
@@ -26,13 +27,22 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
-public class Booking extends BaseEntity{
+public class Booking extends BaseEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     UUID id;
 
-    @Column(nullable = false)
+    @Column
     String userId;
+
+    @Column(name = "guest_name", length = 100)
+    String guestName;
+
+    @Column(name = "guest_email", length = 100)
+    String guestEmail;
+
+    @Column(name = "guest_phone", length = 20)
+    String guestPhone;
 
     @Column(name = "showtime_id", nullable = false)
     UUID showtimeId;
@@ -46,7 +56,6 @@ public class Booking extends BaseEntity{
     @Builder.Default
     @Column
     BigDecimal discountAmount = BigDecimal.ZERO;
-
 
     @Column(nullable = false)
     BigDecimal finalAmount;

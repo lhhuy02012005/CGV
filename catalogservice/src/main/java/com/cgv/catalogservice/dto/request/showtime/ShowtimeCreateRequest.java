@@ -3,6 +3,7 @@ package com.cgv.catalogservice.dto.request.showtime;
 import com.cgv.catalogservice.enums.Format;
 import com.cgv.catalogservice.enums.ShowtimeStatus;
 import com.cgv.catalogservice.enums.ViewingMode;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
@@ -11,6 +12,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record ShowtimeCreateRequest(
 
         @NotNull(message = "Movie ID không được để trống")

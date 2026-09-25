@@ -162,6 +162,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Email đã tồn tại trong hệ thống!");
         }
+        if (request.getPhone() != null && !request.getPhone().isBlank() && userRepository.existsByPhone(request.getPhone())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Số điện thoại đã được đăng ký trong hệ thống!");
+        }
 
         String otp = generateOTP();
         redisTemplate.opsForValue().set(OTP_KEY_PREFIX + request.getEmail(), otp, Duration.ofMinutes(5));
@@ -188,7 +191,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Mã OTP không chính xác!");
         }
 
-        UserResponse response = registerOnKeycloakAndLocal(request.getEmail(), request.getPassword(), request.getFullName());
+        UserResponse response = registerOnKeycloakAndLocal(request.getEmail(), request.getPassword(), request.getFullName(), request.getPhone());
         redisTemplate.delete(redisKey);
         return response;
     }
@@ -198,7 +201,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         return syncUserToLocalDatabase(accessToken, customFullName);
     }
 
-    private UserResponse registerOnKeycloakAndLocal(String email, String password, String fullName) {
+    private UserResponse registerOnKeycloakAndLocal(String email, String password, String fullName, String phone) {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Tài khoản đã tồn tại !");
         }
@@ -235,7 +238,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             var response = keycloakClient.createUser(adminToken, realm, creationParam);
             String userId = extractUserIdKeyCloak(response);
 
-            User newUser = saveOrGetUser(userId, email, trimmedName);
+            User newUser = saveOrGetUser(userId, email, trimmedName, phone);
             return userMapper.toUserResponse(newUser);
 
         } catch (Exception e) {
@@ -254,39 +257,45 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Token không hợp lệ!");
         }
 
-        User user = saveOrGetUser(sub, email, customFullName);
+        User user = saveOrGetUser(sub, email, customFullName, null);
         String tierCode = (user.getMembershipTier() != null) ? user.getMembershipTier().getCode() : "MEMBER";
         redisTemplate.opsForValue().set(USER_TIER_KEY_PREFIX + user.getId() , tierCode , Duration.ofHours(USER_TIER_KEY_DURATION));
         return userMapper.toUserResponse(user);
     }
 
-    private User saveOrGetUser(String id, String email, String fullName) {
+    private User saveOrGetUser(String id, String email, String fullName, String phone) {
         String normalizedName = (fullName != null && !fullName.trim().isEmpty())
                 ? removeVietnameseDiacritics(fullName.trim())
                 : null;
 
         return userRepository.findByEmail(email)
                 .map(existingUser -> {
+                    boolean changed = false;
                     if (normalizedName != null && (existingUser.getFullName() == null || existingUser.getFullName().isEmpty())) {
                         existingUser.setFullName(normalizedName);
-                        return userRepository.save(existingUser);
+                        changed = true;
                     }
-                    return existingUser;
+                    if (phone != null && !phone.isBlank() && existingUser.getPhone() == null) {
+                        existingUser.setPhone(phone);
+                        changed = true;
+                    }
+                    return changed ? userRepository.save(existingUser) : existingUser;
                 })
                 .orElseGet(() -> {
                     log.info("not exist email: {}", email);
                     MemberShipTier defaultTier = memberShipTierRepository.findById("MEMBER")
                             .orElseGet(() -> memberShipTierRepository.save(MemberShipTier.builder()
-                                    .code("MEMBER")
-                                    .name("Member")
-                                    .minSpend(BigDecimal.ZERO)
-                                    .description("Hạng thành viên tiêu chuẩn")
-                                    .build()));
+                                     .code("MEMBER")
+                                     .name("Member")
+                                     .minSpend(BigDecimal.ZERO)
+                                     .description("Hạng thành viên tiêu chuẩn")
+                                     .build()));
 
                     User newUser = User.builder()
                             .id(id)
                             .email(email)
                             .fullName(normalizedName)
+                            .phone(phone)
                             .membershipTier(defaultTier)
                             .total_spend_ytd(BigDecimal.ZERO)
                             .build();
