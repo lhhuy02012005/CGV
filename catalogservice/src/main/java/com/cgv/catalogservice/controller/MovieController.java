@@ -19,6 +19,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,6 +45,7 @@ public class MovieController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyAuthority('movie:manage', 'CONTENT_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<MovieResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu tạo phim", required = true) @RequestBody @Valid MovieCreateRequest request
     ) {
@@ -68,6 +70,7 @@ public class MovieController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{movieId}")
+    @PreAuthorize("hasAnyAuthority('movie:manage', 'CONTENT_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<MovieResponse> update(
             @Parameter(description = "ID của phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID movieId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật phim", required = true) @RequestBody @Valid MovieUpdateRequest request
@@ -93,6 +96,7 @@ public class MovieController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{movieId}/status")
+    @PreAuthorize("hasAnyAuthority('movie:manage', 'CONTENT_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<MovieResponse> updateStatus(
             @Parameter(description = "ID của phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID movieId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật trạng thái phim", required = true) @RequestBody @Valid MovieUpdateStatusRequest request
@@ -118,6 +122,7 @@ public class MovieController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{movieId}/showing-status")
+    @PreAuthorize("hasAnyAuthority('movie:manage', 'CONTENT_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<MovieResponse> updateShowingStatus(
             @Parameter(description = "ID của phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID movieId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật trạng thái chiếu của phim", required = true) @RequestBody @Valid MovieUpdateShowingStatusRequest request

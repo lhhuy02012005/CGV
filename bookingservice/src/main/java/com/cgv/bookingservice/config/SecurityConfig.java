@@ -10,6 +10,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 
+import org.springframework.http.HttpMethod;
+
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -26,9 +28,12 @@ public class SecurityConfig {
             "/api/v1/ws/**",
             "/bookings/seat-locks",
             "/bookings/seat-locks/**",
+            "/bookings",
+            "/bookings/realtime/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
-            "/swagger-ui.html"
+            "/swagger-ui.html",
+            "/actuator/**"
     };
 
     @Bean

@@ -9,11 +9,15 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface MovieRepository
         extends JpaRepository<Movie, UUID>,
         JpaSpecificationExecutor<Movie> {
+
+    @Query("SELECT DISTINCT m FROM Movie m LEFT JOIN FETCH m.casts WHERE m.id = :movieId")
+    Optional<Movie> findByIdWithCasts(@Param("movieId") UUID movieId);
 
     boolean existsByTitleIgnoreCase(String title);
 

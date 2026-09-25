@@ -47,6 +47,9 @@ services:
       KC_HTTP_ENABLED: true
 #      # Tắt strict hostname check → truy cập được qua localhost, 127.0.0.1
       KC_HOSTNAME_STRICT: false
+      KC_HOSTNAME_URL: http://localhost:8180
+      KC_HOSTNAME_ADMIN_URL: http://localhost:8180
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID}
@@ -315,13 +318,13 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       DB_URL: jdbc:postgresql://postgres:5432/cgv
       DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
       KEYCLOAK_URL: http://keycloak:8080
       CLIENT_ID: ${CLIENT_ID:-CGV_App}
-      CLIENT_SERECT: ${CLIENT_SERECT}
+      CLIENT_SERECT: ${CLIENT_SERECT:-2doTmSyizJFxCmngTmi0XrJQ6ksr4uV5}
       REALM: ${REALM:-cgv-realm}
       BREVO_API_KEY: ${BREVO_API_KEY:-}
       EMAIL: ${EMAIL:-}
@@ -352,7 +355,7 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       DB_URL: jdbc:postgresql://postgres:5432/cgv
       DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
@@ -383,11 +386,11 @@ services:
       SPRING_PROFILES_ACTIVE: dev
       DB_URL: jdbc:postgresql://postgres:5432/cgv
       DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD}
-      AWS_REGION: ${AWS_REGION}
-      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-cgv-media-bucket}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-mock-access-key}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-mock-secret-key}
       KEYCLOAK_URL: http://keycloak:8080
       REALM: ${REALM:-cgv-realm}
     #        REDIS_HOST: redis
@@ -407,6 +410,147 @@ services:
       cgv-net:
         aliases:
           - media-service
+    restart: unless-stopped
+
+  catalog-service:
+    build:
+      context: ./catalogservice
+      dockerfile: Dockerfile
+    container_name: cgv-catalog-service
+    ports:
+      - "8083:8083"
+      - "9090:9090"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/cgv
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SPRING_ELASTICSEARCH_URIS: elasticsearch:9200
+      KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+      KEYCLOAK_URL: http://keycloak:8080
+      REALM: ${REALM:-cgv-realm}
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+    networks:
+      cgv-net:
+        aliases:
+          - catalog-service
+    restart: unless-stopped
+
+  booking-service:
+    build:
+      context: ./bookingservice
+      dockerfile: Dockerfile
+    container_name: cgv-booking-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/cgv
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+      KEYCLOAK_URL: http://keycloak:8080
+      REALM: ${REALM:-cgv-realm}
+      CATALOG_GRPC_HOST: catalog-service
+      CATALOG_GRPC_PORT: 9090
+      MARKETING_GRPC_HOST: marketing-service
+      MARKETING_GRPC_PORT: 9099
+      GRPC_CLIENT_CATALOG_SERVICE_ADDRESS: static://catalog-service:9090
+      GRPC_CLIENT_MARKETING_SERVICE_ADDRESS: static://marketing-service:9099
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+    networks:
+      cgv-net:
+        aliases:
+          - booking-service
+    restart: unless-stopped
+
+  payment-service:
+    build:
+      context: ./paymentservice
+      dockerfile: Dockerfile
+    container_name: cgv-payment-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/cgv
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+      KEYCLOAK_URL: http://keycloak:8080
+      REALM: ${REALM:-cgv-realm}
+      VNPAY_TMNCODE: ${VNPAY_TMNCODE:-CGVTEST1}
+      VNPAY_SECRECTKEY: ${VNPAY_SECRECTKEY:-RAI8NW2N2VY4ENY5ALOMCH4KX9Z5S54M}
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-http://localhost:5173/payment/vnpay-return}
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+    networks:
+      cgv-net:
+        aliases:
+          - payment-service
+    restart: unless-stopped
+
+  marketing-service:
+    build:
+      context: ./marketingservice
+      dockerfile: Dockerfile
+    container_name: cgv-marketing-service
+    ports:
+      - "8084:8084"
+      - "9099:9099"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/cgv
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      MARKETING_DB_URL: jdbc:postgresql://postgres:5432/cgv
+      MARKETING_DB_USERNAME: ${DB_USERNAME:-postgres}
+      MARKETING_DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: cgv-kafka-1:19092,cgv-kafka-2:19092,cgv-kafka-3:19092
+      KEYCLOAK_URL: http://keycloak:8080
+      REALM: ${REALM:-cgv-realm}
+      KEYCLOAK_ISSUER: http://keycloak:8080/realms/cgv-realm
+      KEYCLOAK_JWKS: http://keycloak:8080/realms/cgv-realm/protocol/openid-connect/certs
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+    networks:
+      cgv-net:
+        aliases:
+          - marketing-service
     restart: unless-stopped
 
   elasticsearch:
@@ -434,3 +578,21 @@ services:
       - cgv-net
     depends_on:
       - elasticsearch
+
+  # ==============================================================================
+  # GRAFANA K6 - LOAD TESTING & CONCURRENCY BENCHMARK
+  # Chạy theo nhu cầu qua profile 'test', không tự bật khi compose up:
+  # docker compose -f docker-compose-dev.yml run --rm k6 run /k6/k6-load-test.js
+  # docker compose -f docker-compose-dev.yml run --rm -e VUS=200 k6 run /k6/k6-race-condition.js
+  # ==============================================================================
+  k6:
+    image: grafana/k6:latest
+    container_name: cgv-k6
+    profiles:
+      - test
+    networks:
+      - cgv-net
+    volumes:
+      - ./k6:/k6
+    environment:
+      - BASE_URL=http://kong:8000

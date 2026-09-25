@@ -28,6 +28,12 @@ spring:
     enabled: false
     baseline-on-migrate: true
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -99,7 +105,6 @@ spring:
       resourceserver:
         jwt:
           jwk-set-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}/protocol/openid-connect/certs
-          issuer-uri: ${KEYCLOAK_URL:http://localhost:8180}/realms/${REALM:cgv-realm}
 
 logging:
   level:
@@ -110,12 +115,24 @@ logging:
 grpc:
   client:
     catalog-service:
-      address: 'static://127.0.0.1:9090' # CatalogService gRPC server chạy ở port 9090
+      address: ${GRPC_CLIENT_CATALOG_SERVICE_ADDRESS:static://${CATALOG_GRPC_HOST:127.0.0.1}:${CATALOG_GRPC_PORT:9090}} # CatalogService gRPC server
       negotiation-type: plaintext
     marketing-service:
-      address: 'static://127.0.0.1:9099'
+      address: ${GRPC_CLIENT_MARKETING_SERVICE_ADDRESS:static://${MARKETING_GRPC_HOST:127.0.0.1}:${MARKETING_GRPC_PORT:9099}}
       negotiation-type: plaintext
 
 booking:
   seat-lock:
     cooldown-enabled: ${SEAT_LOCK_COOLDOWN_ENABLED:false} # Bật/tắt tính năng phạt khóa giữ ghế 15 phút (mặc định: false)
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+    tryItOutEnabled: true
+

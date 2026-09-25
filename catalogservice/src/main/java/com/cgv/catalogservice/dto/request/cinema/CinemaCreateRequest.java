@@ -1,10 +1,12 @@
 package com.cgv.catalogservice.dto.request.cinema;
 
 import com.cgv.catalogservice.enums.CinemaStatus;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record CinemaCreateRequest(
 
         @NotNull(message = "Khu vực không được để trống")

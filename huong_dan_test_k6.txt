@@ -1,0 +1,226 @@
+================================================================================
+HƯỚNG DẪN KIỂM THỬ HIỆU NĂNG TẢI CAO & TRANH CHẤP ĐỒNG THỜI BẰNG GRAFANA K6 (CGV)
+================================================================================
+Tài liệu hướng dẫn thực hành kiểm thử chuẩn hóa cho hệ thống CGV Microservices.
+Áp dụng: Kiến trúc Spring Boot, Kong API Gateway, Redis Distributed Lock, Kafka, PostgreSQL.
+
+--------------------------------------------------------------------------------
+MỤC LỤC
+--------------------------------------------------------------------------------
+1. TỔNG QUAN VỀ GRAFANA K6 & SO SÁNH VỚI GATLING / JMETER
+2. HƯỚNG DẪN CÀI ĐẶT K6 TRÊN MÁY TÍNH (MAC, WINDOWS, LINUX, DOCKER)
+3. CẤU TRÚC KỊCH BẢN KIỂM THỬ K6 TRONG DỰ ÁN
+   - Kịch bản 1: Kiểm thử tải đọc thông lượng cao (High-Throughput Read)
+   - Kịch bản 2: Kiểm thử tranh chấp đồng thời (Race Condition / Anti-Double Booking)
+4. HƯỚNG DẪN CHẠY TEST CHI TIẾT
+   - Chạy trực tiếp bằng CLI
+   - Chạy không cần cài đặt bằng Docker
+   - Tùy chỉnh tham số (VUs, thời gian, Host API) qua biến môi trường
+5. CÁCH ĐỌC & PHÂN TÍCH BÁO CÁO K6 (CONSOLE & GIAO DIỆN HTML)
+6. QUY TRÌNH KIỂM CHỨNG TÍNH TOÀN VẸN DỮ LIỆU (REDIS & POSTGRESQL)
+7. TỐI ƯU HỆ ĐIỀU HÀNH KHI TEST TẢI CỰC ĐẠI (ULIMIT)
+
+================================================================================
+1. TỔNG QUAN VỀ GRAFANA K6 & SO SÁNH VỚI GATLING / JMETER
+================================================================================
+
+1.1. k6 là gì?
+k6 (Grafana k6) là công cụ kiểm thử tải (Load / Stress / Spike / Concurrency Testing)
+thế hệ mới. Kịch bản test được viết bằng ngôn ngữ JavaScript (ES6), nhưng phần lõi
+thực thi được viết bằng ngôn ngữ Go (Golang) siêu nhanh và tối ưu hóa bộ nhớ.
+
+1.2. So sánh k6 với JMeter và Gatling:
++-------------------+--------------------+--------------------+--------------------+
+| Tiêu chí          | Apache JMeter      | Gatling            | Grafana k6         |
++-------------------+--------------------+--------------------+--------------------+
+| Ngôn ngữ kịch bản | XML / GUI Kéo thả  | Java / Scala       | JavaScript (ES6)   |
+| Engine thực thi   | Java Threads (JVM) | Akka / Netty (JVM) | Go Coroutines (Go) |
+| Cài đặt phụ thuộc | Cần cài JDK + GUI  | Cần cài JDK/Maven  | 1 File nhị phân    |
+| Tiêu thụ RAM      | Rất lớn (>4GB-8GB) | Vừa phải (~2GB)    | Siêu nhẹ (<500MB)  |
+| Hỗ trợ CI/CD      | Khó tự động hóa    | Tốt                | Cực tốt, chuẩn Dev |
+| Ngưỡng (Threshold)| Hạn chế            | Tốt                | Tích hợp sẵn gốc   |
++-------------------+--------------------+--------------------+--------------------+
+
+* Vì sao chọn k6 cho CGV Microservices?
+- Không cần cài đặt máy ảo Java (JVM) cồng kềnh.
+- Cú pháp viết test bằng JavaScript trực quan, quen thuộc với mọi lập trình viên Frontend & Backend.
+- Tốc độ khởi động tức thì, điều khiển hàng chục nghìn Virtual Users (VUs) mà không làm đơ máy test.
+- Tự động xuất báo cáo HTML đồ họa chuyên nghiệp.
+
+================================================================================
+2. HƯỚNG DẪN CÀI ĐẶT K6 TRÊN MÁY TÍNH
+================================================================================
+
+2.1. Cài đặt trên macOS (Khuyên dùng):
+Mở Terminal và chạy bằng Homebrew:
+    brew install k6
+
+Kiểm tra phiên bản đã cài:
+    k6 version
+
+2.2. Cài đặt trên Windows:
+- Cách 1 (Dùng winget):
+    winget install k6 --source winget
+- Cách 2 (Dùng Chocolatey):
+    choco install k6
+- Hoặc tải bộ cài .msi từ: https://github.com/grafana/k6/releases
+
+2.3. Cài đặt trên Linux (Ubuntu/Debian):
+    sudo gpg -k
+    sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+    echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+    sudo apt-get update
+    sudo apt-get install k6
+
+2.4. Chạy qua Docker (Không cần cài đặt bất kỳ thứ gì vào máy host):
+    docker run --rm -i --network=host grafana/k6 run - <k6/k6-load-test.js
+
+================================================================================
+3. CẤU TRÚC KỊCH BẢN KIỂM THỬ K6 TRONG DỰ ÁN
+================================================================================
+
+Trong thư mục `k6/` của dự án đã chuẩn bị sẵn 2 kịch bản hoàn chỉnh:
+
+1. `k6/k6-load-test.js`:
+   - Mục đích: Đo lường thông lượng đọc (Read Throughput) và thời gian phản hồi của
+     các API tra cứu danh mục khi hàng trăm người dùng lướt web cùng lúc.
+   - Các API kiểm thử:
+     * GET /api/v1/catalogs/movies (Danh sách phim đang chiếu)
+     * GET /api/v1/catalogs/cinemas (Danh sách cụm rạp)
+     * GET /api/v1/catalogs/showtimes (Lịch chiếu phim)
+     * GET /api/v1/catalogs/seats/room/:roomId (Sơ đồ ghế ngồi)
+   - Mô hình tải (Stages):
+     * 15s đầu: Tăng dần từ 0 -> 50 VUs (Warm-up).
+     * 30s tiếp theo: Đẩy lên 200 VUs.
+     * 1 phút: Giữ tải đỉnh 500 VUs liên tục.
+     * 15s cuối: Hạ dần về 0 VU.
+   - Ngưỡng đạt chuẩn (Thresholds): 95% request phải phản hồi dưới 300ms, tỷ lệ lỗi < 1%.
+
+2. `k6/k6-race-condition.js`:
+   - Mục đích: Kiểm thử độ an toàn của khóa phân tán Redis (Redisson Distributed Lock)
+     và tính năng chống giữ trùng ghế (Anti-Double Booking).
+   - Mô hình tải: Dồn đồng thời 100 đến 500 khách hàng (VUs) cùng bấm giữ ĐÚNG 1 GHẾ DUY NHẤT
+     trong cùng 1 mili-giây.
+   - Tiêu chí chấp nhận bài test:
+     * Đúng DUY NHẤT 1 người được HTTP 200 (Giữ ghế thành công).
+     * Tất cả các khách hàng còn lại nhận HTTP 400 hoặc 409 (Báo ghế đã bị người khác giữ).
+     * Số lỗi 500 (Internal Server Error) = 0.
+
+3. `k6/k6-elasticsearch-test.js`:
+   - Mục đích: Đo lường tốc độ tìm kiếm phim Full-text Search & Fuzzy Search trên Elasticsearch.
+   - Thử nghiệm tìm kiếm liên tục các từ khóa đa dạng: "Avatar", "Dune", "Kung Fu", "Chiến binh"...
+   - Đo lường: Độ trễ trung bình (< 100ms), 95% request (< 350ms), tỷ lệ lỗi 0%.
+
+================================================================================
+4. HƯỚNG DẪN CHẠY TEST CHI TIẾT
+================================================================================
+
+4.1. Chạy Kịch bản 1: Nạp tải đọc (Read Load Test)
+--------------------------------------------------------------------------------
+- CÁCH 1: Chạy qua Docker Compose (Tiện lợi nhất - chung mạng cgv-net):
+    docker compose -f docker-compose-dev.yml run --rm k6 run /k6/k6-load-test.js
+
+- CÁCH 2: Chạy trực tiếp bằng lệnh k6 (nếu đã brew install k6):
+    k6 run k6/k6-load-test.js
+
+- CÁCH 3: Chạy bằng lệnh Docker độc lập:
+    docker run --rm -i --network=host -v $(pwd)/k6:/k6 grafana/k6 run /k6/k6-load-test.js
+
+Sau khi chạy xong, k6 sẽ tự sinh file báo cáo HTML: `k6/k6-load-test-report.html`.
+
+4.2. Chạy Kịch bản 2: Kiểm thử tranh chấp đồng thời (Race Condition)
+--------------------------------------------------------------------------------
+- CÁCH 1: Chạy qua Docker Compose:
+    docker compose -f docker-compose-dev.yml run --rm -e VUS=100 k6 run /k6/k6-race-condition.js
+
+- CÁCH 2: Chạy trực tiếp bằng lệnh k6:
+    k6 run -e VUS=100 k6/k6-race-condition.js
+
+- Tăng số lượng người tranh chấp lên 300 hoặc 500 người cùng lúc:
+    docker compose -f docker-compose-dev.yml run --rm -e VUS=500 k6 run /k6/k6-race-condition.js
+
+Sau khi chạy xong, k6 sẽ tự sinh file báo cáo HTML: `k6/k6-race-condition-report.html`.
+
+4.3. Chạy Kịch bản 3: Kiểm thử tìm kiếm phim trên Elasticsearch
+--------------------------------------------------------------------------------
+- Chạy qua Docker Compose:
+    docker compose -f docker-compose-dev.yml run --rm k6 run /k6/k6-elasticsearch-test.js
+
+- Chạy trực tiếp bằng lệnh k6:
+    k6 run k6/k6-elasticsearch-test.js
+
+Sau khi chạy xong, k6 sẽ tự sinh file báo cáo HTML: `k6/k6-elasticsearch-report.html`.
+
+================================================================================
+5. CÁCH ĐỌC & PHÂN TÍCH BÁO CÁO K6
+================================================================================
+
+5.1. Bảng số liệu trên Terminal (Console Output):
+Khi bài test kết thúc, k6 in bảng tổng kết với các chỉ số cốt lõi:
+
+- `http_req_duration`: Thời gian từ lúc gửi request đến khi nhận xong response.
+  * `avg`: Thời gian phản hồi trung bình (Mục tiêu: < 100ms).
+  * `p(90)`: 90% người dùng nhận kết quả nhanh hơn mốc này.
+  * `p(95)`: 95% người dùng nhận kết quả nhanh hơn mốc này (Mục tiêu: < 300ms).
+  * `p(99)`: 99% người dùng (trường hợp chậm nhất, mục tiêu: < 600ms).
+
+- `http_req_failed`: Tỷ lệ request bị lỗi kết nối hoặc mã HTTP 4xx/5xx ngoài ý muốn.
+  * Với Load Test: Mục tiêu < 1%.
+  
+- `http_reqs`: Tổng số request đã thực hiện và thông lượng xử lý RPS (Requests Per Second).
+
+- Các Custom Metrics cho bài Race Condition:
+  * `cgv_seat_lock_success`: Số người giữ ghế thành công. BẮT BUỘC PHẢI = 1.
+  * `cgv_seat_lock_conflict_blocked`: Số người bị chặn an toàn. Phải = (VUs - 1).
+  * `cgv_unexpected_5xx_errors`: Số lỗi sập máy chủ. BẮT BUỘC PHẢI = 0.
+
+5.2. Xem Báo Cáo Giao Diện Đồ Họa HTML:
+Mở file HTML vừa tạo bằng trình duyệt để xem biểu đồ trực quan:
+- Trên Mac:
+    open k6-load-test-report.html
+    open k6-race-condition-report.html
+- Trên Windows:
+    start k6-load-test-report.html
+
+Báo cáo HTML sẽ cung cấp biểu đồ hình quạt, biểu đồ thời gian phản hồi theo phân vị
+và bảng thống kê từng endpoint chi tiết.
+
+================================================================================
+6. QUY TRÌNH KIỂM CHỨNG TÍNH TOÀN VẸN DỮ LIỆU
+================================================================================
+
+Sau khi chạy bài test tranh chấp `k6-race-condition.js`, hãy kiểm tra trực tiếp
+trong Redis và PostgreSQL để đảm bảo không có sai lệch dữ liệu ngầm:
+
+6.1. Kiểm tra trên Redis (Bộ nhớ khóa tạm thời):
+Vào container Redis:
+    docker exec -it cgv-redis redis-cli
+
+Chạy lệnh kiểm tra key lock:
+    KEYS "lock:seat:*"
+    KEYS "seat:lock:*"
+
+-> Bạn sẽ thấy key lock của ghế vừa được giữ và TTL đếm ngược (khoảng 300 - 600 giây).
+Chỉ duy nhất 1 User ID chiến thắng được ghi nhận làm chủ sở hữu của key này.
+
+6.2. Kiểm tra trên PostgreSQL (Cơ sở dữ liệu bền vững):
+Vào database kiểm tra trạng thái vé/ghế:
+    docker exec -it cgv-postgres psql -U postgres -d cgv -c "SELECT showtime_id, seat_id, status FROM booking_seats ORDER BY created_at DESC LIMIT 5;"
+
+-> Không bao giờ tồn tại 2 bản ghi cùng `showtime_id` và `seat_id` ở trạng thái `CONFIRMED` hoặc `PAYMENT_PENDING`.
+
+================================================================================
+7. TỐI ƯU HỆ ĐIỀU HÀNH KHI TEST TẢI CỰC ĐẠI (ULIMIT)
+================================================================================
+
+Khi kiểm thử với số lượng Virtual Users lớn (từ 1.000 VUs trở lên), hệ điều hành
+(đặc biệt là macOS và Linux) có thể chặn mở socket mới với lỗi:
+`socket: too many open files`
+
+Khắc phục trước khi chạy test:
+1. Kiểm tra giới hạn hiện tại:
+    ulimit -n
+2. Mở rộng giới hạn file descriptors lên 65.535:
+    ulimit -n 65535
+3. Chạy lại bài test k6 bình thường.
+================================================================================

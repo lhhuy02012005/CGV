@@ -3,9 +3,11 @@ package com.cgv.catalogservice.dto.request.movie;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.time.LocalDate;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record MovieUpdateRequest(
 
         String title,

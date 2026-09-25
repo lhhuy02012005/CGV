@@ -27,6 +27,8 @@ public class VerifyOtpRequest {
     @NotBlank(message = "Họ và tên không được để trống")
     String fullName;
 
+    String phone;
+
     @NotBlank(message = "OTP không được để trống")
     String otp;
 }

@@ -28,7 +28,13 @@ public class CatalogGrpcClient {
         try {
             log.info("Gọi gRPC sang CatalogService lấy thông tin suất chiếu: {}", showtimeId);
             return pricingStub.getShowtimePricing(request);
-        } catch (Exception e){
+        } catch (io.grpc.StatusRuntimeException e) {
+            if (e.getStatus().getCode() == io.grpc.Status.Code.FAILED_PRECONDITION
+                    || e.getStatus().getCode() == io.grpc.Status.Code.INVALID_ARGUMENT
+                    || e.getStatus().getCode() == io.grpc.Status.Code.NOT_FOUND) {
+                log.warn("Catalog gRPC từ chối yêu cầu với lỗi nghiệp vụ: {}", e.getStatus().getDescription());
+                throw new BusinessException(ErrorCode.BAD_REQUEST, e.getStatus().getDescription() != null ? e.getStatus().getDescription() : e.getMessage());
+            }
             log.warn("Lỗi khi gọi gRPC qua stub cấu hình: {}. Đang thử fallback trực tiếp các port 9090 và 9098...", e.getMessage());
 
             for (int port : new int[]{9090, 9098}) {

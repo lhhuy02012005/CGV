@@ -38,10 +38,10 @@ public class OpenApiConfig {
                 .servers(List.of(
                         new Server()
                                 .url("http://localhost:8000" + contextPath)
-                                .description("Qua Kong API Gateway (Cổng chính 8000)"),
+                                .description("Chế độ 1: Qua Kong API Gateway (Cổng 8000)"),
                         new Server()
                                 .url("http://localhost:8081" + contextPath)
-                                .description("Trực tiếp Identity Service (Local 8081)")
+                                .description("Chế độ 2: Trực tiếp Port chính Service (Local 8081)")
                 ))
                 .addSecurityItem(new SecurityRequirement().addList(securitySchemeName))
                 .components(new Components()
@@ -50,6 +50,6 @@ public class OpenApiConfig {
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
                                 .bearerFormat("JWT")
-                                .description("Nhập Access Token (JWT) theo định dạng: Bearer <token>")));
+                                .description("Chỉ cần dán JWT Token vào đây (Swagger sẽ tự động gắn tiền tố Bearer)")));
     }
 }

@@ -17,6 +17,8 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,7 @@ public class GenreServiceImpl implements GenreService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "genres:all", allEntries = true)
     public GenreResponse createGenre(
             GenreCreateRequest request
     ) {
@@ -66,6 +69,7 @@ public class GenreServiceImpl implements GenreService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "genres:all", allEntries = true)
     public GenreResponse updateGenre(
             Integer genreId,
             GenreUpdateRequest request
@@ -116,6 +120,7 @@ public class GenreServiceImpl implements GenreService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "genres:all", allEntries = true)
     public void deleteGenre(Integer genreId) {
 
         log.info("Deleting genre: genreId={}", genreId);
@@ -149,6 +154,7 @@ public class GenreServiceImpl implements GenreService {
 
     @Override
     @Transactional(readOnly = true)
+    @Cacheable(value = "genres:all", key = "#pageable.pageNumber + '-' + #pageable.pageSize + '-' + #pageable.sort.toString()")
     public PageResponse<GenreResponse> getAllGenres(Pageable pageable) {
 
         log.debug("Getting all genres: page={}, size={}", pageable.getPageNumber(), pageable.getPageSize());

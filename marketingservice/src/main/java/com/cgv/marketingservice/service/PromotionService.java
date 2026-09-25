@@ -15,4 +15,6 @@ public interface PromotionService {
     List<PromotionResponse> getActivePromotions();
     List<PromotionResponse> getAvailablePromotions(BigDecimal totalAmount, String tier);
     PageResponse<PromotionResponse> getAllPromotions(Pageable pageable);
+    PromotionResponse updatePromotion(UUID id, com.cgv.marketingservice.dto.request.PromotionUpdateRequest request);
+    void deletePromotion(UUID id);
 }

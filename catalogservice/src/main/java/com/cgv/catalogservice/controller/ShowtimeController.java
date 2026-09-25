@@ -24,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -49,6 +50,7 @@ public class ShowtimeController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyAuthority('showtime:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<ShowtimeResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu tạo suất chiếu", required = true) @RequestBody @Valid ShowtimeCreateRequest request
     ) {
@@ -73,6 +75,7 @@ public class ShowtimeController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{showtimeId}")
+    @PreAuthorize("hasAnyAuthority('showtime:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<ShowtimeResponse> update(
             @Parameter(description = "ID của suất chiếu", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID showtimeId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật suất chiếu", required = true) @RequestBody @Valid ShowtimeUpdateRequest request
@@ -98,6 +101,7 @@ public class ShowtimeController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{showtimeId}/status")
+    @PreAuthorize("hasAnyAuthority('showtime:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<ShowtimeResponse> updateStatus(
             @Parameter(description = "ID của suất chiếu", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID showtimeId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật trạng thái suất chiếu", required = true) @RequestBody @Valid ShowtimeUpdateStatusRequest request

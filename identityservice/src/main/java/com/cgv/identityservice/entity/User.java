@@ -12,7 +12,8 @@ import java.util.UUID;
 @Entity
 @Table(name = "users" , indexes = {
         @Index(name = "idx_cgv_user_email" , columnList = "email"),
-        @Index(name = "idx_cgv_user_membership_tier" , columnList = "membership_tier")
+        @Index(name = "idx_cgv_user_membership_tier" , columnList = "membership_tier"),
+        @Index(name = "idx_cgv_user_phone" , columnList = "phone")
 })
 @Getter
 @Setter
@@ -29,6 +30,9 @@ public class User extends BaseEntity {
 
     @Column
     String fullName;
+
+    @Column(name = "phone", length = 20)
+    String phone;
 
 
     @ManyToOne(fetch = FetchType.LAZY)

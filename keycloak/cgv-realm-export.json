@@ -100,7 +100,7 @@
       "description" : "Ban giam doc, CTO, System Admin - toan quyen he thong",
       "composite" : true,
       "composites" : {
-        "realm" : [ "ticket:view", "rental:manage", "user:manage", "showtime:manage", "ticket:book", "movie:manage", "report:view", "ticket:refund", "content:manage", "cinema:manage", "promotion:manage" ]
+        "realm" : [ "ticket:view", "user:manage", "showtime:manage", "ticket:book", "movie:manage", "report:view", "ticket:refund", "content:manage", "cinema:manage", "promotion:manage" ]
       },
       "clientRole" : false,
       "containerId" : "cgv-realm",
@@ -132,14 +132,6 @@
       "composites" : {
         "realm" : [ "ticket:view", "ticket:book" ]
       },
-      "clientRole" : false,
-      "containerId" : "cgv-realm",
-      "attributes" : { }
-    }, {
-      "id" : "44d32718-b6e7-4fce-90c3-ff15065d9b41",
-      "name" : "rental:manage",
-      "description" : "Tiep nhan, bao gia va duyet don thue tron rap su kien",
-      "composite" : false,
       "clientRole" : false,
       "containerId" : "cgv-realm",
       "attributes" : { }
@@ -203,7 +195,7 @@
       "description" : "Quan ly cum rap chi nhanh, phong chieu, suat chieu va don thue rap",
       "composite" : true,
       "composites" : {
-        "realm" : [ "ticket:view", "rental:manage", "showtime:manage", "report:view", "ticket:refund", "cinema:manage" ]
+        "realm" : [ "ticket:view", "showtime:manage", "report:view", "ticket:refund", "cinema:manage" ]
       },
       "clientRole" : false,
       "containerId" : "cgv-realm",

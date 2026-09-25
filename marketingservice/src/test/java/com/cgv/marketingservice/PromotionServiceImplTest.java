@@ -37,14 +37,19 @@ class PromotionServiceImplTest {
     @Mock
     private PromotionRepository promotionRepository;
 
+    @Mock
+    private com.cgv.marketingservice.repository.PromotionUsageRepository promotionUsageRepository;
+
+    @Mock
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
     private PromotionServiceImpl promotionService;
 
     @BeforeEach
     void setUp() {
         PromotionMapper mapper = Mappers.getMapper(PromotionMapper.class);
 
-        promotionService = new PromotionServiceImpl(promotionRepository, mapper);
-
+        promotionService = new PromotionServiceImpl(promotionRepository, promotionUsageRepository, mapper, stringRedisTemplate);
     }
 
     @Test

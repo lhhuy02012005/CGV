@@ -26,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -53,6 +54,7 @@ public class CinemaController {
     })
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @PreAuthorize("hasAnyAuthority('cinema:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<CinemaResponse> create(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu tạo rạp chiếu phim", required = true) @RequestBody @Valid CinemaCreateRequest request
     ) {
@@ -75,6 +77,7 @@ public class CinemaController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{cinemaId}")
+    @PreAuthorize("hasAnyAuthority('cinema:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<CinemaResponse> update(
             @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật rạp chiếu phim", required = true) @RequestBody @Valid CinemaUpdateRequest request
@@ -98,6 +101,7 @@ public class CinemaController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Xung đột dữ liệu hoặc vi phạm quy tắc nghiệp vụ")
     })
     @PatchMapping("/{cinemaId}/status")
+    @PreAuthorize("hasAnyAuthority('cinema:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<CinemaResponse> updateStatus(
             @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "Dữ liệu cập nhật trạng thái rạp chiếu phim", required = true) @RequestBody @Valid CinemaUpdateStatusRequest request
@@ -182,6 +186,28 @@ public class CinemaController {
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Lịch chiếu theo rạp")
+                .build();
+    }
+
+    @Operation(
+            summary = "Xóa rạp chiếu phim",
+            description = "Xóa rạp chiếu phim theo ID."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Xóa rạp chiếu phim thành công"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy rạp chiếu phim"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Rạp chiếu phim đang có suất chiếu hoặc không thể xóa")
+    })
+    @DeleteMapping("/{cinemaId}")
+    @PreAuthorize("hasAnyAuthority('cinema:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
+    public ApiResponse<Void> delete(
+            @Parameter(description = "ID của rạp chiếu phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID cinemaId
+    ) {
+        cinemaService.deleteCinema(cinemaId);
+
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Xóa rạp chiếu phim thành công")
                 .build();
     }
 }

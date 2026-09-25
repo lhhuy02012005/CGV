@@ -17,6 +17,9 @@ public class UserRegistrationRequest {
     @NotBlank(message = "Họ và tên không được để trống")
     String fullName;
 
+    @NotBlank(message = "Số điện thoại không được để trống")
+    String phone;
+
     @NotBlank(message = "Mật khẩu không được để trống")
     @Size(min = 6, message = "Mật khẩu phải có ít nhất 6 ký tự")
     String password;

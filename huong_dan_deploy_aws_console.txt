@@ -1,0 +1,518 @@
+================================================================================
+BẢN THIẾT KẾ & HƯỚNG DẪN DEPLOY TOÀN BỘ HỆ THỐNG CGV CHUẨN ENTERPRISE PRODUCTION
+KIẾN TRÚC DOANH NGHIỆP LỚN: AMAZON MSK (KAFKA) + MULTI-AZ RDS + DUAL NAT GATEWAY
+KẾT HỢP CLOUDFLARE WAF + APPLICATION LOAD BALANCER (ALB) + ELASTICACHE REDIS
+================================================================================
+Tài liệu kiến trúc và hướng dẫn thực thi từng bước (Click-by-Click) trên AWS Web Console
+Kèm Bảng Giải Thích "VÌ SAO CHỌN THÔNG SỐ NÀY & MỤC ĐÍCH LÀ GÌ" cho TỪNG BƯỚC 1
+Chuẩn bảo mật: PCI-DSS, SOC 2, Zero Trust, Defense-in-Depth (Phòng thủ chiều sâu)
+
+================================================================================
+1. SƠ ĐỒ TỔNG QUAN KIẾN TRÚC ENTERPRISE (HIGH-LEVEL SYSTEM ARCHITECTURE)
+================================================================================
+
+                           [ END-USER BROWSER & MOBILE APP ]
+                                           │
+                                           ▼ (HTTPS / WSS)
+               [ CLOUDFLARE GLOBAL EDGE NETWORK (WAF + DDOS SHIELD) ]
+                 - Anycast DNS (Phân giải tên miền < 10ms)
+                 - Layer 7 WAF (Chống SQLi, XSS, Botnet cào vé)
+                 - Universal SSL / Edge Cache / Rate-Limiting
+                                           │
+                                           ▼ (TLS 1.3 Strict)
+               [ AWS INTERNET GATEWAY & APPLICATION LOAD BALANCER ]
+                 - AWS ALB (Multi-AZ Ingress Port 443 / 80)
+                 - AWS Certificate Manager (ACM SSL Certificate)
+                                           │
+ ┌─────────────────────────────────────────┴───────────────────────────────────────────┐
+ │ AWS VPC 3-TIER ENTERPRISE: 10.0.0.0/16 (ap-southeast-1 Singapore)                   │
+ │                                                                                     │
+ │ ─────────────────────────────────────────────────────────────────────────────────── │
+ │ TIER 1: PUBLIC SUBNET (DMZ LAYER - Chỉ chứa Gateway & Ingress)                      │
+ │ ┌─────────────────────────────────────────┐ ┌─────────────────────────────────────┐ │
+ │ │ Subnet: cgv-public-1a (10.0.1.0/24)     │ │ Subnet: cgv-public-1b (10.0.2.0/24) │ │
+ │ │ • AWS ALB Node A                        │ │ • AWS ALB Node B                    │ │
+ │ │ • NAT Gateway 1A (Elastic IP 1)         │ │ • NAT Gateway 1B (Elastic IP 2)     │ │
+ │ └─────────────────────────────────────────┘ └─────────────────────────────────────┘ │
+ │                                                                                     │
+ │ ─────────────────────────────────────────────────────────────────────────────────── │
+ │ TIER 2: PRIVATE APPLICATION SUBNET (Không Public IP, Chỉ Outbound qua NAT Gateway)  │
+ │ ┌─────────────────────────────────────────┐ ┌─────────────────────────────────────┐ │
+ │ │ Subnet: cgv-app-1a (10.0.10.0/24)       │ │ Subnet: cgv-app-1b (10.0.11.0/24)   │ │
+ │ │                                         │ │                                     │ │
+ │ │ • Kong API Gateway (Port 8000)          │ │ • Kong API Gateway (Cluster Node)   │ │
+ │ │ • Keycloak IAM (Port 8180)              │ │ • Keycloak IAM (Standby Node)       │ │
+ │ │ • identity-service (Port 8081)          │ │ • identity-service                  │ │
+ │ │ • catalog-service  (Port 8083, gRPC 9090) │ catalog-service                     │ │
+ │ │ • booking-service  (Port 8082)          │ │ • booking-service                   │ │
+ │ │ • payment-service  (Port 8085)          │ │ • payment-service                   │ │
+ │ │ • marketing-service(Port 8084)          │ │ • marketing-service                 │ │
+ │ └─────────────────────────────────────────┘ └─────────────────────────────────────┘ │
+ │                         │                                     │                     │
+ │                         └──────────────────┬──────────────────┘                     │
+ │                                            ▼                                        │
+ │ ─────────────────────────────────────────────────────────────────────────────────── │
+ │ TIER 3: PRIVATE DATA SUBNET (Cách ly 100% Internet, Bảo mật tuyệt đối)              │
+ │ ┌─────────────────────────────────────────┐ ┌─────────────────────────────────────┐ │
+ │ │ Subnet: cgv-data-1a (10.0.20.0/24)      │ │ Subnet: cgv-data-1b (10.0.21.0/24)  │ │
+ │ │                                         │ │                                     │ │
+ │ │ [ AMAZON RDS POSTGRESQL MULTI-AZ ]      │ │ [ AMAZON RDS POSTGRESQL MULTI-AZ ]  │ │
+ │ │   • Master DB (Active Read/Write)       │ ══ Synchronous ══> • Standby DB Node  │ │
+ │ │                                         │ │        Replication  (Auto-Failover) │ │
+ │ │                                         │ │                                     │ │
+ │ │ [ AMAZON ELASTICACHE REDIS CLUSTER ]    │ │ [ AMAZON ELASTICACHE REDIS CLUSTER ]│ │
+ │ │   • Redis Primary Node                  │ ══ Replication ══> • Redis Replica    │ │
+ │ │                                         │ │                                     │ │
+ │ │ [ AMAZON MSK - MANAGED KAFKA CLUSTER ]  │ │ [ AMAZON MSK - MANAGED KAFKA ]      │ │
+ │ │   • Kafka Broker 1                      │ │   • Kafka Broker 2                  │ │
+ │ └─────────────────────────────────────────┘ └─────────────────────────────────────┘ │
+ └─────────────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+2. NHIỆM VỤ CHI TIẾT & BẢN CHẤT CỦA TỪNG LAYER TRONG HỆ THỐNG ENTERPRISE
+================================================================================
+
+1. CLOUDFLARE EDGE & WAF LAYER:
+   - "Lá chắn thép đầu tiên" (First Line of Defense) đặt trước toàn bộ hạ tầng AWS.
+   - Anycast DNS siêu tốc: Phân giải tên miền toàn cầu trong 10ms.
+   - Ẩn giấu 100% địa chỉ IP thật và CNAME của AWS Application Load Balancer.
+   - Web Application Firewall (WAF): Chặn các cuộc tấn công DDoS Layer 3/4 và Layer 7,
+     tự động chặn bot cào dữ liệu ghế và các cuộc tấn công SQL Injection, XSS.
+
+2. INGRESS & LOAD BALANCING LAYER (AWS ALB + ACM):
+   - Phân phối tải thông minh (Round-Robin / Least Outstanding Requests) tới các cụm máy chủ.
+   - Quản lý chứng chỉ SSL/TLS tự động gia hạn thông qua AWS Certificate Manager (ACM).
+   - Health Check: Liên tục kiểm tra nhịp tim (Heartbeat) của các container. Nếu một máy chủ bị treo,
+     ALB tự động ngắt kết nối và điều phối khách sang máy chủ còn lại mà không gây gián đoạn phiên đặt vé.
+
+3. DMZ TIER 1 - DUAL NAT GATEWAY (High-Availability Outbound):
+   - Đặt 2 NAT Gateway độc lập tại 2 Availability Zones (`ap-southeast-1a` và `ap-southeast-1b`).
+   - Nhiệm vụ: Cho phép các máy chủ ở Private Subnet kết nối ra Internet để gọi API ngân hàng (VNPay, MoMo),
+     gửi email thông báo vé, tải thư viện/Docker image.
+   - Tính sẵn sàng cao: Nếu 1 Data Center của AWS bị mất điện, NAT Gateway ở Data Center còn lại vẫn hoạt động.
+
+4. APPLICATION TIER 2 - KONG GATEWAY & CORE MICROSERVICES:
+   - Các máy chủ chạy trong Private Subnet, hoàn toàn KHÔNG CÓ Public IPv4 -> Miễn nhiễm 100% với các đòn
+     quét port và tấn công trực diện từ Internet.
+   - Kong Gateway đóng vai trò Reverse Proxy nội bộ, phân luồng API, mở CORS và Rate-limiting.
+   - 5 Microservices Spring Boot 3 / Java 21 kết nối lỏng thông qua Kafka và gRPC.
+
+5. DATA TIER 3 - PERSISTENCE & CACHE CLUSTER (Cách ly tuyệt đối):
+   - Multi-AZ RDS PostgreSQL: Nhân bản dữ liệu đồng bộ (Synchronous). Đảm bảo RPO = 0 (Không mất dữ liệu)
+     và RTO < 60s (Tự động kích hoạt node Standby thành Master khi có sự cố).
+   - Multi-AZ ElastiCache Redis: Tự động bầu chọn (Failover) giữ vững trạng thái khóa ghế và cache.
+   - Amazon MSK: Cụm Kafka 3 Brokers phân tán đa vùng, bảo vệ toàn vẹn các sự kiện đặt vé và thanh toán.
+
+================================================================================
+3. BẢNG MAPPING TOÀN BỘ THÔNG SỐ ENTERPRISE "LẤY GÌ GẮN VÀO ĐÂU"
+================================================================================
+
+┌────────────────────────┬─────────────────────────┬────────────────────────────┬────────────────────────────────────────────────────────┐
+│ LẤY TỪ ĐÂU TRÊN AWS     │ TÊN THÔNG SỐ CẦN LẤY    │ GẮN VÀO FILE & BIẾN NÀO    │ MỤC ĐÍCH & Ý NGHĨA KỸ THUẬT                            │
+├────────────────────────┼─────────────────────────┼────────────────────────────┼────────────────────────────────────────────────────────┤
+│ RDS Multi-AZ Console   │ Regional Endpoint       │ docker-compose-prod.yml    │ Cho phép các microservices kết nối tới PostgreSQL      │
+│ (cgv-db-enterprise)    │ (VD: cgv-db-enterprise. │ -> SPRING_DATASOURCE_URL   │ Cluster. Khi Master sập, DNS này tự động trỏ sang      │
+│                        │ c12345.ap-southeast-1.  │                            │ node Standby mà không cần sửa code hay khởi động lại.  │
+│                        │ rds.amazonaws.com)      │                            │                                                        │
+├────────────────────────┼─────────────────────────┼────────────────────────────┼────────────────────────────────────────────────────────┤
+│ Amazon MSK Console     │ Bootstrap Brokers TLS   │ docker-compose-prod.yml    │ Chuỗi kết nối bảo mật tới cụm Kafka đa vùng của AWS.  │
+│ (cgv-msk-cluster)      │ (VD: b-1.cgv-msk.xxx:   │ -> SPRING_KAFKA_BOOTSTRAP_ │ Dữ liệu gửi nhận qua Kafka được mã hóa TLS đường truyền│
+│                        │ 9094,b-2.cgv-msk.xxx:   │    SERVERS                 │ và chống nghẽn mạng phân tán.                          │
+│                        │ 9094)                   │                            │                                                        │
+├────────────────────────┼─────────────────────────┼────────────────────────────┼────────────────────────────────────────────────────────┤
+│ ElastiCache Console    │ Configuration Endpoint  │ docker-compose-prod.yml    │ Điểm kết nối Cluster Redis tự động nhận diện tất cả    │
+│ (cgv-redis-cluster)    │ (VD: cgv-redis.xxxx.    │ -> REDIS_HOST              │ các Shards/Replicas để khóa ghế và đọc cache tốc độ cao│
+│                        │ clustercfg.apse1.cache) │                            │                                                        │
+├────────────────────────┼─────────────────────────┼────────────────────────────┼────────────────────────────────────────────────────────┤
+│ AWS EC2 Application    │ Private IP của Node App │ apigateway/kong-prod.yml   │ Kong Gateway chuyển tiếp các route nội bộ sang các     │
+│ (Máy chạy Java)        │ (VD: 10.0.10.15)        │ -> url: http://10.0.10.15: │ container Spring Boot qua mạng Private VPC 10Gbps.     │
+│                        │                         │    8081, 8082, 8083...     │                                                        │
+├────────────────────────┼─────────────────────────┼────────────────────────────┼────────────────────────────────────────────────────────┤
+│ AWS ALB Console        │ DNS Name của Load       │ Cloudflare DNS Record      │ Bản ghi CNAME trên Cloudflare trỏ tên miền doanh nghiệp│
+│ (cgv-enterprise-alb)   │ Balancer (VD: cgv-alb-  │ -> CNAME: api -> cgv-alb-  │ (api.cgvcinemas.vn) vào Load Balancer của AWS.         │
+│                        │ 12345.ap-southeast-1... │    12345.ap-southeast-1... │                                                        │
+├────────────────────────┼─────────────────────────┼────────────────────────────┼────────────────────────────────────────────────────────┤
+│ Cloudflare Domain      │ Tên miền chính thức     │ CGV-FE-USER/.env.production│ Trình duyệt người dùng gửi request vào tên miền bảo mật│
+│ (Đã bật WAF Proxy)     │ (VD: https://api.       │ CGV-FE-ADMIN/.env.product..│ có SSL của Cloudflare: https://api.cgvcinemas.vn       │
+│                        │ cgvcinemas.vn)          │ -> VITE_API_GATEWAY_URL    │                                                        │
+└────────────────────────┴─────────────────────────┴────────────────────────────┴────────────────────────────────────────────────────────┘
+
+================================================================================
+4. HƯỚNG DẪN THỰC THI TỪNG BƯỚC TRÊN AWS & GIẢI THÍCH CHI TIẾT TỪNG THÔNG SỐ
+================================================================================
+
+--------------------------------------------------------------------------------
+BƯỚC 1: TẠO MẠNG 3-TIER MULTI-AZ VPC CHUẨN ENTERPRISE
+--------------------------------------------------------------------------------
+1.1. Thao tác trên AWS Console:
+1. Vào AWS Console -> Region `ap-southeast-1 (Singapore)` -> Dịch vụ **VPC** -> Bấm **Create VPC**.
+2. Chọn **VPC and more** (Tính năng tự động sinh topology chuẩn Enterprise):
+   - **Name tag**: `cgv-enterprise-vpc`.
+   - **IPv4 CIDR block**: `10.0.0.0/16`.
+   - **Number of Availability Zones (AZs)**: Chọn `2` (`ap-southeast-1a` và `ap-southeast-1b`).
+   - **Number of public subnets**: Chọn `2` (Gán: `10.0.1.0/24` và `10.0.2.0/24`).
+   - **Number of private subnets**: Chọn `4` (2 App Subnets: `10.0.10.0/24`, `10.0.11.0/24` và 2 Data Subnets: `10.0.20.0/24`, `10.0.21.0/24`).
+   - **NAT Gateways**: Chọn **1 per AZ** (Chuẩn Enterprise High-Availability: Tạo 2 NAT Gateway độc lập).
+   - **VPC Endpoints**: Chọn **S3 Gateway** (Cho phép máy chủ đẩy ảnh poster lên S3 miễn phí băng thông).
+3. Bấm **Create VPC** -> AWS sẽ tự động tạo VPC, Internet Gateway, 2 NAT Gateways và phân bổ Route Tables cách ly.
+
+1.2. BẢNG GIẢI THÍCH CHI TIẾT "VÌ SAO GẮN THÔNG SỐ NHƯ THẾ? MỤC ĐÍCH LÀ GÌ?":
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ CẤU HÌNH      │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Region                 │ ap-southeast-1       │ • Data Center gần Việt Nam nhất về địa lý cáp quang biển (AAG, APG).   │
+│                        │ (Singapore)          │ • Độ trễ mạng (Ping) chỉ ~25-35ms (so với US là 180-220ms).            │
+│                        │                      │ • Hỗ trợ đầy đủ 3 AZs và tất cả dịch vụ cao cấp: MSK, RDS Multi-AZ.    │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Phương thức tạo        │ VPC and more         │ • Trình thuật toán của AWS tự động liên kết Subnet, Internet Gateway,  │
+│                        │                      │   NAT Gateway và Route Tables chính xác 100%, chống lỗi cấu hình tay. │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ IPv4 CIDR Block        │ 10.0.0.0/16          │ • Chuẩn RFC 1918 dành cho mạng doanh nghiệp lớn.                       │
+│                        │                      │ • Cung cấp tới 65,536 địa chỉ IP, đủ scale hàng trăm container mà      │
+│                        │                      │   không sợ cạn kiệt IP. Tránh trùng dải mạng gia đình (192.168.x.x).   │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Availability Zones     │ 2 AZs (1a & 1b)      │ • Yêu cầu tối thiểu bắt buộc của High Availability (HA).               │
+│                        │                      │ • 1a và 1b là 2 tòa nhà Data Center vật lý cách nhau hàng chục km,     │
+│                        │                      │   độc lập hoàn toàn về nguồn điện, cáp mạng và máy phát dự phòng.      │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Public Subnets         │ 2 Subnets /24        │ • Chỉ dùng làm vùng đệm (DMZ) chứa Application Load Balancer và 2 NAT. │
+│                        │ (10.0.1.0, 10.0.2.0) │ • Mỗi subnet /24 cung cấp 251 IP khả dụng (AWS giữ 5 IP hệ thống).     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Private Subnets        │ 4 Subnets /24        │ • Phân tách 2 Subnet cho Tầng Ứng Dụng (App: 10.0.10.x, 10.0.11.x)    │
+│                        │                      │   và 2 Subnet cho Tầng Dữ Liệu (Data: 10.0.20.x, 10.0.21.x).           │
+│                        │                      │ • Tuân thủ chuẩn bảo mật phân tầng PCI-DSS: Data cách ly hoàn toàn.    │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ NAT Gateways           │ 1 per AZ (2 Gateways)│ • Nếu chọn 1 NAT Gateway chung, khi AZ-a bị sự cố thì cả hệ thống mất  │
+│                        │                      │   đường ra Internet (Single Point of Failure).                          │
+│                        │                      │ • "1 per AZ" đảm bảo tính sẵn sàng độc lập 99.99% cho từng vùng.       │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ VPC Endpoints          │ S3 Gateway (Miễn phí)│ • Định tuyến lưu lượng upload/download ảnh poster phim từ EC2 sang S3  │
+│                        │                      │   đi qua cáp nội bộ 25Gbps của AWS, KHÔNG CHẠY qua NAT Gateway.        │
+│                        │                      │ • Tăng tốc độ truyền tải gấp 10 lần và tiết kiệm phí data transfer NAT.│
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+1.3. GIẢI THÍCH CHUYÊN SÂU: VÌ SAO LẠI CẦN TỚI TẬN 4 PRIVATE SUBNETS?
+Rất nhiều người thắc mắc: "Tại sao không gom lại thành 1 hay 2 Private Subnet mà phải tạo tận 4 cái?"
+Lý do nằm ở 2 nguyên tắc kiến trúc cốt lõi của Doanh nghiệp lớn:
+- Nguyên tắc 1: High Availability (Đa vùng dự phòng 2 AZs):
+  Bạn đang chọn 2 Availability Zones (`ap-southeast-1a` và `ap-southeast-1b`). Mọi tài nguyên chịu lỗi thảm họa (Multi-AZ) bắt buộc phải có mặt đồng thời ở CẢ 2 Data Center. Nếu 1 Data Center gặp sự cố, hệ thống vẫn sống ở Data Center còn lại.
+- Nguyên tắc 2: Phân tầng cách ly bảo mật (App Tier vs Data Tier):
+  + 2 Subnets dành cho Tầng Ứng Dụng (App Tier):
+    * `private1-ap-southeast-1a` (Chứa máy chủ Kong Gateway, Microservices Node 1).
+    * `private2-ap-southeast-1b` (Chứa máy chủ Microservices Node 2).
+    * Đặc điểm: Cần kết nối ra ngoài Internet (qua NAT Gateway) để gọi webhook VNPay/MoMo, gửi email, gọi API đối tác.
+  + 2 Subnets dành cho Tầng Dữ Liệu (Data Tier):
+    * `private3-ap-southeast-1a` (Chứa PostgreSQL Master, Kafka Broker 1, Redis Master).
+    * `private4-ap-southeast-1b` (Chứa PostgreSQL Standby, Kafka Broker 2, Redis Replica).
+    * Đặc điểm: Cách ly tuyệt đối, không có đường ra Internet (ngay cả qua NAT).
+    * QUY ĐỊNH BẮT BUỘC CỦA AWS: Khi tạo Amazon RDS Multi-AZ hoặc Amazon MSK, AWS BẮT BUỘC bạn phải chọn tối thiểu 2 Subnet ở 2 AZ khác nhau để làm DB Subnet Group. Nếu không có đủ 2 Subnet ở 2 vùng, AWS sẽ BÁO LỖI KHÔNG CHO TẠO DATABASE!
+  => Phép tính: 2 Subnets (Tầng App) + 2 Subnets (Tầng Data) = 4 Private Subnets. Đây là con số tiêu chuẩn vàng!
+
+1.4. GIẢI THÍCH CHUYÊN SÂU: VPC ENDPOINTS LÀ GÌ? VÌ SAO S3 GATEWAY LẠI GIÚP TĂNG TỐC 10X & MIỄN PHÍ 100%?
+- Bản chất khi KHÔNG CÓ VPC Endpoint:
+  Dịch vụ Amazon S3 (lưu poster phim, trailer) là dịch vụ công cộng của AWS. Nếu máy chủ Java trong Private Subnet muốn upload hoặc tải ảnh từ S3:
+  `Máy chủ Java (Private) -> NAT Gateway -> Đi vòng ra Internet -> Amazon S3`.
+  + Tốn tiền: NAT Gateway thu phí truyền dữ liệu $0.045/GB. Upload hàng trăm GB ảnh poster sẽ làm hóa đơn NAT tăng vọt.
+  + Tốc độ chậm: Gói tin phải đi qua cổng NAT Gateway rồi mới tới S3.
+- Khi BẬT "S3 Gateway VPC Endpoint":
+  AWS tạo một "Đường hầm cáp quang ảo ngầm" (Private Virtual Link) chạy trực tiếp bên trong hạ tầng vật lý của AWS, nối thẳng từ VPC tới dịch vụ S3.
+  `Máy chủ Java (Private) -> Cáp ngầm nội bộ AWS (25 Gbps) -> Amazon S3`.
+  + 0 ĐỒNG CHI PHÍ: AWS cung cấp S3 Gateway Endpoint hoàn toàn miễn phí. Toàn bộ lưu lượng sang S3 không bị tính 1 xu tiền NAT Gateway.
+  + Tốc độ cực nhanh (Tăng tốc 10x): Chạy trên đường truyền băng thông nội bộ 25 Gbps với độ trễ < 1ms.
+  + Bảo mật tuyệt đối: Dữ liệu nội bộ không bao giờ phải đi ra mạng Internet công cộng.
+
+1.5. GIẢI NGHĨA TOÀN BỘ SƠ ĐỒ PREVIEW TRÊN MÀN HÌNH AWS CONSOLE (TỪ TRÁI SANG PHẢI):
+Quan sát 4 cột trong sơ đồ Preview của AWS Console:
+[ Cột 1: VPC ] -> [ Cột 2: Subnets (6) ] -> [ Cột 3: Route Tables (5) ] -> [ Cột 4: Network Connections (3) ]
+
+- Cột 1: `VPC (cgv-enterprise-vpc-vpc)`:
+  Đại diện cho toàn bộ "vùng mạng riêng" độc lập của dự án CGV trên đám mây AWS.
+- Cột 2: `Subnets (6)` (Chia đều 2 Data Center):
+  + Ở `ap-southeast-1a`:
+    * `subnet-public1`: Chứa Load Balancer Node A và NAT Gateway 1.
+    * `subnet-private1`: Chứa Microservices Java Node 1.
+    * `subnet-private3`: Chứa PostgreSQL Master, Kafka Broker 1, Redis Master.
+  + Ở `ap-southeast-1b`:
+    * `subnet-public2`: Chứa Load Balancer Node B.
+    * `subnet-private2`: Chứa Microservices Java Node 2.
+    * `subnet-private4`: Chứa PostgreSQL Standby, Kafka Broker 2, Redis Replica.
+- Cột 3: `Route Tables (5)` (Bảng chỉ đường phân luồng giao thông):
+  AWS tự động sinh ra 5 bảng chỉ đường riêng biệt:
+  + `rtb-public`: Bảng chỉ đường cho 2 Public Subnet.
+  + `rtb-private1`, `rtb-private2`, `rtb-private3`, `rtb-private4`: Bảng chỉ đường riêng cho từng Private Subnet để kiểm soát chiều đi của dữ liệu.
+- Cột 4: `Network Connections (3)` (Các cổng xuất nhập cảnh):
+  Nhìn các đường dây nối từ Route Table sang Network Connections:
+  1. `cgv-enterprise-vpc-igw` (Internet Gateway):
+     * Chỉ có đường kẻ từ `rtb-public` nối tới đây!
+     * Ý nghĩa: Chỉ có Public Subnet mới được giao tiếp trực tiếp 2 chiều với Internet.
+  2. `cgv-enterprise-vpc-nat-public1-ap-` (NAT Gateway):
+     * Các đường kẻ từ `rtb-private` nối vào đây!
+     * Ý nghĩa: Các máy chủ trong Private Subnet khi cần gọi ra Internet (VNPay, MoMo) sẽ đi "nhờ" qua cổng NAT Gateway này (chỉ ra được 1 chiều, bên ngoài không chọc vào được).
+  3. `cgv-enterprise-vpc-vpce-s3` (S3 Gateway Endpoint):
+     * Các đường kẻ từ `rtb-private` cũng đồng thời nối thẳng vào đây!
+     * Ý nghĩa: Khi có lệnh tải ảnh poster phim từ S3, Route Table sẽ bẻ nhánh gói tin đi thẳng qua cổng cáp ngầm nội bộ này tới S3 mà không cần qua NAT Gateway.
+
+--------------------------------------------------------------------------------
+BƯỚC 2: THIẾT LẬP SECURITY GROUPS PHÒNG THỦ CHIỀU SÂU (DEFENSE-IN-DEPTH)
+--------------------------------------------------------------------------------
+2.1. Thao tác trên AWS Console:
+Vào **Security Groups** -> Tạo lần lượt 5 Security Groups:
+1. `cgv-alb-sg`:
+   - HTTPS (Port 443) -> `0.0.0.0/0`
+   - HTTP (Port 80) -> `0.0.0.0/0`
+2. `cgv-app-sg`:
+   - Custom TCP (Port 8000) -> Source: `cgv-alb-sg`
+   - All Traffic -> Source: `cgv-app-sg` (Chính nó)
+3. `cgv-db-sg`:
+   - PostgreSQL (Port 5432) -> Source: `cgv-app-sg`
+4. `cgv-msk-sg`:
+   - Custom TCP (Port 9092, 9094, 9096) -> Source: `cgv-app-sg`
+5. `cgv-redis-sg`:
+   - Custom TCP (Port 6379) -> Source: `cgv-app-sg`
+
+2.2. BẢNG GIẢI THÍCH CHI TIẾT "VÌ SAO MỞ PORT NÀY VỚI SOURCE NÀY?":
+┌───────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ TÊN SECURITY GROUP    │ QUY TẮC MỞ CỔNG      │ VÌ SAO THIẾT LẬP NHƯ VẬY & Ý NGHĨA BẢO MẬT?                            │
+├───────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ cgv-alb-sg            │ Port 443 & 80        │ • Cổng tiếp nhận lưu lượng duy nhất từ thế giới bên ngoài.             │
+│ (Load Balancer)       │ Source: 0.0.0.0/0    │ • Cổng 443 giải mã SSL/TLS HTTPS. Cổng 80 chỉ làm nhiệm vụ Redirect 301│
+│                       │                      │   bắt buộc khách hàng chuyển sang HTTPS để bảo vệ mật khẩu/thông tin vé│
+├───────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ cgv-app-sg            │ Port 8000 (Kong API) │ • TUYỆT ĐỐI KHÔNG mở 0.0.0.0/0! Chỉ chấp nhận traffic đã qua ALB kiểm  │
+│ (Kong & Microservices)│ Source: cgv-alb-sg   │   duyệt. Tránh hacker chọc thẳng bỏ qua lớp WAF.                       │
+│                       ├──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│                       │ All Traffic          │ • Cho phép các container trong cụm gọi nhau qua gRPC (Port 9090)       │
+│                       │ Source: cgv-app-sg   │   và truyền tin nội bộ mạng Private với độ trễ < 0.5ms.                │
+├───────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ cgv-db-sg             │ Port 5432            │ • Chỉ cho phép máy chủ Backend truy vấn SQL. Hacker ngoài Internet     │
+│ (RDS PostgreSQL)      │ Source: cgv-app-sg   │   hoàn toàn không có đường truyền vật lý nào chọc tới Database.        │
+├───────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ cgv-msk-sg            │ Port 9092 - 9096     │ • Cổng Broker Kafka (Plaintext & TLS). Chỉ các worker app mới được phép│
+│ (Amazon MSK Kafka)    │ Source: cgv-app-sg   │   bắn event hoặc consume message, ngăn chặn kẻ xấu tiêm event giả mạo. │
+├───────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ cgv-redis-sg          │ Port 6379            │ • Chỉ chấp nhận lệnh Redis (SETNX, GET, LUA script) từ cụm App. Ngăn   │
+│ (ElastiCache Redis)   │ Source: cgv-app-sg   │   chặn kẻ xấu can thiệp trái phép vào trạng thái giữ ghế xem phim.     │
+├───────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ VÌ SAO KHÔNG MỞ       │ Port 22 SSH          │ • Port 22 mở công khai là nguồn gốc của 90% vụ tấn công dò mật khẩu.   │
+│ BẤT KỲ CỔNG 22 NÀO?   │ BỊ KHÓA 100%         │ • Doanh nghiệp dùng AWS Systems Manager (SSM Session Manager) để SSH   │
+│                       │                      │   thông qua IAM quyền hạn cao, không cần mở bất kỳ port inbound nào!   │
+└───────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+BƯỚC 3: TẠO AMAZON RDS POSTGRESQL MULTI-AZ (HIGH AVAILABILITY)
+--------------------------------------------------------------------------------
+3.1. Thao tác trên AWS Console:
+1. Vào **RDS** -> **Subnet groups** -> **Create DB Subnet Group**:
+   - Tên: `cgv-rds-data-subnet-group`.
+   - VPC: `cgv-enterprise-vpc`.
+   - Subnets: Chọn 2 Private Data Subnets (`10.0.20.0/24` và `10.0.21.0/24`).
+2. Vào **Databases** -> **Create database**:
+   - Engine: `PostgreSQL` (Version `16.x`).
+   - Template: **Production**.
+   - Deployment options: **Multi-AZ DB cluster** (hoặc Multi-AZ DB instance).
+   - DB instance identifier: `cgv-db-enterprise`.
+   - Master username: `postgres`.
+   - Master password: `CgvEnterpriseP@ss2026`.
+   - Instance class: `db.m6g.large` hoặc `db.t4g.medium`.
+   - Storage: `100 GiB gp3`, tích chọn **Enable storage autoscaling**.
+   - Virtual private cloud (VPC): `cgv-enterprise-vpc`.
+   - DB subnet group: `cgv-rds-data-subnet-group`.
+   - Public access: **No** (Bắt buộc).
+   - VPC security group: Chọn `cgv-db-sg`.
+   - Additional configuration: Initial database name: `cgv`.
+   - Bấm **Create database** -> Copy **Regional Endpoint**.
+
+3.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ RDS MULTI-AZ:
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ RDS           │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ PostgreSQL Version     │ 16.x                 │ • Bản ổn định mới nhất, cải thiện 30% tốc độ truy vấn JSONB, tối ưu    │
+│                        │                      │   VACUUM dọn dẹp bảng và hỗ trợ chuẩn Logical Decoding cho Debezium.  │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Deployment Options     │ Multi-AZ Cluster     │ • Nhân bản đồng bộ (Synchronous Replication) sang node Standby ở AZ-b. │
+│                        │ (hoặc Instance)      │ • Khi Data Center A sập, AWS tự động chuyển Endpoint sang AZ-b trong   │
+│                        │                      │   vòng < 60 giây (RTO < 60s, RPO = 0: Không mất 1 bản ghi vé nào).     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Instance Class         │ db.m6g.large         │ • Chip Graviton 3 (ARM) do AWS tự sản xuất, hiệu năng cao hơn 20%      │
+│                        │                      │   và tiết kiệm 20% chi phí so với chip Intel x86 truyền thống.         │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Storage gp3 &          │ 100 GiB gp3          │ • Cung cấp sẵn 3,000 IOPS và 125 MB/s băng thông độc lập dung lượng.   │
+│ Autoscaling            │ Autoscaling Enabled  │ • Autoscaling tự phình to khi rạp chiếu có hàng triệu đơn đặt vé,      │
+│                        │                      │   tránh thảm họa đầy ổ cứng làm sập database trong giờ cao điểm.       │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Public Access          │ No                   │ • Khóa cứng DB trong mạng kín. Chỉ cho phép các ứng dụng trong VPC     │
+│                        │                      │   truy cập. Hacker không có cách nào chọc trực tiếp vào cơ sở dữ liệu. │
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+BƯỚC 4: TẠO AMAZON MSK (MANAGED STREAMING FOR APACHE KAFKA)
+--------------------------------------------------------------------------------
+4.1. Thao tác trên AWS Console:
+1. Vào **Amazon MSK** -> Bấm **Create cluster**:
+   - Cluster name: `cgv-msk-enterprise`.
+   - Cluster type: **Provisioned**.
+   - Apache Kafka version: Phiên bản 3.5.x trở lên.
+2. Networking:
+   - VPC: `cgv-enterprise-vpc`.
+   - Subnets: Chọn 2 Private Data Subnets (`10.0.20.0/24` và `10.0.21.0/24`).
+   - Security Groups: Chọn `cgv-msk-sg`.
+3. Brokers:
+   - Broker type: `kafka.m5.large` (hoặc `kafka.t3.small`).
+   - Number of brokers per zone: `1` (Tổng 2 hoặc 3 brokers).
+4. Security & Encryption:
+   - Encryption: Bật **TLS encryption between brokers** và **TLS encryption in transit**.
+   - Access control: Chọn **SASL/SCRAM** (Lưu thông tin tài khoản trong AWS Secrets Manager) hoặc **Unauthenticated** (nếu chạy hoàn toàn trong mạng Private).
+5. Bấm **Create cluster** -> Chờ khoảng 15 phút -> Copy chuỗi **Bootstrap servers (TLS)**.
+
+4.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ AMAZON MSK:
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ MSK           │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Cluster Type           │ Provisioned          │ • Doanh nghiệp kiểm soát chính xác tài nguyên CPU/RAM của từng Broker, │
+│                        │                      │   ổn định throughput không bị ảnh hưởng bởi cơ chế "thắt cổ chai" bus. │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Number of Brokers      │ 2 hoặc 3 Brokers     │ • Phân bổ trên 2 hoặc 3 AZs khác nhau. Nếu 1 Data Center sập, cụm      │
+│                        │ (Multi-AZ)           │   Kafka vẫn đạt Quorum (đa số) để ghi nhận đơn vé bình thường.         │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Encryption in Transit  │ TLS Enabled          │ • Mã hóa mọi gói tin sự kiện (thông tin vé, khách hàng, số tiền)       │
+│                        │                      │   ngay trên đường dây truyền dẫn, chống nghe lén nội bộ (Sniffing).    │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ SASL/SCRAM Auth        │ Enabled              │ • Cơ chế xác thực mạnh mẽ bằng thuật toán băm Salted Challenge Response│
+│                        │                      │   Password, chống giả mạo danh tính khi gửi thông điệp vào topic.      │
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+BƯỚC 5: TẠO AMAZON ELASTICACHE REDIS CLUSTER MULTI-AZ
+--------------------------------------------------------------------------------
+5.1. Thao tác trên AWS Console:
+1. Vào **ElastiCache** -> **Redis clusters** -> Bấm **Create Redis cluster**:
+   - Deployment option: **Cluster Mode Enabled** (Scale ngang đa Shard).
+   - Cluster name: `cgv-redis-enterprise`.
+   - Multi-AZ: TÍCH CHỌN **Enable Multi-AZ**.
+   - Auto-failover: TÍCH CHỌN **Enable**.
+   - Subnet group: Chọn 2 Private Data Subnets.
+   - Security group: Chọn `cgv-redis-sg`.
+   - Encryption: Bật **Encryption in-transit** và **Encryption at-rest**.
+2. Bấm **Create** -> Copy **Configuration Endpoint**.
+
+5.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ ELASTICACHE REDIS:
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ REDIS         │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Cluster Mode Enabled   │ Sharding Enabled     │ • Băm nhỏ dữ liệu ra 16,384 Hash Slots. Cho phép scale ngang bộ nhớ    │
+│                        │                      │   và chia tải đọc ghi lên hàng chục node khi có công chiếu phim bom tấn│
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Multi-AZ Auto-failover │ Enabled              │ • Khi node Redis Master sập, Replica sẽ tự động được đôn lên làm       │
+│                        │                      │   Master trong vòng 5 giây, bảo toàn 100% các phiên khóa ghế (SeatLock)│
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Encryption in-transit  │ TLS Enabled          │ • Mã hóa đường truyền Redis với Spring Boot Lettuce Client qua cổng 6379│
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+BƯỚC 6: TRIỂN KHAI CỤM MÁY CHỦ APPLICATION (EC2 PRIVATE SUBNET)
+--------------------------------------------------------------------------------
+6.1. Thao tác trên AWS Console:
+1. Vào **EC2** -> **Launch instances**:
+   - Name: `cgv-app-node-1` (và tương tự cho `cgv-app-node-2`).
+   - OS: `Ubuntu Server 24.04 LTS`.
+   - Instance type: `t3.medium` hoặc `c6g.large` (2 vCPU, 4-8 GB RAM).
+   - Network settings:
+     * VPC: `cgv-enterprise-vpc`.
+     * Subnet: Chọn **Private App Subnet** (`10.0.10.0/24`).
+     * Auto-assign Public IP: **Disable** (Bắt buộc không cấp IP Public!).
+     * Security group: Chọn `cgv-app-sg`.
+   - Advanced details -> **IAM instance profile**: Chọn Role có gắn policy `AmazonSSMManagedInstanceCore`.
+2. Bấm **Launch instance**.
+3. Kết nối vào máy ảo: Trên trang Instances -> Chọn máy -> Bấm nút **Connect** ở góc trên -> Chọn tab **Session Manager** -> Bấm **Connect** (Mở terminal trực tiếp trên trình duyệt, an toàn tuyệt đối 100% không cần mở port 22!).
+
+6.2. BẢNG GIẢI THÍCH CHI TIẾT THÔNG SỐ EC2 PRIVATE:
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ EC2           │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Vị trí Subnet          │ Private App Subnet   │ • Máy chủ chứa mã nguồn và xử lý nghiệp vụ thanh toán nằm hoàn toàn    │
+│                        │ (10.0.10.x, 10.0.11.x│   bên trong mạng kín. Mọi kết nối ra ngoài đều qua NAT Gateway.        │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Auto-assign Public IP  │ Disable              │ • Không cấp IP Public giúp triệt tiêu hoàn toàn khả năng bị rà quét    │
+│                        │                      │   lỗ hổng hay tấn công trực diện từ mạng Internet.                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ IAM Instance Profile   │ SSM Managed Core     │ • Cho phép kỹ sư quản trị remote qua AWS Systems Manager.              │
+│                        │                      │ • Kiểm soát đăng nhập qua quyền IAM và lưu vết log truy cập CloudTrail,│
+│                        │                      │   loại bỏ hoàn toàn rủi ro bị mất file khóa SSH .pem.                  │
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+BƯỚC 7: TẠO APPLICATION LOAD BALANCER (ALB) & CHỨNG CHỈ ACM
+--------------------------------------------------------------------------------
+7.1. Thao tác trên AWS Console:
+1. Vào **AWS Certificate Manager (ACM)** -> **Request certificate**:
+   - Domain name: `api.cgvcinemas.vn` (hoặc domain của bạn).
+   - Validation method: **DNS validation** -> Bấm Request.
+   - Thêm bản ghi CNAME mà AWS cung cấp vào Cloudflare DNS để hoàn tất xác thực chứng chỉ SSL trong 2 phút.
+2. Vào **EC2** -> **Load Balancers** -> **Create Load Balancer** -> **Application Load Balancer**:
+   - Name: `cgv-enterprise-alb`.
+   - Scheme: **Internet-facing**.
+   - Network mapping: Chọn `cgv-enterprise-vpc` và 2 **Public Subnets** (`10.0.1.0/24` & `10.0.2.0/24`).
+   - Security groups: Chọn `cgv-alb-sg`.
+   - Listeners & Routing:
+     * Listener HTTPS 443: Forward sang **Target Group** (Port 8000 của các máy ảo Private). Chọn chứng chỉ ACM vừa tạo.
+     * Listener HTTP 80: Chọn Action **Redirect to URL** -> Chọn **HTTPS: 443** (Mã 301 Moved Permanently).
+3. Copy **DNS name** của ALB (VD: `cgv-alb-12345.ap-southeast-1.elb.amazonaws.com`).
+
+7.2. BẢNG GIẢI THÍCH CHI TIẾT THÔNG SỐ ALB & ACM:
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ ALB           │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Scheme                 │ Internet-facing      │ • ALB đóng vai trò "người gác cổng" đón nhận traffic từ khách hàng     │
+│                        │                      │   trên Internet rồi phân phối vào các máy chủ Private an toàn.         │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Vị trí Network Mapping │ 2 Public Subnets     │ • Phải đặt trên 2 AZs khác nhau để ALB dự phòng khi 1 Data Center sập.  │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ HTTP 80 Redirect 301   │ Redirect sang 443    │ • Đảm bảo 100% liên lạc giữa khách hàng và rạp chiếu phim được mã hóa, │
+│                        │                      │   không bao giờ truyền mật khẩu hay thông tin thẻ dưới dạng văn bản thô│
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Target Group Port 8000 │ Trỏ vào Kong Gateway │ • ALB chỉ chuyển tiếp request vào cổng 8000 của Kong Gateway. Kong sẽ  │
+│                        │                      │   tự phân luồng chi tiết sang các port 8081, 8082, 8083...             │
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+BƯỚC 8: CẤU HÌNH TƯỜNG LỬA CLOUDFLARE WAF + TÊN MIỀN DOANH NGHIỆP
+--------------------------------------------------------------------------------
+8.1. Thao tác trên Cloudflare Dashboard:
+1. Đăng nhập https://dash.cloudflare.com/ -> Chọn tên miền của bạn.
+2. Vào **DNS** -> **Records** -> Bấm **Add record**:
+   - Type: `CNAME`
+   - Name: `api` (Tạo URL: `api.cgvcinemas.vn`)
+   - Target: Dán **DNS name của AWS ALB** (`cgv-alb-12345.ap-southeast-1.elb.amazonaws.com`).
+   - Proxy status: BẬT **Proxied (Đám mây màu cam)**.
+3. Vào tab **SSL/TLS**:
+   - Chọn chế độ mã hóa: **Full (Strict)** (Mã hóa toàn vẹn từ Client -> Cloudflare -> AWS ALB).
+4. Vào tab **Security** -> **WAF**:
+   - Bật **Cloudflare Managed Ruleset** để tự động chống botnet cào vé, chống SQLi và chặn các dải IP độc hại.
+5. Cập nhật Frontend `.env.production`:
+   `VITE_API_GATEWAY_URL=https://api.cgvcinemas.vn`
+
+8.2. BẢNG GIẢI THÍCH CHI TIẾT THÔNG SỐ CLOUDFLARE WAF:
+┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
+│ THÔNG SỐ CLOUDFLARE    │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ CNAME Record           │ api -> ALB DNS       │ • Tạo tên miền chuyên nghiệp, dễ nhớ cho API của rạp chiếu phim.       │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Proxy Status (Mây cam) │ Proxied              │ • BẮT BUỘC: Khi bật mây cam, toàn bộ traffic từ người dùng phải đi qua │
+│                        │                      │   Cloudflare lọc sạch mã độc trước khi chuyển tiếp về AWS.             │
+│                        │                      │ • Ẩn 100% CNAME của AWS, hacker ping chỉ thấy IP ẩn danh của Cloudflare│
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ SSL/TLS Full (Strict)  │ Strict Encryption    │ • Đảm bảo dữ liệu được mã hóa 2 lần: (1) Từ người dùng đến Cloudflare, │
+│                        │                      │   và (2) Từ Cloudflare đến AWS ALB bằng chứng chỉ ACM hợp lệ.          │
+└────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+5. TỔNG KẾT VẬN HÀNH & KẾT QUẢ ĐẠT ĐƯỢC
+================================================================================
+Khi triển khai xong theo đúng bản thiết kế này:
+✓ Toàn bộ cơ sở dữ liệu PostgreSQL, Kafka Broker và Redis Cluster đều nằm sâu trong mạng kín Private,
+  không có bất kỳ con đường nào bị hacker rà quét từ Internet.
+✓ Chịu lỗi thảm họa tức thời (Disaster Recovery): Sập 1 Data Center của AWS, hệ thống tự động failover
+  trong vòng dưới 60 giây mà không cần con người can thiệp.
+✓ Lưu lượng từ khách hàng được tăng tốc qua CDN toàn cầu, bảo vệ bởi tường lửa WAF của Cloudflare.
+✓ Đạt 100% tiêu chuẩn kiến trúc của các tập đoàn công nghệ lớn trên thế giới!
+================================================================================

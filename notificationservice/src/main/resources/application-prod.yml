@@ -1,0 +1,72 @@
+server:
+  port: ${SERVER_PORT:8086}
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: notification-service
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:${DB_URL:jdbc:postgresql://postgres-db.cgv-prod.svc.cluster.local:5432/cgv}}
+    username: ${SPRING_DATASOURCE_USERNAME:${DB_USERNAME:postgres}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${DB_PASSWORD:postgrespassword}}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 3
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:kafka-1.cgv-prod.svc.cluster.local:9092,kafka-2.cgv-prod.svc.cluster.local:9092,kafka-3.cgv-prod.svc.cluster.local:9092}}
+    consumer:
+      bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:${KAFKA_BOOTSTRAP_SERVERS:kafka-1.cgv-prod.svc.cluster.local:9092,kafka-2.cgv-prod.svc.cluster.local:9092,kafka-3.cgv-prod.svc.cluster.local:9092}}
+      group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-group}
+      auto-offset-reset: earliest
+      spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      enable-auto-commit: false
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
+        max.poll.records: 50
+        max.poll.interval.ms: 300000
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        fetch.min.bytes: 1
+        fetch.max.wait.ms: 500
+        isolation.level: read_committed
+
+    listener:
+      concurrency: 3
+      ack-mode: MANUAL_IMMEDIATE
+      poll-timeout: 3000
+      missing-topics-fatal: false
+
+brevo:
+  expiry-time: ${EXPIRY_TIME:5}
+  template-id: 2
+  api-key: ${BREVO_API_KEY}
+  sender:
+    name: "CGV Cinemas"
+    email: ${EMAIL}
+
+logging:
+  level:
+    root: INFO
+    com.cgv.notificationservice: INFO
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.apache.kafka: WARN

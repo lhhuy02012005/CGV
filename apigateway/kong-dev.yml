@@ -1,9 +1,16 @@
 _format_version: "3.0"
 _transform: true
 
+# ==============================================================================
+# HƯỚNG DẪN CẤU HÌNH URL:
+# 1. Chạy Docker Compose (Bridge network cgv-net): Dùng tên container (mặc định bên dưới).
+# 2. Chạy AWS nhiều máy ảo EC2: Thay tên container thành Private IP của Máy ảo 2 (VD: http://10.0.1.X:8082).
+# 3. Chạy Local trực tiếp trên máy host: Bỏ comment dòng '# url: http://host.docker.internal:...'.
+# ==============================================================================
 services:
   - name: identity-service
     url: http://identity-service:8081
+    # url: http://host.docker.internal:8081
     routes:
       - name: identity-route
         paths:
@@ -27,23 +34,37 @@ services:
               fault_tolerant: true
 
   - name: booking-service
-    url: http://host.docker.internal:8082
+    url: http://booking-service:8082
+    # url: http://host.docker.internal:8082
     routes:
       - name: booking-route
         paths:
           - /api/v1/bookings
+          - /api/v1/ws
         strip_path: false
 
   - name: catalog-service
-    url: http://host.docker.internal:8083/api/v1
+    url: http://catalog-service:8083/api/v1
+    # url: http://host.docker.internal:8083/api/v1
     routes:
       - name: catalog-route
         paths:
           - /api/v1/catalogs
         strip_path: true
+      - name: catalog-direct-route
+        paths:
+          - /api/v1/movies
+          - /api/v1/cinemas
+          - /api/v1/showtimes
+          - /api/v1/seats
+          - /api/v1/seat-types
+          - /api/v1/regions
+          - /api/v1/rooms
+        strip_path: false
 
   - name: marketing-service
-    url: http://host.docker.internal:8084
+    url: http://marketing-service:8084
+    # url: http://host.docker.internal:8084
     routes:
       - name: marketing-route
         paths:
@@ -51,7 +72,8 @@ services:
         strip_path: false
 
   - name: payment-service
-    url: http://host.docker.internal:8085
+    url: http://payment-service:8085
+    # url: http://host.docker.internal:8085
     routes:
       - name: payment-route
         paths:
@@ -59,16 +81,18 @@ services:
           - /api/v1/payments
         strip_path: false
 
-#  - name: notification-service
-#    url: http://notification-service:8086
-#    routes:
-#      - name: notification-route
-#        paths:
-#          - /api/v1/notification
-#        strip_path: false
+  - name: notification-service
+    url: http://notification-service:8086
+    # url: http://host.docker.internal:8086
+    routes:
+      - name: notification-route
+        paths:
+          - /api/v1/notification
+        strip_path: false
 
   - name: media-service
-    url: http://host.docker.internal:8087
+    url: http://media-service:8087
+    # url: http://host.docker.internal:8087
     routes:
       - name: media-route
         paths:
@@ -80,11 +104,26 @@ plugins:
   - name: cors
     config:
       origins:
+        - ".*"
         - http://localhost:3000
         - http://localhost:5173
         - http://localhost:5174
         - http://localhost:8000
         - http://localhost:8081
+        - http://localhost:8082
+        - http://localhost:8083
+        - http://localhost:8084
+        - http://localhost:8085
+        - http://localhost:8086
+        - http://localhost:8087
+        - http://127.0.0.1:5173
+        - http://127.0.0.1:8000
+        - http://127.0.0.1:8081
+        - http://127.0.0.1:8082
+        - http://127.0.0.1:8083
+        - http://127.0.0.1:8084
+        - http://127.0.0.1:8085
+        - http://127.0.0.1:8087
       methods:
         - GET
         - POST

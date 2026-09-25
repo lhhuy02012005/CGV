@@ -4,13 +4,14 @@ import com.cgv.bookingservice.dto.request.SeatLockRequest;
 import com.cgv.bookingservice.dto.response.SeatLockResponse;
 import com.cgv.bookingservice.service.SeatLockService;
 import com.cgv.commondto.dto.ApiResponse;
-import com.cgv.commondto.exception.BusinessException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/bookings/seat-locks")
@@ -19,19 +20,23 @@ public class SeatLockController {
 
     private final SeatLockService seatLockService;
 
+    private String resolveUserId(Jwt jwt, String headerUserId) {
+        if (jwt != null && jwt.getSubject() != null) {
+            return jwt.getSubject();
+        }
+        if (headerUserId != null && !headerUserId.isBlank() && !headerUserId.equalsIgnoreCase("anonymous")) {
+            return headerUserId;
+        }
+        return "guest_" + UUID.randomUUID().toString();
+    }
+
     @PostMapping
     public ApiResponse<SeatLockResponse> lockSeats(
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @RequestBody @Valid SeatLockRequest request
     ) {
-        String userId = (jwt != null) ? jwt.getSubject() : (headerUserId != null && !headerUserId.isBlank() ? headerUserId : null);
-        if (userId == null || userId.equalsIgnoreCase("guest") || userId.equalsIgnoreCase("anonymous")) {
-            throw new BusinessException(
-                    com.cgv.commondto.exception.ErrorCode.UNAUTHENTICATED,
-                    "Vui lòng đăng nhập tài khoản trước khi thực hiện giữ ghế!"
-            );
-        }
+        String userId = resolveUserId(jwt, headerUserId);
         SeatLockResponse response = seatLockService.lockSeats(userId, request);
         return ApiResponse.<SeatLockResponse>builder()
                 .status(HttpStatus.OK.value())
@@ -46,10 +51,8 @@ public class SeatLockController {
             @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @RequestBody @Valid SeatLockRequest request
     ) {
-        String userId = (jwt != null) ? jwt.getSubject() : (headerUserId != null && !headerUserId.isBlank() ? headerUserId : null);
-        if (userId != null) {
-            seatLockService.releaseSeats(userId, request);
-        }
+        String userId = resolveUserId(jwt, headerUserId);
+        seatLockService.releaseSeats(userId, request);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())
                 .message("Giải phóng ghế thành công")
@@ -60,12 +63,10 @@ public class SeatLockController {
     public ApiResponse<Void> reportExpired(
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
-            @RequestParam java.util.UUID showtimeId
+            @RequestParam UUID showtimeId
     ) {
-        String userId = (jwt != null) ? jwt.getSubject() : (headerUserId != null && !headerUserId.isBlank() ? headerUserId : null);
-        if (userId != null) {
-            seatLockService.reportExpiredLock(userId, showtimeId);
-        }
+        String userId = resolveUserId(jwt, headerUserId);
+        seatLockService.reportExpiredLock(userId, showtimeId);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())
                 .message("Ghi nhận phiên giữ ghế hết hạn thành công")
@@ -73,13 +74,24 @@ public class SeatLockController {
     }
 
     @GetMapping("/{showtimeId}")
-    public ApiResponse<java.util.List<java.util.UUID>> getLockedSeats(
-            @PathVariable java.util.UUID showtimeId
+    public ApiResponse<java.util.List<UUID>> getLockedSeats(
+            @PathVariable UUID showtimeId
     ) {
-        return ApiResponse.<java.util.List<java.util.UUID>>builder()
+        return ApiResponse.<java.util.List<UUID>>builder()
                 .status(HttpStatus.OK.value())
                 .message("Danh sách ghế đang được giữ")
                 .data(seatLockService.getActiveLockedSeatIds(showtimeId))
+                .build();
+    }
+
+    @GetMapping("/booked/{showtimeId}")
+    public ApiResponse<java.util.List<UUID>> getBookedSeats(
+            @PathVariable UUID showtimeId
+    ) {
+        return ApiResponse.<java.util.List<UUID>>builder()
+                .status(HttpStatus.OK.value())
+                .message("Danh sách ghế đã được đặt")
+                .data(seatLockService.getBookedSeatIds(showtimeId))
                 .build();
     }
 }

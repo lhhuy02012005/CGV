@@ -1,0 +1,13 @@
+Microservice	Cổng	Đường dẫn Swagger UI	Chức năng chính
+Identity Service	8081	http://localhost:8081/api/v1/swagger-ui/index.html
+Đăng nhập, đăng ký, OTP, đổi mật khẩu, phân quyền
+Booking Service	8082	http://localhost:8082/api/v1/swagger-ui/index.html
+Giữ ghế (Seat-Lock), đặt vé, đơn hàng của tôi
+Catalog Service	8083	http://localhost:8083/api/v1/swagger-ui/index.html
+Phim, Rạp, Suất chiếu, Ghế, Tìm kiếm Elasticsearch
+Marketing Service	8084	http://localhost:8084/api/v1/swagger-ui/index.html
+Voucher, mã giảm giá, khuyến mãi đang chạy
+Payment Service	8085	http://localhost:8085/api/v1/swagger-ui/index.html
+Tạo URL VNPay, Webhook & Callback thanh toán
+Media Service	8087	http://localhost:8087/api/v1/swagger-ui/index.html
+Upload poster, banner, trailer video lên AWS S3

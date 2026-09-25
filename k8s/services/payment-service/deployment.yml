@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: cgv-prod
+  labels:
+    app: payment-service
+spec:
+  replicas: 2 # Mặc định 2 Pods để đảm bảo luôn sẵn sàng nhận webhook thanh toán VNPay
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+        - name: payment-service
+          image: cgv/payment-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: cgv-global-config
+            - secretRef:
+                name: cgv-global-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "180Mi"
+            limits:
+              cpu: "500m"
+              memory: "350Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/actuator/health/readiness
+              port: 8085
+            initialDelaySeconds: 35
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/actuator/health/liveness
+              port: 8085
+            initialDelaySeconds: 45
+            periodSeconds: 15

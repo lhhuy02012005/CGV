@@ -21,9 +21,12 @@ public class SecurityConfig {
             "/auth/register/verify",
             "/auth/refresh",
             "/auth/exchange-code",
+            "/auth/social-sync",
+            "/auth/logout",
             "/v3/api-docs/**",
             "/swagger-ui/**",
-            "/swagger-ui.html"
+            "/swagger-ui.html",
+            "/actuator/**"
     };
 
     @Bean

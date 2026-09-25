@@ -1,0 +1,27 @@
+# 1. Tạo Namespace cgv-prod
+kubectl apply -f k8s/00-namespace.yml
+
+# 2. Nạp ConfigMap và Secret
+kubectl apply -f k8s/01-configmap.yml
+kubectl apply -f k8s/02-secrets.yml
+
+# 2.1. (Tuỳ chọn) Nếu chạy Postgres/Redis trong cụm K8s (không dùng AWS RDS/ElastiCache):
+# kubectl apply -f k8s/infra/postgres-redis.yml
+
+# 3. Khởi tạo Cụm Kafka Cluster 3 Broker
+kubectl apply -f k8s/kafka/
+
+# 4. Bật Kong API Gateway (2 bản sao)
+kubectl apply -f k8s/kong/
+
+# 5. Triển khai đồng loạt 6 Microservices
+kubectl apply -f k8s/services/identity-service/
+kubectl apply -f k8s/services/catalog-service/
+kubectl apply -f k8s/services/booking-service/
+kubectl apply -f k8s/services/payment-service/
+kubectl apply -f k8s/services/notification-service/
+kubectl apply -f k8s/services/marketing-service/
+kubectl apply -f k8s/services/media-service/
+
+# 6. Mở Ingress đón khách
+kubectl apply -f k8s/ingress/ingress.yml

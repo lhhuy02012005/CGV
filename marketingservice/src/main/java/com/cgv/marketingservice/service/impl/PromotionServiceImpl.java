@@ -28,6 +28,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
+import com.cgv.marketingservice.dto.request.PromotionUpdateRequest;
+import com.cgv.marketingservice.repository.PromotionUsageRepository;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 @Service
 @RequiredArgsConstructor
@@ -35,7 +38,9 @@ import java.util.UUID;
 @Slf4j(topic = "PROMOTION-SERVICE")
 public class PromotionServiceImpl implements PromotionService {
     PromotionRepository promotionRepository;
+    PromotionUsageRepository promotionUsageRepository;
     PromotionMapper promotionMapper;
+    StringRedisTemplate stringRedisTemplate;
 
     @Override
     @Transactional
@@ -79,13 +84,18 @@ public class PromotionServiceImpl implements PromotionService {
     @Override
     @Transactional(readOnly = true)
     public List<PromotionResponse> getAvailablePromotions(BigDecimal totalAmount, String tier) {
-        MembershipTier userTier = MembershipTier.fromCode(tier);
+        boolean isGuest = tier == null || tier.isBlank() || tier.equalsIgnoreCase("GUEST");
+        List<MembershipTier> eligibleTiers;
+        if (isGuest) {
+            eligibleTiers = List.of(MembershipTier.ALL);
+        } else {
+            MembershipTier userTier = MembershipTier.fromCode(tier);
+            eligibleTiers = Arrays.stream(MembershipTier.values())
+                    .filter(t -> t.canApply(userTier))
+                    .toList();
+        }
+
         Instant now = Instant.now();
-
-        List<MembershipTier> eligibleTiers = Arrays.stream(MembershipTier.values())
-                .filter(t -> t.canApply(userTier))
-                .toList();
-
         BigDecimal filterAmount = (totalAmount != null && totalAmount.compareTo(BigDecimal.ZERO) > 0)
                 ? totalAmount
                 : null;
@@ -110,5 +120,115 @@ public class PromotionServiceImpl implements PromotionService {
                 .totalPages(page.getTotalPages())
                 .totalElements(page.getTotalElements())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"promotions:active", "promotions:detail"}, allEntries = true)
+    public PromotionResponse updatePromotion(java.util.UUID id, PromotionUpdateRequest request) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_EXISTED, "Không tìm thấy mã khuyến mãi với id: " + id));
+
+        long usedCount = promotionUsageRepository.countByPromotionId(id);
+
+        if (usedCount > 0) {
+            // Đã có khách hàng sử dụng: CHẶN sửa các trường tài chính cốt lõi
+            if (request.getCode() != null && !request.getCode().equalsIgnoreCase(promotion.getCode())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể đổi mã voucher vì đã có " + usedCount + " lượt khách hàng sử dụng!");
+            }
+            if (request.getDiscountType() != null && !request.getDiscountType().equals(promotion.getDiscountType())) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể đổi loại giảm giá (DiscountType) của voucher đã có người sử dụng!");
+            }
+            if (request.getDiscountValue() != null && request.getDiscountValue().compareTo(promotion.getDiscountValue()) != 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể thay đổi giá trị giảm giá (DiscountValue) của voucher đã có người sử dụng!");
+            }
+            if (request.getMinOrderValue() != null && request.getMinOrderValue().compareTo(promotion.getMinOrderValue()) != 0) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể thay đổi điều kiện đơn tối thiểu (MinOrderValue) của voucher đã có người sử dụng!");
+            }
+            if (request.getUsageLimit() != null && request.getUsageLimit() < usedCount) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Giới hạn sử dụng mới (" + request.getUsageLimit() + ") không được nhỏ hơn số lượt đã dùng thực tế (" + usedCount + ")!");
+            }
+        } else {
+            // Chưa có ai sử dụng: Cho phép sửa tự do
+            if (request.getCode() != null && !request.getCode().isBlank()) {
+                String newCode = request.getCode().toUpperCase(Locale.ROOT);
+                if (!newCode.equals(promotion.getCode()) && promotionRepository.existsByCode(newCode)) {
+                    throw new BusinessException(ErrorCode.BAD_REQUEST, "Mã khuyến mãi '" + newCode + "' đã tồn tại!");
+                }
+                promotion.setCode(newCode);
+            }
+            if (request.getDiscountType() != null) promotion.setDiscountType(request.getDiscountType());
+            if (request.getDiscountValue() != null) promotion.setDiscountValue(request.getDiscountValue());
+            if (request.getMaxDiscountAmount() != null) promotion.setMaxDiscountAmount(request.getMaxDiscountAmount());
+            if (request.getMinOrderValue() != null) promotion.setMinOrderValue(request.getMinOrderValue());
+            if (request.getValidFrom() != null) promotion.setValidFrom(request.getValidFrom());
+            if (request.getApplicableTier() != null) {
+                promotion.setApplicableTier(MembershipTier.fromCode(request.getApplicableTier()));
+            }
+        }
+
+        // Các trường luôn được phép sửa
+        if (request.getName() != null && !request.getName().isBlank()) {
+            promotion.setName(request.getName());
+        }
+        if (request.getDescription() != null) {
+            promotion.setDescription(request.getDescription());
+        }
+        if (request.getValidTo() != null) {
+            promotion.setValidTo(request.getValidTo());
+        }
+        if (request.getUsageLimit() != null) {
+            promotion.setUsageLimit(request.getUsageLimit());
+        }
+        if (request.getMaxUsesPerUser() != null) {
+            promotion.setMaxUsesPerUser(request.getMaxUsesPerUser());
+        }
+        if (request.getIsActive() != null) {
+            promotion.setActive(request.getIsActive());
+        }
+
+        Promotion saved = promotionRepository.save(promotion);
+
+        // Đồng bộ cache Redis nếu cần
+        try {
+            String redisKey = "voucher:" + saved.getCode();
+            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(redisKey))) {
+                if (saved.getUsageLimit() != null) {
+                    stringRedisTemplate.opsForHash().put(redisKey, "max_usage", String.valueOf(saved.getUsageLimit()));
+                }
+                if (!saved.isActive()) {
+                    stringRedisTemplate.delete(redisKey);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Lỗi đồng bộ Redis cache cho voucher {}: {}", saved.getCode(), e.getMessage());
+        }
+
+        log.info("Admin đã cập nhật thành công voucher: ID={}, Code={}", saved.getId(), saved.getCode());
+        return promotionMapper.toPromotionResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"promotions:active", "promotions:detail"}, allEntries = true)
+    public void deletePromotion(java.util.UUID id) {
+        Promotion promotion = promotionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_EXISTED, "Không tìm thấy mã khuyến mãi với id: " + id));
+
+        long usedCount = promotionUsageRepository.countByPromotionId(id);
+        if (usedCount > 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "Không thể xóa voucher '" + promotion.getCode() + "' vì đã có " + usedCount +
+                    " lượt khách hàng sử dụng trong các đơn đặt vé. Vui lòng ngưng kích hoạt (isActive = false) để đảm bảo toàn vẹn dữ liệu kế toán!");
+        }
+
+        promotionRepository.delete(promotion);
+        try {
+            stringRedisTemplate.delete("voucher:" + promotion.getCode());
+            stringRedisTemplate.delete("voucher:" + promotion.getCode() + ":users");
+        } catch (Exception e) {
+            log.warn("Lỗi xóa cache Redis cho voucher {}: {}", promotion.getCode(), e.getMessage());
+        }
+        log.info("Đã xóa hoàn toàn voucher chưa sử dụng: ID={}, Code={}", id, promotion.getCode());
     }
 }

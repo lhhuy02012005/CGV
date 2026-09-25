@@ -20,4 +20,6 @@ public interface RoomService {
     RoomResponse getRoomById(UUID roomId);
 
     PageResponse<RoomResponse> getAllRoomsByCinemaId(UUID cinemaId, Pageable pageable);
+
+    void deleteRoom(UUID roomId);
 }

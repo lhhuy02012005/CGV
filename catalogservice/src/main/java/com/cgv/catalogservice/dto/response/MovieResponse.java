@@ -4,6 +4,8 @@ import com.cgv.catalogservice.enums.MovieStatus;
 import com.cgv.catalogservice.enums.ShowingStatus;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public record MovieResponse(
@@ -17,8 +19,8 @@ public record MovieResponse(
         String supportedModes,
         String ageRating,
         Integer durationMinutes,
-        Instant releaseDate,
-        Instant endDate,
+        LocalDate releaseDate,
+        LocalDate endDate,
         ShowingStatus showingStatus,
         String posterUrl,
         String backdropUrl,
@@ -26,6 +28,15 @@ public record MovieResponse(
         Boolean isFeatured,
         MovieStatus status,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        List<MovieCastResponse> casts
 ) {
+    public MovieResponse withCasts(List<MovieCastResponse> newCasts) {
+        return new MovieResponse(
+                id, title, originalTitle, synopsis, director, language, subtitle,
+                supportedModes, ageRating, durationMinutes, releaseDate, endDate,
+                showingStatus, posterUrl, backdropUrl, trailerYoutubeUrl,
+                isFeatured, status, createdAt, updatedAt, newCasts
+        );
+    }
 }

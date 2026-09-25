@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service
+  namespace: cgv-prod
+  labels:
+    app: catalog-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: catalog-service
+  template:
+    metadata:
+      labels:
+        app: catalog-service
+    spec:
+      containers:
+        - name: catalog-service
+          image: cgv/catalog-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+            - name: grpc
+              containerPort: 9090
+          envFrom:
+            - configMapRef:
+                name: cgv-global-config
+            - secretRef:
+                name: cgv-global-secrets
+          resources:
+            requests: #Máy chủ phải còn trống tối thiểu 180MB RAM và 0.1 CPU thì mới cho phép Pod này chạy lên.
+              cpu: "100m"
+              memory: "180Mi"
+            limits: #Nếu lúc cao điểm tải nặng, Pod được phép ăn tối đa 350MB RAM. Nếu vượt quá 350MB, K8s sẽ khởi động lại Pod để tránh làm treo các container khác
+              cpu: "500m"
+              memory: "350Mi"
+          readinessProbe:
+            httpGet:
+              path: /api/v1/actuator/health/readiness
+              port: 8083
+            initialDelaySeconds: 35
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/actuator/health/liveness
+              port: 8083
+            initialDelaySeconds: 45
+            periodSeconds: 15

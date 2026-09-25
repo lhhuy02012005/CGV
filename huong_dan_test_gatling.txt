@@ -1,0 +1,285 @@
+================================================================================
+HƯỚNG DẪN KIỂM THỬ TẢI CAO VÀ TÍNH TOÀN VẸN DỮ LIỆU BẰNG GATLING (CGV BACKEND)
+================================================================================
+Tài liệu hướng dẫn thực hành chi tiết dành cho kỹ sư kiểm thử & phát triển Backend.
+Áp dụng: CGV Microservices Architecture (Spring Boot, Redis, Kafka, PostgreSQL).
+
+--------------------------------------------------------------------------------
+MỤC LỤC
+--------------------------------------------------------------------------------
+1. TỔNG QUAN VỀ GATLING & VÌ SAO CHỌN GATLING CHO BÀI TOÁN TẢI CAO
+2. CÁCH CÀI ĐẶT & CHUẨN BỊ MÔI TRƯỜNG CHẠY GATLING
+3. VIẾT KỊCH BẢN KIỂM THỬ BẰNG JAVA (GATLING JAVA SDK)
+   - Kịch bản 1: Kiểm thử tải đọc (High-Throughput Read) - Tra cứu suất chiếu
+   - Kịch bản 2: Kiểm thử tranh chấp đồng thời (Concurrency & Race Condition) - Đặt ghế
+4. CÁCH CHẠY BÀI TEST & TINH CHỈNH JVM MEMORY
+5. CÁCH ĐỌC & PHÂN TÍCH BÁO CÁO HTML SAU TEST
+6. QUY TRÌNH KIỂM CHỨNG TÍNH TOÀN VẸN DỮ LIỆU (DATA INTEGRITY CHECK)
+7. GIẢI THÍCH CHI TIẾT "VÌ SAO" & "MỤC ĐÍCH" CỦA TỪNG BƯỚC THIẾT LẬP
+
+================================================================================
+1. TỔNG QUAN VỀ GATLING & VÌ SAO CHỌN GATLING CHO BÀI TOÁN TẢI CAO
+================================================================================
+
+1.1. Gatling là gì?
+Gatling là công cụ kiểm thử hiệu năng (Load / Stress / Concurrency Testing) mã nguồn mở,
+được phát triển trên nền tảng Akka Framework và Netty Server (Non-blocking I/O).
+
+1.2. So sánh Gatling và Apache JMeter:
+- Apache JMeter: Mô hình "1 luồng trên 1 người dùng" (1 Thread per Virtual User). Khi bạn
+  cần giả lập 10.000 - 50.000 người dùng đồng thời, máy tính sẽ phải tạo ra hàng chục
+  nghìn OS Threads, dẫn đến hiện tượng nghẽn chuyển ngữ cảnh (Thread Context Switch),
+  tiêu tốn hàng chục GB RAM và máy test bị sập trước cả máy chủ được test.
+- Gatling: Mô hình Non-blocking Asynchronous I/O. Chỉ cần một vài worker threads của
+  Netty là có thể điều khiển hàng chục nghìn kết nối HTTP song song cùng lúc với mức tiêu
+  thụ RAM cực thấp (< 2GB).
+- Viết kịch bản bằng Code (Java/Kotlin/Scala): Dễ tích hợp vào Git, CI/CD Pipeline
+  thay vì phải kéo thả giao diện đồ họa phức tạp như JMeter.
+
+================================================================================
+2. CÁCH CÀI ĐẶT & CHUẨN BỊ MÔI TRƯỜNG CHẠY GATLING
+================================================================================
+
+Có 2 cách cài đặt:
+
+CÁCH 1: DÙNG BẢN ĐỘC LẬP GATLING STANDALONE BUNDLE (Nhanh nhất - Khuyên dùng)
+-----------------------------------------------------------------------------
+Bước 1: Cài đặt JDK 17 hoặc JDK 21 (Gatling yêu cầu tối thiểu Java 11+).
+        Kiểm tra trong Terminal:
+        java -version
+
+Bước 2: Tải Gatling Standalone Bundle (file .zip) từ trang chủ:
+        https://gatling.io/open-source/
+        Hoặc tải trực tiếp bản 3.10.x:
+        curl -LO https://repo1.maven.org/maven2/io/gatling/highcharts/gatling-charts-highcharts-bundle/3.10.5/gatling-charts-highcharts-bundle-3.10.5-bundle.zip
+
+Bước 3: Giải nén thư mục:
+        unzip gatling-charts-highcharts-bundle-3.10.5-bundle.zip
+        cd gatling-charts-highcharts-bundle-3.10.5
+
+Cấu trúc thư mục Gatling:
+- /bin: Chứa script chạy (`gatling.sh` cho Mac/Linux, `gatling.bat` cho Windows).
+- /conf: Chứa file cấu hình `gatling.conf`.
+- /user-files/simulations: Nơi lưu trữ các file kịch bản kiểm thử (Java/Scala).
+- /results: Nơi Gatling xuất báo cáo HTML sau mỗi lần chạy.
+
+CÁCH 2: TÍCH HỢP TRỰC TIẾP VÀO MAVEN PROJECT
+-----------------------------------------------------------------------------
+Thêm plugin sau vào file `pom.xml` của project test:
+```xml
+<dependencies>
+    <dependency>
+        <groupId>io.gatling.highcharts</groupId>
+        <artifactId>gatling-charts-highcharts</artifactId>
+        <version>3.10.5</version>
+        <scope>test</scope>
+    </dependency>
+</dependencies>
+
+<build>
+    <plugins>
+        <plugin>
+            <groupId>io.gatling</groupId>
+            <artifactId>gatling-maven-plugin</artifactId>
+            <version>4.8.2</version>
+        </plugin>
+    </plugins>
+</build>
+```
+
+================================================================================
+3. VIẾT KỊCH BẢN KIỂM THỬ BẰNG JAVA (GATLING JAVA SDK)
+================================================================================
+
+Tạo file: `user-files/simulations/CgvLoadTestSimulation.java`
+
+Dưới đây là mã nguồn kiểm thử thực tế mô phỏng 2 kịch bản:
+- Kịch bản A: Hàng trăm ngàn người tra cứu lịch chiếu phim (Read-Heavy).
+- Kịch bản B: Tranh chấp đồng thời đặt đúng 1 ghế E05 (Race Condition / Concurrency).
+
+```java
+package simulations;
+
+import static io.gatling.javaapi.core.CoreDsl.*;
+import static io.gatling.javaapi.http.HttpDsl.*;
+
+import io.gatling.javaapi.core.*;
+import io.gatling.javaapi.http.*;
+import java.time.Duration;
+
+public class CgvLoadTestSimulation extends Simulation {
+
+    // 1. Cấu hình giao thức HTTP chung
+    HttpProtocolBuilder httpProtocol = http
+        .baseUrl("http://localhost:8000") // Trỏ vào Kong API Gateway của CGV
+        .acceptHeader("application/json")
+        .contentTypeHeader("application/json")
+        .shareConnections(); // Tái sử dụng kết nối HTTP Keep-Alive để đạt throughput tối đa
+
+    // 2. Kịch bản 1: Tra cứu lịch chiếu và danh sách ghế (Read Test)
+    ScenarioBuilder scnBrowseShowtimes = scenario("Kịch bản 1: Tra cứu Suất chiếu & Sơ đồ ghế")
+        .exec(
+            http("1. Lấy danh sách phim đang chiếu")
+                .get("/api/v1/movies/now-showing")
+                .check(status().is(200))
+        )
+        .pause(1) // Người dùng dừng lại 1 giây đọc thông tin
+        .exec(
+            http("2. Lấy sơ đồ ghế suất chiếu")
+                .get("/api/v1/showtimes/d290f1ee-6c54-4b01-90e6-d701748f0851/seats")
+                .check(status().is(200))
+        );
+
+    // 3. Kịch bản 2: Concurrency Rush - Tranh chấp đặt đúng 1 ghế tại cùng 1 thời điểm
+    ScenarioBuilder scnRaceConditionSeatBooking = scenario("Kịch bản 2: Tranh chấp Đặt ghế (Anti-Double Booking)")
+        .exec(
+            http("Bấm Đặt Ghế E05 Đồng Thời")
+                .post("/api/v1/bookings")
+                .body(StringBody("{"
+                    + "\"showtimeId\": \"d290f1ee-6c54-4b01-90e6-d701748f0851\","
+                    + "\"seatIds\": [\"9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d\"],"
+                    + "\"ticketType\": \"ADULT\""
+                    + "}"))
+                .header("Authorization", "Bearer YOUR_JWT_TOKEN_HERE")
+                // Kiểm tra mã phản hồi: Chỉ 1 người được 201 (Created), còn lại phải là 409 (Conflict) hoặc 400
+                .check(status().in(201, 400, 409))
+        );
+
+    // 4. Thiết lập mô hình nạp tải (Load Injection Profile)
+    {
+        setUp(
+            // Kịch bản đọc: Tăng dần từ 0 lên 10.000 người dùng trong 30 giây, giữ tải 1 phút
+            scnBrowseShowtimes.injectOpen(
+                rampUsers(10000).during(Duration.ofSeconds(30)),
+                constantUsersPerSec(500).during(Duration.ofSeconds(60))
+            ),
+
+            // Kịch bản tranh chấp: Đột ngột dồn 5.000 người cùng bấm đặt ghế trong đúng 2 giây
+            scnRaceConditionSeatBooking.injectOpen(
+                nothingFor(Duration.ofSeconds(5)), // Đợi 5 giây cho hệ thống ổn định
+                atOnceUsers(5000)                  // 5.000 người bấm cùng lúc
+            )
+        )
+        .protocols(httpProtocol)
+        // Tiêu chí chấp nhận bài test (Assertions)
+        .assertions(
+            global().responseTime().percentile3().lt(500), // 95% requests phản hồi dưới 500ms
+            global().successfulRequests().percent().gt(99.0) // Tỷ lệ thành công tổng thể > 99%
+        );
+    }
+}
+```
+
+================================================================================
+4. CÁCH CHẠY BÀI TEST & TINH CHỈNH JVM MEMORY
+================================================================================
+
+4.1. Tăng giới hạn File Descriptors trên máy chạy Test (Mac/Linux):
+Mặc định hệ điều hành chỉ cho phép mở 1024 file descriptors (sockets). Cần mở rộng:
+    ulimit -n 65535
+
+4.2. Tinh chỉnh bộ nhớ JVM cho Gatling:
+Mở file `bin/gatling.sh` (hoặc đặt biến môi trường JAVA_OPTS):
+    export JAVA_OPTS="-Xms4G -Xmx8G -XX:+UseG1GC"
+
+Vì sao?
+- `-Xms4G -Xmx8G`: Cấp phát ban đầu 4GB RAM, tối đa 8GB RAM để Gatling không bị OutOfMemoryError
+  khi theo dõi hàng triệu metrics thống kê.
+- `-XX:+UseG1GC`: Garbage Collector thế hệ mới giúp dọn dẹp bộ nhớ không gây ngắt quãng (pause).
+
+4.3. Lệnh chạy bài kiểm thử:
+- Trên Standalone Bundle:
+    ./bin/gatling.sh -s simulations.CgvLoadTestSimulation
+- Trên Maven Project:
+    mvn gatling:test -Dgatling.simulationClass=simulations.CgvLoadTestSimulation
+
+Gatling sẽ hiển thị biểu đồ console thời gian thực và tự động tạo thư mục báo cáo
+HTML tại: `results/cgvloadtestsimulation-<timestamp>/index.html`.
+
+================================================================================
+5. CÁCH ĐỌC & PHÂN TÍCH BÁO CÁO HTML SAU TEST
+================================================================================
+
+Mở file `index.html` trong trình duyệt. Các chỉ số quan trọng cần phân tích:
+
+1. Bảng tóm tắt kết quả (Response Time Distribution):
+   - `OK`: Số lượng request phản hồi đúng mã HTTP kỳ vọng (200, 201, 409).
+   - `KO`: Số lượng request bị lỗi máy chủ (500 Internal Server Error, 502 Bad Gateway, Timeout).
+   - *Quy chuẩn*: Tỷ lệ `KO` phải = 0% đối với các lỗi 5xx.
+
+2. Phân vị thời gian phản hồi (Percentiles):
+   - `50th percentile (Median)`: Thời gian phản hồi của 50% người dùng thông thường.
+   - `95th percentile`: Thời gian phản hồi của 95% người dùng. Chuẩn rạp phim yêu cầu < 500ms.
+   - `99th percentile`: Đại diện cho nhóm người dùng bị chậm nhất (Worst Case). Chuẩn < 1500ms.
+
+3. Biểu đồ Throughput (Requests Per Second - RPS):
+   - Cho biết tại đỉnh điểm, hệ thống xử lý được bao nhiêu request trong 1 giây.
+   - Nếu đường cong RPS đi ngang trong khi lượng User tiếp tục tăng -> Hệ thống đã chạm ngưỡng
+     giới hạn (Bottleneck ở CPU hoặc Connection Pool).
+
+================================================================================
+6. QUY TRÌNH KIỂM CHỨNG TÍNH TOÀN VẸN DỮ LIỆU (DATA INTEGRITY CHECK)
+================================================================================
+
+Sau khi Gatling hoàn thành bài test 5.000 user cùng đặt ghế E05, bạn phải thực hiện
+3 bước kiểm tra tính toàn vẹn:
+
+Bước 1: Kiểm tra trong Database PostgreSQL
+Chạy câu lệnh SQL sau trong pgAdmin hoặc DBeaver:
+```sql
+SELECT showtime_id, seat_id, COUNT(*) AS total_booked
+FROM booking_seats bs
+JOIN bookings b ON bs.booking_id = b.id
+WHERE b.showtime_id = 'd290f1ee-6c54-4b01-90e6-d701748f0851'
+  AND bs.seat_id = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
+  AND b.status IN ('CONFIRMED', 'PAYMENT_PENDING')
+GROUP BY showtime_id, seat_id;
+```
+- Kết quả ĐẠT CHUẨN: `total_booked = 1`.
+- Kết quả THẤT BẠI: `total_booked > 1` (Bị bán trùng ghế - Vi phạm tính toàn vẹn).
+
+Bước 2: Kiểm tra Redis Distributed Lock
+Chạy trong Redis CLI:
+```bash
+redis-cli GET "seat_lock:d290f1ee-6c54-4b01-90e6-d701748f0851:9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+redis-cli TTL "seat_lock:d290f1ee-6c54-4b01-90e6-d701748f0851:9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+```
+- Phải tồn tại đúng 1 User ID duy nhất giữ lock.
+- TTL phải có giá trị đếm lùi (~600s), không bị treo vô hạn (Deadlock).
+
+Bước 3: Kiểm tra hàng đợi Kafka Saga (Consumer Lag)
+Chạy lệnh kiểm tra lag của Kafka Consumer:
+```bash
+kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group cgv-booking-group
+```
+- `LAG` của tất cả các partitions phải về = 0 sau khi bài test kết thúc. Điều này đảm bảo
+  mọi sự kiện thanh toán hoặc hủy vé đều được xử lý bù (compensate) không thất thoát.
+
+================================================================================
+7. GIẢI THÍCH CHI TIẾT "VÌ SAO" & "MỤC ĐÍCH" CỦA TỪNG BƯỚC THIẾT LẬP
+================================================================================
+
+1. Vì sao dùng `shareConnections()` trong HttpProtocolBuilder?
+   - Mục đích: Cho phép các Virtual User tái sử dụng các kết nối HTTP TCP đã mở
+     (HTTP Keep-Alive). Nếu không bật, mỗi request sẽ phải bắt tay 3 bước TCP SYN-ACK
+     liên tục, dẫn đến cạn kiệt cổng ephemeral của hệ điều hành máy test và làm sai lệch
+     kết quả đo đạc.
+
+2. Vì sao trong Kịch bản 2 lại cho phép mã `status().in(201, 400, 409)`?
+   - Mục đích: Trong bài toán tranh chấp (Race Condition), 4.999 người bị từ chối
+     (nhận mã 409 Conflict hoặc 400 "Ghế đã có người đặt") là ĐÚNG THEO THIẾT KẾ KINH DOANH.
+     Nếu chỉ kiểm tra mã 201, Gatling sẽ đánh dấu 4.999 request bị từ chối là lỗi (KO),
+     làm sai lệch bài test.
+
+3. Vì sao dùng `atOnceUsers(5000)` thay vì `rampUsers` cho test tranh chấp?
+   - Mục đích: `rampUsers` tăng dần từ từ, người đến trước sẽ chiếm ghế và người đến sau
+     chỉ thấy ghế đã mất. Muốn phát hiện lỗi Race Condition trong code backend (như lỗi
+     quên dùng Redis Lock, quên Transaction Isolation), bắt buộc phải dùng `atOnceUsers`
+     để 5.000 requests cùng đổ ập vào trong cùng 1 mili-giây.
+
+4. Vì sao phải kiểm tra `percentile3().lt(500)` (95th Percentile) thay vì xem Mean (Trung bình)?
+   - Mục đích: Số trung bình (Mean) thường "nói dối". Ví dụ 90 người phản hồi trong 10ms,
+     nhưng 10 người phải chờ 10.000ms, thì số trung bình vẫn trông có vẻ đẹp (~1.000ms).
+     Chỉ số 95th Percentile phản ánh chính xác 95% khách hàng thực tế có trải nghiệm
+     mượt mà dưới 500ms hay không.
+================================================================================

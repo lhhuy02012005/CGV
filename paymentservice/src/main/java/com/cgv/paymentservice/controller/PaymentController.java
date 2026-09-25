@@ -1,6 +1,8 @@
 package com.cgv.paymentservice.controller;
 
 import com.cgv.commondto.dto.ApiResponse;
+import com.cgv.commondto.exception.BusinessException;
+import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.paymentservice.service.PaymentService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
@@ -31,6 +33,9 @@ public class PaymentController {
             @RequestParam UUID bookingId,
             @RequestParam BigDecimal amount
     ) {
+        if (jwt == null || jwt.getSubject() == null) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập trước khi tạo liên kết thanh toán!");
+        }
         String userId = jwt.getSubject();
         String paymentUrl = paymentService.add(request, bookingId, amount, userId);
         return ApiResponse.<String>builder()

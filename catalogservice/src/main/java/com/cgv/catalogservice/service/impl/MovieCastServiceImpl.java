@@ -20,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j(topic = "MOVIE-CAST-SERVICE")
@@ -113,5 +114,12 @@ public class MovieCastServiceImpl implements MovieCastService {
                 pageable,
                 movieCastMapper::toResponseList
         );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<MovieCastResponse> getMovieCastsByMovieId(UUID movieId) {
+        List<MovieCast> movieCasts = movieCastRepository.findByMovieIdOrderByDisplayOrderAsc(movieId);
+        return movieCastMapper.toResponseList(movieCasts);
     }
 }

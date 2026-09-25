@@ -35,4 +35,6 @@ public interface CinemaService {
             double longitude,
             Double radiusKm
     );
+
+    void deleteCinema(UUID cinemaId);
 }

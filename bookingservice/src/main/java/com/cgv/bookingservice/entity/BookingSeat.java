@@ -9,9 +9,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "booking_seats" , indexes = {
-        @Index(name = "idx_cgv_booking_seat_booking_id_seat_id" , columnList = "seat_id, booking_id")
-},uniqueConstraints = {
-        @UniqueConstraint(name = "uk_cgv_booking_seat_showtime_id_seat_id", columnNames = {"showtime_id","seat_id"})
+        @Index(name = "idx_cgv_booking_seat_booking_id_seat_id" , columnList = "seat_id, booking_id"),
+        @Index(name = "idx_cgv_booking_seat_showtime_id_seat_id", columnList = "showtime_id, seat_id")
 })
 @AllArgsConstructor
 @NoArgsConstructor

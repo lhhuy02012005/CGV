@@ -7,6 +7,8 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -79,4 +81,9 @@ public class Movie extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Builder.Default
     MovieStatus status = MovieStatus.ACTIVE;
+
+    @OneToMany(mappedBy = "movie", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("displayOrder ASC")
+    @Builder.Default
+    List<MovieCast> casts = new ArrayList<>();
 }

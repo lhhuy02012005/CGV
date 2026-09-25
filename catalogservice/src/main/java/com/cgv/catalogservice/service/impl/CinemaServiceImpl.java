@@ -8,11 +8,17 @@ import com.cgv.catalogservice.dto.response.CinemaResponse;
 import com.cgv.catalogservice.dto.response.NearbyCinemaResponse;
 import com.cgv.catalogservice.entity.Cinema;
 import com.cgv.catalogservice.entity.Region;
+import com.cgv.catalogservice.entity.Room;
+import com.cgv.catalogservice.entity.Seat;
 import com.cgv.catalogservice.enums.CinemaStatus;
+import com.cgv.catalogservice.enums.ShowtimeStatus;
 import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.CinemaMapper;
 import com.cgv.catalogservice.repository.CinemaRepository;
 import com.cgv.catalogservice.repository.RegionRepository;
+import com.cgv.catalogservice.repository.RoomRepository;
+import com.cgv.catalogservice.repository.SeatRepository;
+import com.cgv.catalogservice.repository.ShowtimeRepository;
 import com.cgv.catalogservice.service.CinemaService;
 import com.cgv.catalogservice.specification.CinemaSpecification;
 import com.cgv.catalogservice.util.GeoUtils;
@@ -32,6 +38,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
@@ -44,7 +51,11 @@ public class CinemaServiceImpl implements CinemaService {
 
     CinemaRepository cinemaRepository;
     RegionRepository regionRepository;
+    RoomRepository roomRepository;
+    SeatRepository seatRepository;
+    ShowtimeRepository showtimeRepository;
     CinemaMapper cinemaMapper;
+    com.cgv.catalogservice.service.CatalogRealtimeService catalogRealtimeService;
 
     @Override
     @CacheEvict(
@@ -137,10 +148,11 @@ public class CinemaServiceImpl implements CinemaService {
                     )
             },
             evict = {
-                    @CacheEvict(
-                            value = "cinemasByRegion",
-                            allEntries = true
-                    )
+                    @CacheEvict(value = "cinemasByRegion", allEntries = true),
+                    @CacheEvict(value = "cinemaSchedule", allEntries = true),
+                    @CacheEvict(value = "showtime", allEntries = true),
+                    @CacheEvict(value = "showtimes", allEntries = true),
+                    @CacheEvict(value = "cinemas", allEntries = true)
             }
     )
     @Transactional
@@ -156,6 +168,16 @@ public class CinemaServiceImpl implements CinemaService {
         cinema.setStatus(request.status());
 
         cinemaRepository.saveAndFlush(cinema);
+
+        try {
+            catalogRealtimeService.broadcast("CINEMA_STATUS_CHANGED", java.util.Map.of(
+                    "cinemaId", cinemaId.toString(),
+                    "status", cinema.getStatus() != null ? cinema.getStatus().name() : "",
+                    "name", cinema.getName() != null ? cinema.getName() : ""
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast CINEMA_STATUS_CHANGED: {}", e.getMessage());
+        }
 
         return cinemaMapper.toResponse(cinema);
     }
@@ -275,5 +297,58 @@ public class CinemaServiceImpl implements CinemaService {
                 .filter(res -> radiusKm == null || res.distanceInKm() <= radiusKm)
                 .sorted(Comparator.comparingDouble(NearbyCinemaResponse::distanceInKm))
                 .toList();
+    }
+
+    @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(
+                            value = "cinemas",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "cinemasByRegion",
+                            allEntries = true
+                    ),
+                    @CacheEvict(
+                            value = "roomsByCinema",
+                            allEntries = true
+                    )
+            }
+    )
+    @Transactional
+    public void deleteCinema(UUID cinemaId) {
+        log.info("Deleting cinema: cinemaId={}", cinemaId);
+        Cinema cinema = cinemaRepository.findById(cinemaId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy rạp chiếu với id: " + cinemaId));
+
+        List<Room> rooms = roomRepository.findByCinemaId(cinemaId);
+        for (Room r : rooms) {
+            if (showtimeRepository.existsByRoomIdAndStatusAndEndTimeAfter(r.getId(), ShowtimeStatus.SCHEDULED, Instant.now())) {
+                throw new ResourceConflictException("Không thể xóa rạp có phòng chiếu đang có lịch chiếu sắp diễn ra.");
+            }
+            if (showtimeRepository.existsByRoomId(r.getId())) {
+                throw new ResourceConflictException("Không thể xóa rạp đã có dữ liệu lịch chiếu. Vui lòng đổi trạng thái rạp sang NGƯNG HOẠT ĐỘNG.");
+            }
+        }
+
+        for (Room r : rooms) {
+            List<Seat> seats = seatRepository.findByRoomId(r.getId());
+            if (!seats.isEmpty()) {
+                seatRepository.deleteAllInBatch(seats);
+            }
+            roomRepository.delete(r);
+        }
+
+        cinemaRepository.delete(cinema);
+
+        try {
+            catalogRealtimeService.broadcast("CINEMA_STATUS_CHANGED", java.util.Map.of(
+                    "cinemaId", cinemaId.toString(),
+                    "action", "DELETED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast CINEMA_STATUS_CHANGED on delete: {}", e.getMessage());
+        }
     }
 }

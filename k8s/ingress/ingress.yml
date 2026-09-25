@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cgv-main-ingress
+  namespace: cgv-prod
+  annotations:
+    kubernetes.io/ingress.class: "nginx" # Nếu dùng K3s mặc định là traefik, hoặc "nginx" nếu dùng Nginx Ingress Controller
+spec:
+  rules:
+    - # host: api.cgv.vn # Mở comment nếu dùng domain thật. Bỏ trường host thì Ingress sẽ nhận mọi domain / IP trỏ vào
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kong-proxy
+                port:
+                  number: 8000
+
+
+#Mục đích: Ingress Controller đóng vai trò Reverse Proxy tầng L7 (HTTP/HTTPS) bên ngoài K8s.
+#Khi người dùng từ Internet gọi tới domain https://api.cgv.vn/api/v1/movies, Ingress nhận yêu cầu ở cổng 80/443 và đẩy thẳng vào dịch vụ kong-proxy ở cổng 8000. Từ đó, Kong tiếp tục định tuyến chuẩn xác tới từng microservice.
