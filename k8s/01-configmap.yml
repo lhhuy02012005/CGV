@@ -6,15 +6,18 @@ metadata:
 data:
   # Cấu hình môi trường chạy
   SPRING_PROFILES_ACTIVE: "prod"
-  JAVA_TOOL_OPTIONS: "-Xmx220m -Xms100m -XX:+UseSerialGC -XX:MaxRAMPercentage=75.0"
+  JAVA_TOOL_OPTIONS: "-Xmx300m -Xms128m -XX:MaxMetaspaceSize=150m -XX:+UseSerialGC"
 
   # Endpoint cơ sở dữ liệu (Trỏ vào RDS PostgreSQL)
-  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres-db.cgv-prod.svc.cluster.local:5432/cgv"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com:5432/cgv"
   SPRING_DATASOURCE_USERNAME: "postgres"
 
   # Cụm Redis phân tán & Kafka KRaft (Cluster 3 Broker)
   SPRING_DATA_REDIS_HOST: "redis-service.cgv-prod.svc.cluster.local"
   SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_PASSWORD: "CGVRedis2026"
+  REDIS_PASSWORD: "CGVRedis2026"
+  SPRING_DATA_REDIS_SSL_ENABLED: "false"
   SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka-1.cgv-prod.svc.cluster.local:9092,kafka-2.cgv-prod.svc.cluster.local:9092,kafka-3.cgv-prod.svc.cluster.local:9092"
 
   # Giao tiếp gRPC nội bộ giữa Booking Service -> Catalog Service & Marketing Service
@@ -26,6 +29,30 @@ data:
   # Keycloak & Elasticsearch nội bộ
   KEYCLOAK_URL: "http://keycloak.cgv-prod.svc.cluster.local:8080"
   SPRING_ELASTICSEARCH_URIS: "elasticsearch.cgv-prod.svc.cluster.local:9200"
+
+  # Kafka Consumer Group cho Notification Service
+  SPRING_KAFKA_CONSUMER_GROUP_ID: "cgv-notification-group"
+
+  # Cấu hình AWS S3 cho Media Service
+  AWS_REGION: "ap-southeast-1"
+  AWS_BUCKET_NAME: "cgv-cinema-media-bucket"
+
+  # Cấu hình cổng thanh toán VNPay
+  VNPAY_TMNCODE: "3DGV00B5"
+  VNPAY_RETURN_URL: "https://cgvfeuser.vercel.app/payment/vnpay-return"
+
+  # Cấu hình Email Brevo cho Notification Service
+  EMAIL: "lhhuy.2005@gmail.com"
+  EXPIRY_TIME: "5"
+  BREVO_API_KEY: "REDACTED"
+  BREVO_TEMPLATE_ID: "2"
+  brevo.template-id: "2"
+  BREVO_EXPIRY_TIME: "5"
+  brevo.expiry-time: "5"
+  BREVO_SENDER_NAME: "CGV Cinemas"
+  BREVO_SENDER_EMAIL: "lhhuy.2005@gmail.com"
+  brevo.sender.name: "CGV Cinemas"
+  brevo.sender.email: "lhhuy.2005@gmail.com"
 
 #  VÌ SAO & MỤC ĐÍCH:
 #  Mục đích: Tách biệt hoàn toàn code với cấu hình môi trường.

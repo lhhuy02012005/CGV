@@ -6,7 +6,7 @@ metadata:
   labels:
     app: payment-service
 spec:
-  replicas: 2 # Mặc định 2 Pods để đảm bảo luôn sẵn sàng nhận webhook thanh toán VNPay
+  replicas: 2
   selector:
     matchLabels:
       app: payment-service
@@ -15,10 +15,13 @@ spec:
       labels:
         app: payment-service
     spec:
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
       containers:
         - name: payment-service
-          image: cgv/payment-service:latest
-          imagePullPolicy: IfNotPresent
+          image: 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/payment-service:latest
+          imagePullPolicy: Always
           ports:
             - name: http
               containerPort: 8085
@@ -27,22 +30,30 @@ spec:
                 name: cgv-global-config
             - secretRef:
                 name: cgv-global-secrets
+          env:
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "none"
           resources:
             requests:
-              cpu: "100m"
-              memory: "180Mi"
-            limits:
-              cpu: "500m"
+              cpu: "300m"
               memory: "350Mi"
-          readinessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/readiness
+            limits:
+              cpu: "1000m"
+              memory: "750Mi"
+          startupProbe:
+            tcpSocket:
               port: 8085
-            initialDelaySeconds: 35
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: 8085
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/liveness
+            tcpSocket:
               port: 8085
-            initialDelaySeconds: 45
+            initialDelaySeconds: 30
             periodSeconds: 15
+            failureThreshold: 5
