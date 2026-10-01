@@ -80,6 +80,7 @@ kubectl rollout restart deployment \
 echo "⏳ Đang chờ các dịch vụ cốt lõi sẵn sàng tạo bảng..."
 kubectl rollout status deployment/catalog-service -n "${NAMESPACE}" --timeout=120s
 kubectl rollout status deployment/identity-service -n "${NAMESPACE}" --timeout=120s
+kubectl rollout status deployment/marketing-service -n "${NAMESPACE}" --timeout=120s
 
 # Chờ 5 giây để Hibernate hoàn tất việc commit cấu trúc bảng
 sleep 5
