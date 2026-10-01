@@ -16,11 +16,14 @@ import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import com.cgv.catalogservice.service.CatalogRealtimeService;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j(topic = "MOVIE-CAST-SERVICE")
@@ -32,9 +35,11 @@ public class MovieCastServiceImpl implements MovieCastService {
     MovieCastRepository movieCastRepository;
     MovieRepository movieRepository;
     MovieCastMapper movieCastMapper;
+    CatalogRealtimeService catalogRealtimeService;
 
     @Override
     @Transactional
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieCastResponse createMovieCast(MovieCastCreateRequest request) {
 
         log.info("Creating movie cast");
@@ -48,11 +53,22 @@ public class MovieCastServiceImpl implements MovieCastService {
 
         MovieCast savedMovieCast = movieCastRepository.save(movieCast);
 
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", Map.of(
+                    "movieId", movie.getId().toString(),
+                    "title", movie.getTitle(),
+                    "action", "CAST_UPDATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED on cast create: {}", e.getMessage());
+        }
+
         return movieCastMapper.toResponse(savedMovieCast);
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieCastResponse updateMovieCast(
             UUID movieCastId,
             MovieCastUpdateRequest request
@@ -74,11 +90,22 @@ public class MovieCastServiceImpl implements MovieCastService {
             movieCast.setMovie(movie);
         }
 
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", Map.of(
+                    "movieId", movieCast.getMovie().getId().toString(),
+                    "title", movieCast.getMovie().getTitle(),
+                    "action", "CAST_UPDATED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED on cast update: {}", e.getMessage());
+        }
+
         return movieCastMapper.toResponse(movieCast);
     }
 
     @Override
     @Transactional
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public void deleteMovieCast(UUID movieCastId) {
 
         log.info("Deleting movie cast: movieCastId={}", movieCastId);
@@ -87,7 +114,19 @@ public class MovieCastServiceImpl implements MovieCastService {
                         "Không tìm thấy movie cast với id: " + movieCastId
                 ));
 
+        UUID movieId = movieCast.getMovie().getId();
+        String title = movieCast.getMovie().getTitle();
         movieCastRepository.delete(movieCast);
+
+        try {
+            catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", Map.of(
+                    "movieId", movieId.toString(),
+                    "title", title,
+                    "action", "CAST_DELETED"
+            ));
+        } catch (Exception e) {
+            log.warn("Failed to broadcast MOVIE_STATUS_CHANGED on cast delete: {}", e.getMessage());
+        }
     }
 
     @Override

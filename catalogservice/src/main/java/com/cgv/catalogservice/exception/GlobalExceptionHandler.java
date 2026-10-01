@@ -272,6 +272,14 @@ public class GlobalExceptionHandler {
 //        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
 //    }
 
+    @ExceptionHandler({
+            org.springframework.web.context.request.async.AsyncRequestNotUsableException.class,
+            java.io.IOException.class
+    })
+    public void handleClientDisconnect(Exception ex) {
+        log.debug("SSE/Async client disconnected: {}", ex.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handleGeneralException(Exception ex, HttpServletRequest request) {
