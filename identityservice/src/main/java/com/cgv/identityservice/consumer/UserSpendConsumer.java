@@ -44,7 +44,7 @@ public class UserSpendConsumer {
 
                     MemberShipTier newTier = memberShipTierService.determineTierBySpend(newSpend);
                     if (newTier != null && (user.getMembershipTier() == null || !newTier.getCode().equals(user.getMembershipTier().getCode()))) {
-                        log.info("🎉 Chúc mừng User {} được nâng hạng từ {} lên {}",
+                        log.info("Chúc mừng User {} được nâng hạng từ {} lên {}",
                                 user.getId(),
                                 user.getMembershipTier() != null ? user.getMembershipTier().getCode() : "NONE",
                                 newTier.getCode());

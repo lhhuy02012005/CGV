@@ -78,9 +78,6 @@ public class VnpayPayment implements PaymentService {
            String createDate = formatter.format(cld.getTime());
            vnp_Params.put("vnp_CreateDate", createDate);
 
-           cld.add(Calendar.MINUTE, PAYMENT_DEADLINE_DURATION);
-           vnp_Params.put("vnp_ExpireDate", formatter.format(cld.getTime()));
-
            // ====== Build Data ======
            List fieldNames = new ArrayList(vnp_Params.keySet());
            Collections.sort(fieldNames);

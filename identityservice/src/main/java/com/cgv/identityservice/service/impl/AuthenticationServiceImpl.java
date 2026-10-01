@@ -210,7 +210,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         JsonNode tokenResponse = keycloakClient.exchangeToken(realm, tokenBody);
         String adminToken = "Bearer " + tokenResponse.get("access_token").asText();
 
-        String trimmedName = fullName != null ? removeVietnameseDiacritics(fullName.trim()) : email;
+        String trimmedName = (fullName != null && !fullName.trim().isEmpty()) ? fullName.trim() : email;
         String firstName = trimmedName;
         String lastName = trimmedName;
 
@@ -264,15 +264,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     private User saveOrGetUser(String id, String email, String fullName, String phone) {
-        String normalizedName = (fullName != null && !fullName.trim().isEmpty())
-                ? removeVietnameseDiacritics(fullName.trim())
+        String cleanName = (fullName != null && !fullName.trim().isEmpty())
+                ? fullName.trim()
                 : null;
 
         return userRepository.findByEmail(email)
                 .map(existingUser -> {
                     boolean changed = false;
-                    if (normalizedName != null && (existingUser.getFullName() == null || existingUser.getFullName().isEmpty())) {
-                        existingUser.setFullName(normalizedName);
+                    if (cleanName != null && !cleanName.equals(existingUser.getFullName())) {
+                        existingUser.setFullName(cleanName);
                         changed = true;
                     }
                     if (phone != null && !phone.isBlank() && existingUser.getPhone() == null) {
@@ -294,7 +294,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                     User newUser = User.builder()
                             .id(id)
                             .email(email)
-                            .fullName(normalizedName)
+                            .fullName(cleanName)
                             .phone(phone)
                             .membershipTier(defaultTier)
                             .total_spend_ytd(BigDecimal.ZERO)

@@ -87,7 +87,7 @@ spring:
     vnpay_api_url: ${VNPAY_API_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
     tmn-code: ${VNPAY_TMNCODE:CGVTEST1}
     secret-key: ${VNPAY_SECRECTKEY:${VNPAY_SECRET_KEY:${VNPAY_HASH_SECRET:RAI8NW2N2VY4ENY5ALOMCH4KX9Z5S54M}}}
-    return-url: ${VNPAY_RETURN_URL:http://localhost:5173/payment/vnpay-return}
+    return-url: ${VNPAY_RETURN_URL:https://cgvfeuser.vercel.app/payment/vnpay-return}
     version: "2.1.0"
     command: "pay"
 
