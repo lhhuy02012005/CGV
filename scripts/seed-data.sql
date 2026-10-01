@@ -28,10 +28,12 @@ SET name = EXCLUDED.name, min_spend = EXCLUDED.min_spend, description = EXCLUDED
 -- ------------------------------------------------------------------------------
 INSERT INTO users (id, email, full_name, membership_tier, total_spend_ytd, version, created_at, updated_at)
 VALUES
-    ('usr-test-001', 'nguyen.an@cgv.vn', 'Nguyễn Văn An', 'GOLD', 5500000.00, 1, NOW(), NOW()),
-    ('usr-test-002', 'tran.bich@cgv.vn', 'Trần Thị Bích', 'PLATINUM', 16000000.00, 1, NOW(), NOW()),
-    ('usr-test-003', 'le.thang@cgv.vn', 'Lê Hoàng Thắng', 'SILVER', 2800000.00, 1, NOW(), NOW()),
-    ('usr-test-004', 'pham.dung@cgv.vn', 'Phạm Tiến Dũng', 'MEMBER', 450000.00, 1, NOW(), NOW())
+    ('c3effc5c-2ee6-4837-bc8a-8d0c9ab0e909', 'lhhuy.2005@gmail.com', 'Le Huu Huy', 'GOLD', 5500000.00, 1, NOW(), NOW()),
+    ('2434983f-0796-423b-a134-e4a24b9e8643', 'admin@gmail.com', 'Huy Admin', 'PLATINUM', 16000000.00, 1, NOW(), NOW()),
+    ('e1000000-0000-0000-0000-000000000001', 'superadmin.headquarters.enterprise@cgv.vn', 'CGV SuperAdmin Enterprise', 'PLATINUM', 20000000.00, 1, NOW(), NOW()),
+    ('e1000000-0000-0000-0000-000000000002', 'cinemamanager.vincom.dongkhoi@cgv.vn', 'Manager Vincom Dong Khoi', 'GOLD', 8000000.00, 1, NOW(), NOW()),
+    ('e1000000-0000-0000-0000-000000000003', 'ticketstaff.boxoffice.crescentmall@cgv.vn', 'Staff BoxOffice Crescent Mall', 'SILVER', 3000000.00, 1, NOW(), NOW()),
+    ('e1000000-0000-0000-0000-000000000004', 'marketing.contentlead.digital@cgv.vn', 'Lead Content Marketing', 'GOLD', 7500000.00, 1, NOW(), NOW())
 ON CONFLICT (id) DO UPDATE
 SET email = EXCLUDED.email, full_name = EXCLUDED.full_name, membership_tier = EXCLUDED.membership_tier, total_spend_ytd = EXCLUDED.total_spend_ytd;
 
@@ -110,7 +112,7 @@ VALUES
     ('01000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000001', 'Cinema 1 (IMAX Laser)', 'IMAX', 80, 8, 10, 'ACTIVE'),
     ('01000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000001', 'Cinema 2 (Standard)', '2D', 80, 8, 10, 'ACTIVE'),
     -- Rạp Crescent Mall
-    ('02000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000002', 'Cinema 1 (4DX)', '4D', 80, 8, 10, 'ACTIVE'),
+    ('02000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000002', 'Cinema 1 (4DX)', '4DX', 80, 8, 10, 'ACTIVE'),
     ('02000000-0000-0000-0000-000000000002', 'c1000000-0000-0000-0000-000000000002', 'Cinema 2 (Standard)', '2D', 80, 8, 10, 'ACTIVE'),
     -- Rạp Vạn Hạnh Mall
     ('03000000-0000-0000-0000-000000000001', 'c1000000-0000-0000-0000-000000000003', 'Cinema 1 (Standard)', '2D', 80, 8, 10, 'ACTIVE'),
@@ -549,7 +551,7 @@ INSERT INTO bookings (
 VALUES
     (
         'b1000000-0000-0000-0000-000000000001',
-        'usr-test-001',
+        'c3effc5c-2ee6-4837-bc8a-8d0c9ab0e909',
         '21000000-0000-0000-0000-000000000001',
         '31000000-0000-0000-0000-000000000001',
         320000.00,
@@ -565,7 +567,7 @@ VALUES
     -- Booking 2: Đang chờ thanh toán (PAYMENT_PENDING) của user An
     (
         'b1000000-0000-0000-0000-000000000002',
-        'usr-test-001',
+        'c3effc5c-2ee6-4837-bc8a-8d0c9ab0e909',
         '21000000-0000-0000-0000-000000000002',
         NULL,
         180000.00,
@@ -581,7 +583,7 @@ VALUES
     -- Booking 3: Đã hủy (CANCELLED) của user Bích (usr-test-002)
     (
         'b1000000-0000-0000-0000-000000000003',
-        'usr-test-002',
+        '2434983f-0796-423b-a134-e4a24b9e8643',
         '21000000-0000-0000-0000-000000000007',
         NULL,
         190000.00,
@@ -637,7 +639,7 @@ VALUES
         '50000000-0000-0000-0000-000000000001',
         'VNPAY',
         'b1000000-0000-0000-0000-000000000001',
-        'usr-test-001',
+        'c3effc5c-2ee6-4837-bc8a-8d0c9ab0e909',
         270000.00,
         'SUCCESS',
         'VNPAY-TX-17182938102',
