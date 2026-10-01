@@ -28,19 +28,6 @@ CREATE TABLE IF NOT EXISTS booking_seats (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS seat_locks (
-    id UUID PRIMARY KEY,
-    showtime_id UUID NOT NULL,
-    seat_id UUID NOT NULL,
-    user_id VARCHAR(255),
-    session_id VARCHAR(255),
-    status VARCHAR(50) NOT NULL CHECK (status IN ('LOCKED', 'RELEASED', 'CONVERTED_TO_BOOKING')),
-    expires_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT uk_cgv_showtime_seat UNIQUE (showtime_id, seat_id)
-);
-
 CREATE TABLE IF NOT EXISTS outbox_booking_events (
     id UUID PRIMARY KEY,
     aggregate_id VARCHAR(255) NOT NULL,

@@ -33,6 +33,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     List<Booking> findByUserIdOrderByCreatedAtDesc(String userId);
 
     @EntityGraph(attributePaths = {"bookingSeats"})
+    List<Booking> findByUserIdAndShowtimeIdAndStatus(String userId, UUID showtimeId, BookingStatus status);
+
+    @EntityGraph(attributePaths = {"bookingSeats"})
     Page<Booking> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"bookingSeats"})

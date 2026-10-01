@@ -95,6 +95,30 @@ public class BookingServiceImpl implements BookingService {
 
         String guestSessionId = request.getGuestSessionId();
 
+        // 1. Tự động dọn dẹp đơn cũ: Nếu user đã có đơn vé PAYMENT_PENDING ở chính suất chiếu này (ví dụ quay lại từ cổng VNPay để thanh toán lại),
+        // hủy đơn cũ để giải phóng trạng thái trong DB trước khi tạo đơn mới
+        List<Booking> oldPendingBookings = bookingRepository.findByUserIdAndShowtimeIdAndStatus(userId, showtimeId, BookingStatus.PAYMENT_PENDING);
+        if (oldPendingBookings != null && !oldPendingBookings.isEmpty()) {
+            for (Booking oldB : oldPendingBookings) {
+                oldB.setStatus(BookingStatus.CANCELLED);
+                oldB.setCancelledAt(Instant.now());
+                bookingRepository.save(oldB);
+                log.info("Tự động hủy đơn pending cũ {} của user {} để khởi tạo đơn mới", oldB.getId(), userId);
+            }
+        }
+
+        // 2. Kiểm tra xem ghế đã bị ai mua hoặc ai khác đang thanh toán chưa
+        List<UUID> activeBookedSeatIds = bookingSeatRepository.findBookedSeatIdsByShowtimeId(
+                showtimeId,
+                List.of(BookingStatus.CONFIRMED, BookingStatus.PAYMENT_PENDING)
+        );
+        for (UUID seatId : seatIds) {
+            if (activeBookedSeatIds.contains(seatId)) {
+                throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã có người đặt hoặc đang trong quá trình thanh toán. Vui lòng chọn ghế khác!");
+            }
+        }
+
+        // 3. Kiểm tra quyền sở hữu ghế trên Redis (hỗ trợ cả userId, guestSessionId và re-acquire an toàn)
         for (UUID seatId : seatIds) {
             String seatKey = LOCK_KEY_PREFIX + showtimeId + ":" + seatId;
             String currentHolder = redisTemplate.opsForValue().get(seatKey);
@@ -103,18 +127,13 @@ public class BookingServiceImpl implements BookingService {
                     || (guestSessionId != null && !guestSessionId.isBlank() && currentHolder.equals(guestSessionId))
                     || (isGuest && currentHolder.startsWith("guest_"))
             );
+            // Fallback: nếu key trên Redis bị thiếu (do unmount hoặc timeout), nhưng ghế hoàn toàn trống ở DB
+            if (!isHolder && currentHolder == null && !activeBookedSeatIds.contains(seatId)) {
+                redisTemplate.opsForValue().set(seatKey, userId, Duration.ofMinutes(LOCK_KEY_DURATION));
+                isHolder = true;
+            }
             if (!isHolder) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã hết hạn giữ hoặc không thuộc quyền sở hữu của bạn. Vui lòng chọn lại ghế!");
-            }
-        }
-
-        List<UUID> activeBookedSeatIds = bookingSeatRepository.findBookedSeatIdsByShowtimeId(
-                showtimeId,
-                List.of(BookingStatus.CONFIRMED, BookingStatus.PAYMENT_PENDING)
-        );
-        for (UUID seatId : seatIds) {
-            if (activeBookedSeatIds.contains(seatId)) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã có người đặt hoặc đang trong quá trình thanh toán. Vui lòng chọn ghế khác!");
             }
         }
 
@@ -461,7 +480,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional(readOnly = true)
     @Cacheable(value = "dashboard:statistics")
-    public com.cgv.bookingservice.dto.response.DashboardStatisticsResponse getDashboardStatistics() {
+    public DashboardStatisticsResponse getDashboardStatistics() {
         Instant now = Instant.now();
         Instant startOfToday = LocalDate.now().atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
         Instant startOfWeek = LocalDate.now().minusDays(7).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant();
@@ -711,7 +730,7 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
-        log.info("⚡ [SAGA ROLLBACK] Đã tự động rollback đơn vé {} (lý do: {}) và giải phóng {} ghế trên Redis.",
+        log.info("[SAGA ROLLBACK] Đã tự động rollback đơn vé {} (lý do: {}) và giải phóng {} ghế trên Redis.",
                 bookingId, reason, releasedSeatIds.size());
 
         if (!releasedSeatIds.isEmpty()) {

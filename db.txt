@@ -1,98 +1,76 @@
 // ================================================================
-// CGV CINEMA — DATABASE SCHEMA (DBML for dbdiagram.io)
-// Updated: Production-grade redesign
+// CGV CINEMA ENTERPRISE — DATABASE SCHEMA (DBML for dbdiagram.io)
+// Chuan hoa 100% theo cac JPA Entity thuc te trong Backend Microservices
+// Ngay cap nhat: 2026-09-25
 // ================================================================
 
-// Redis -> Cache
-// elasticsearch
-// indexes
+// Luu y kien truc Database-per-Service:
+// - He thong gom 5 Database rieng biet tuong ung 5 Microservices co Entity:
+//   1. IdentityService (Quan ly nguoi dung, hang thanh vien, OAuth2)
+//   2. CatalogService  (Phim, the loai, dien vien, cum rap, phong chieu, ghe, lich chieu, tin tuc, su kien)
+//   3. BookingService  (Giu ghe, don dat ve, chi tiet ghe dat, outbox su kien)
+//   4. PaymentService  (Giao dich thanh toan VNPay, nhat ky payment logs, outbox payment)
+//   5. MarketingService(Chien dich khuyen mai, ma giam gia, lich su su dung voucher)
+// - 2 Services khong su dung Database (Stateless Services):
+//   + NotificationService: Lang nghe Kafka topic 'notification.send' de gui email OTP qua Brevo REST API.
+//   + MediaService: Xu ly upload poster/banner truc tiep len AWS S3 Bucket.
 
 // ================================================================
-// IdentityService
+// 1. IDENTITY SERVICE
 // ================================================================
 
 TableGroup IdentityService {
-  users
   membership_tiers
+  users
   user_connected_accounts
 }
 
 Table membership_tiers {
-  code varchar [pk, note: 'SILVER, GOLD, PLATINUM']
-  name varchar [not null, note: 'Thành viên Bạc, Thành viên Vàng, Thành viên Bạch Kim']
-  min_spend decimal [not null, note: 'Tổng chi tiêu tối thiểu trong năm để đạt hạng (VD: 0, 5000000, 15000000)']
-  // perks text [note: 'Mô tả quyền lợi hiển thị trên UI']
-  // cashback_percent decimal [default: 0, note: '% hoàn tiền: Silver=3%, Gold=5%, Platinum=7%']
-  description text
+  code varchar [pk, note: 'Ma hang hoi vien: MEMBER, VIP, VVIP']
+  name varchar [not null, note: 'Ten hang: Thanh vien Thuong, VIP, VVIP']
+  min_spend decimal [not null, default: 0, note: 'Chi tieu toi thieu trong nam de thiet lap hang']
+  description text [note: 'Mo ta dac quyen va quyen loi hang']
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 }
 
 Table users {
-  id uuid [pk]
-  keycloak_id varchar [unique, not null, note: 'ID từ Keycloak — dùng để map JWT sub claim. KHÔNG lưu password hay role ở đây']
+  id varchar [pk, note: 'ID nguoi dung tu Keycloak (UUID String). Khong luu password/role o day']
   email varchar [unique, not null]
-  full_name varchar
-  // date_of_birth date [note: 'Dùng cho ưu đãi sinh nhật tự động']
-  membership_tier varchar [ref: > membership_tiers.code, not null, default: 'SILVER', note: 'Khóa ngoại tới membership_tiers']
-  total_spend_ytd decimal [default: 0, note: 'Tổng chi tiêu tính từ đầu năm — tự động reset mỗi 1/1. Dùng để xét lên/xuống hạng']
-  is_active boolean [default: true, note: 'Admin khóa/mở khóa tài khoản']
-  version int [default: 1, note: 'OPTIMISTIC LOCKING: Chống ghi đè khi nhiều luồng cùng cộng điểm đồng thời (VD: flash sale)']
+  full_name varchar [note: 'Ho va ten day du']
+  phone varchar(20) [note: 'So dien thoai lien he']
+  membership_tier varchar [not null, default: 'MEMBER', ref: > membership_tiers.code, note: 'Khoa ngoai toi hang thanh vien']
+  total_spend_ytd decimal [not null, default: 0, note: 'Tong chi tieu tich luy trong nam de xet len hang']
+  version bigint [not null, default: 0, note: 'OPTIMISTIC LOCKING (@Version): Chong ghi de mat diem khi nhieu luong cong chi tieu dong thoi']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    email
-    keycloak_id
-    membership_tier
+    email [name: 'idx_cgv_user_email']
+    membership_tier [name: 'idx_cgv_user_membership_tier']
+    phone [name: 'idx_cgv_user_phone']
   }
 }
 
 Table user_connected_accounts {
   id uuid [pk]
-  user_id uuid [not null, ref: > users.id]
+  user_id varchar [not null, ref: > users.id, note: 'Tham chieu nguoi dung']
   provider varchar [not null, note: 'GOOGLE, FACEBOOK, APPLE']
-  provider_id varchar [not null, note: 'ID của user trên provider đó']
-  provider_email varchar [note: 'Email trả về từ provider, có thể khác email chính']
-  access_token text [note: 'Token OAuth lưu để refresh (nên encrypt)']
-  token_expires_at timestamp
+  provider_id varchar [not null, note: 'ID nguoi dung tren nha cung cap OAuth']
+  provider_email varchar [note: 'Email tra ve tu nha cung cap']
+  access_token text [note: 'OAuth access token']
+  token_expires_at timestamp [note: 'Thoi han het han cua token']
   created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
   indexes {
-    (provider, provider_id) [unique]
-    user_id
+    (provider, provider_id) [unique, name: 'uk_cgv_provider_provider_id']
+    user_id [name: 'idx_cgv_connected_user_id']
   }
 }
 
 // ================================================================
-// NotificationService
-// ================================================================
-TableGroup NotificationService {
-  notifications
-}
-
-Table notifications {
-  id uuid [pk]
-  user_id uuid [not null, ref: > users.id]
-  title varchar [not null]
-  body text
-  type varchar [not null, note: 'BOOKING_CONFIRMED, PAYMENT_SUCCESS, PAYMENT_FAILED, PROMOTION, SYSTEM, TIER_UPGRADE']
-  reference_id uuid [note: 'ID của booking/payment liên quan — dùng để deep link']
-  reference_type varchar [note: 'BOOKING, PAYMENT, PROMOTION']
-  is_read boolean [default: false]
-  created_at timestamp [default: `now()`]
-
-  indexes {
-    user_id
-    (user_id, is_read)
-    created_at
-  }
-}
-
-
-
-
-
-// ================================================================
-// CatalogService
+// 2. CATALOG SERVICE
 // ================================================================
 
 TableGroup CatalogService {
@@ -103,428 +81,366 @@ TableGroup CatalogService {
   seat_types
   seats
   genres
-  movie_genres
   movies
+  movie_genres
   movie_casts
-  // movie_reviews
   showtimes
   articles
   events
 }
 
 Table regions {
-  id int [pk, increment]
-  name varchar [unique, not null, note: 'Hồ Chí Minh, Hà Nội, Đà Nẵng, Cần Thơ...']
-  slug varchar [unique, not null, note: 'ho-chi-minh, ha-noi (dùng làm URL chuẩn SEO)']
+  id integer [pk, increment]
+  name varchar [unique, not null, note: 'Ten khu vuc: Ho Chi Minh, Ha Noi, Da Nang...']
+  slug varchar [unique, not null, note: 'Slug URL: ho-chi-minh, ha-noi']
 }
 
 Table cinemas {
   id uuid [pk]
-  region_id int [ref: > regions.id, not null]
-  name varchar [unique, not null, note: 'CGV Vincom Đồng Khởi, CGV Crescent Mall...']
-  address varchar
-  phone varchar(20)
-  // latitude decimal(10,7) [note: 'Tọa độ GPS để tính khoảng cách "rạp gần bạn"']
-  // longitude decimal(10,7)
-  opening_hours varchar [note: 'VD: 08:00 - 23:30']
-  status varchar [default: 'ACTIVE', note: 'ACTIVE, TEMPORARILY_CLOSED, PERMANENTLY_CLOSED']
+  region_id integer [not null, ref: > regions.id]
+  name varchar [unique, not null, note: 'Ten cum rap: CGV Hung Vuong Plaza, CGV Landmark 81']
+  address varchar [note: 'Dia chi chi tiet cua cum rap']
+  phone varchar(20) [note: 'Hotline lien he']
+  opening_hours varchar [note: 'Gio mo cua: 08:00 - 24:00']
+  latitude double [note: 'Vi do toa do ban do']
+  longitude double [note: 'Kinh do toa do ban do']
+  status varchar [not null, default: 'ACTIVE', note: 'CinemaStatus: ACTIVE, INACTIVE, MAINTENANCE']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    region_id
-    status
+    region_id [name: 'idx_cinema_region_id']
+    status [name: 'idx_cinema_status']
   }
 }
 
 Table cinema_amenities {
-  cinema_id uuid [ref: > cinemas.id, not null]
-  amenity varchar [not null, note: 'IMAX, 4D, DOLBY_ATMOS, SWEETBOX, PARKING, ONLINE_BOOKING, FOOD_COURT']
+  cinema_id uuid [not null, ref: > cinemas.id]
+  amenity varchar [not null, note: 'CinemaAmenityType: PARKING, POPCORN_BAR, IMAX, 4DX, GOLD_CLASS, SWEETBOX, WHEELCHAIR_ACCESS, ATM']
 
   indexes {
     (cinema_id, amenity) [pk]
-    amenity [note: 'Để filter theo tiện ích trên trang Rạp chiếu']
+    amenity [name: 'idx_cinema_amenity']
   }
 }
 
 Table rooms {
   id uuid [pk]
-  cinema_id uuid [ref: > cinemas.id, not null]
-  name varchar [not null, note: 'Phòng 1, Phòng IMAX, Hall A...']
-  format varchar [default: '2D', note: '2D, 3D, IMAX, 4D, SCREENX']
-  total_seats int [note: 'Denormalized — tính từ bảng seats để query nhanh']
-  row_count int [not null]
-  column_count int [not null]
-  status varchar [default: 'ACTIVE', note: 'ACTIVE, MAINTENANCE']
-}
-
-Table seat_types {
-  name varchar [pk, note: 'NORMAL, VIP, SWEETBOX — đóng vai trò ID']
-  surcharge decimal(12,2) [not null, default: 0, note: 'Phí phụ thu thêm vào base_price: NORMAL=0đ, VIP=15000đ, SWEETBOX=30000đ']
-  description text [note: 'Mô tả hiển thị lên UI khi chọn ghế']
-}
-
-Table seats {
-  id uuid [pk]
-  room_id uuid [ref: > rooms.id, not null]
-  row_char varchar(2) [not null, note: 'A, B, C... hoặc AA, AB (cho rạp lớn)']
-  seat_number int [not null]
-  seat_type_name varchar [ref: > seat_types.name, not null, default: 'NORMAL']
-  is_active boolean [default: true, note: 'Ghế bị hỏng/bảo trì thì false']
-
-  indexes {
-    (room_id, row_char, seat_number) [unique, note: 'Đảm bảo không trùng ghế trong cùng phòng']
-    room_id
-  }
-}
-
-Table genres {
-  id int [pk, increment]
-  name varchar [unique, not null, note: 'Hành động, Phiêu lưu, Kinh dị, Tâm lý, Hài hước, Hoạt hình, Gia đình...']
-  slug varchar [unique, not null, note: 'hanh-dong, phieu-luu (dùng cho filter URL)']
-}
-
-Table movies {
-  id uuid [pk]
-  title varchar [not null]
-  original_title varchar [note: 'Tên gốc tiếng Anh/Hàn nếu là phim nước ngoài']
-  synopsis text [note: 'Mô tả đầy đủ cho trang chi tiết phim']
-  director varchar
-  language varchar [note: 'Ngôn ngữ gốc: Tiếng Việt, Tiếng Anh, Tiếng Hàn...']
-  subtitle varchar [note: 'Phụ đề có sẵn: Tiếng Việt, Không có']
-  age_rating varchar(5) [note: 'P, T13, T16, T18 — phân loại độ tuổi']
-  duration_minutes int
-  release_date date [note: 'Ngày khởi chiếu tại Việt Nam']
-  end_date date [note: 'Ngày kết thúc chiếu — khi qua ngày này thì chuyển ENDED']
-  showing_status varchar [not null, note: 'NOW_SHOWING, COMING_SOON, ENDED']
-  poster_url varchar [note: 'Ảnh poster dọc (2:3) — lưu trên S3/MinIO']
-  backdrop_url varchar [note: 'Ảnh nền ngang (16:9) — dùng cho hero banner trang Phim']
-  trailer_youtube_url varchar [note: 'Link nhúng YouTube — tránh lưu video nặng trực tiếp']
-  // average_rating decimal(3,1) [default: 0, note: 'Denormalized từ movie_reviews — cập nhật bằng trigger/event']
-  // total_reviews int [default: 0, note: 'Counter cache — tránh COUNT(*) mỗi lần']
-  status varchar [default: 'ACTIVE', note: 'ACTIVE, DRAFT, HIDDEN']
+  cinema_id uuid [not null, ref: > cinemas.id]
+  name varchar [not null, note: 'Ten phong: Cinema 1, IMAX Hall, Gold Class 2']
+  total_seats integer [default: 0, note: 'Tong so luong ghe']
+  row_count integer [not null, note: 'So luong hang ghe (A, B, C...)']
+  column_count integer [not null, note: 'So luong cot ghe moi hang (1, 2, 3...)']
+  room_type varchar [not null, default: 'STANDARD', note: 'RoomType: STANDARD, IMAX, 4DX, GOLD_CLASS, SCREENX']
+  status varchar [not null, default: 'ACTIVE', note: 'RoomStatus: ACTIVE, MAINTENANCE, INACTIVE']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    title [name: 'idx_movies_title_gin', note: 'GIN index (pg_trgm) cho full-text search tiếng Việt không dấu']
-    showing_status
-    release_date
-    status
+    (cinema_id, name) [unique, name: 'uk_rooms_cinema_id_name']
+  }
+}
+
+Table seat_types {
+  name varchar [pk, note: 'SeatTypeName: STANDARD, VIP, SWEETBOX']
+  surcharge decimal [not null, default: 0, note: 'Phu thu them tren gia ve co ban: Standard=0, VIP=15000, Sweetbox=30000']
+  description text [note: 'Mo ta kieu ghe']
+}
+
+Table seats {
+  id uuid [pk]
+  room_id uuid [not null, ref: > rooms.id]
+  row_char varchar(2) [not null, note: 'Ky tu hang: A, B, C, ..., H']
+  seat_number integer [not null, note: 'So thu tu ghe: 1, 2, 3...']
+  seat_type_name varchar [not null, ref: > seat_types.name]
+  is_active boolean [default: true, note: 'false neu ghe dang bi hong hoc/bao tri tai rap']
+
+  indexes {
+    (room_id, row_char, seat_number) [unique, name: 'idx_seats_room_id_row_char_seat_number']
+    room_id [name: 'idx_seats_room_id']
+  }
+}
+
+Table genres {
+  id integer [pk, increment]
+  name varchar [unique, not null, note: 'Hanh dong, Hai huoc, Kinh di, Khoa hoc vien tuong']
+  slug varchar [unique, not null, note: 'hanh-dong, hai-huoc, kinh-di']
+}
+
+Table movies {
+  id uuid [pk]
+  title varchar [unique, not null, note: 'Ten phim tieng Viet']
+  original_title varchar [note: 'Ten phim goc quoc te']
+  synopsis text [note: 'Noi dung tom tat phim']
+  director varchar [note: 'Dao dien']
+  language varchar [note: 'Tieng Viet, Tieng Anh, Tieng Han']
+  subtitle varchar [note: 'Phu de tieng Viet, Tieng Anh']
+  supported_modes varchar [note: 'Cac dinh dang ho tro: 2D, 3D, IMAX']
+  age_rating varchar(5) [note: 'P (moi lua tuoi), K (duoi 13 tuoi kem PH), T13, T16, T18, C (cam)']
+  duration_minutes integer [note: 'Thoi luong phim (phut)']
+  release_date date [note: 'Ngay khoi chieu']
+  end_date date [note: 'Ngay ket thuc chieu du kien']
+  showing_status varchar [not null, note: 'MovieShowingStatus: COMING_SOON, NOW_SHOWING, END_SHOWING']
+  poster_url varchar [note: 'Duong dan anh poster tren S3']
+  backdrop_url varchar [note: 'Duong dan anh bia backdrop tren S3']
+  trailer_youtube_url varchar [note: 'Link trailer YouTube']
+  is_featured boolean [not null, default: false, note: 'Phim noi bat tren trang chu']
+  status varchar [not null, default: 'ACTIVE', note: 'MovieStatus: ACTIVE, INACTIVE, DRAFT']
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+
+  indexes {
+    showing_status [name: 'idx_movies_showing_status']
+    release_date [name: 'idx_movies_release_date']
+    status [name: 'idx_movies_status']
   }
 }
 
 Table movie_genres {
-  movie_id uuid [ref: > movies.id, not null]
-  genre_id int [ref: > genres.id, not null]
+  movie_id uuid [not null, ref: > movies.id]
+  genre_id integer [not null, ref: > genres.id]
 
   indexes {
     (movie_id, genre_id) [pk]
-    genre_id [note: 'Để query phim theo thể loại']
+    genre_id [name: 'idx_movie_genres_genre_id']
+    movie_id [name: 'idx_movie_genres_movie_id']
   }
 }
 
 Table movie_casts {
   id uuid [pk]
-  movie_id uuid [ref: > movies.id, not null]
-  actor_name varchar [not null]
-  character_name varchar [note: 'Tên nhân vật trong phim']
-  role_type varchar [note: 'DIRECTOR, LEAD, SUPPORTING, CAMEO']
-  avatar_url varchar [note: 'Ảnh diễn viên']
-  display_order int [default: 0, note: 'Thứ tự hiển thị — diễn viên chính lên đầu']
+  movie_id uuid [not null, ref: > movies.id]
+  actor_name varchar [not null, note: 'Ten dien vien / dao dien']
+  character_name varchar [note: 'Ten nhan vat trong phim']
+  role_type varchar [note: 'CastRoleType: ACTOR, DIRECTOR, PRODUCER']
+  avatar_url varchar [note: 'Anh chan dung dien vien']
+  display_order integer [default: 0]
 
   indexes {
-    movie_id
+    movie_id [name: 'idx_movie_casts_movie_id']
   }
 }
 
-// Table movie_reviews {
-//   id uuid [pk]
-//   movie_id uuid [ref: > movies.id, not null]
-//   user_id uuid [not null]
-//   rating smallint [not null, note: 'Điểm 1-10']
-//   comment text
-//   status varchar [default: 'PENDING', note: 'PENDING, CANCELLED, APPROVED']
-//   likes int [default: 0, note: 'Số lượt like review này']
-//   created_at timestamp [default: `now()`]
-//   updated_at timestamp [default: `now()`]
-
-//   indexes {
-//     (movie_id, user_id) [unique, note: 'Mỗi user chỉ review 1 lần/phim']
-//     movie_id
-//     rating
-//   }
-// }
-
 Table showtimes {
   id uuid [pk]
-  movie_id uuid [ref: > movies.id, not null]
-  room_id uuid [ref: > rooms.id, not null]
-  show_date date [not null]
-  start_time timestamp [not null]
-  end_time timestamp [not null]
-  language varchar [note: 'Có thể khác ngôn ngữ gốc của phim (VD: lồng tiếng Việt)']
-  subtitle_language varchar [note: 'Phụ đề: Tiếng Việt, Không có']
-  format varchar [note: 'Override format của phòng: 2D, 3D, IMAX, 4D']
-  base_price decimal(12,2) [not null, note: 'Giá sàn của suất chiếu — giá cuối = base_price + seat_type.surcharge']
-  available_seats int [note: 'Denormalized counter — giảm dần khi booking. Dùng để hiển thị còn vé không']
-  status varchar [not null, default: 'SCHEDULED', note: 'SCHEDULED, CANCELLED, COMPLETED']
+  movie_id uuid [not null, ref: > movies.id]
+  room_id uuid [not null, ref: > rooms.id]
+  show_date date [not null, note: 'Ngay chieu (YYYY-MM-DD)']
+  start_time timestamp [not null, note: 'Gio bat dau chieu']
+  end_time timestamp [not null, note: 'Gio ket thuc chieu']
+  language varchar [note: 'Ngon ngu am thanh']
+  subtitle_language varchar [note: 'Ngon ngu phu de']
+  viewing_mode varchar [note: 'ViewingMode: _2D, _3D, IMAX, _4DX']
+  format varchar [note: 'ShowtimeFormat: DUBBED (Long tieng), SUBTITLED (Phu de), ORIGINAL']
+  base_price decimal [not null, note: 'Gia ve co ban cho suat chieu nay (chua tinh phu thu ghe)']
+  available_seats integer [note: 'So ghe con trong']
+  status varchar [not null, default: 'ACTIVE', note: 'ShowtimeStatus: ACTIVE, CANCELLED, COMPLETED']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    movie_id
-    show_date
-    (room_id, start_time, end_time) [unique, note: 'Không thể xếp 2 suất chiếu cùng phòng trùng giờ']
-    (show_date, status) [note: 'Query suất chiếu theo ngày']
+    movie_id [name: 'idx_showtimes_movie_id']
+    room_id [name: 'idx_showtimes_room_id']
+    show_date [name: 'idx_showtimes_show_date']
+    status [name: 'idx_showtimes_status']
+    start_time [name: 'idx_showtimes_start_time']
   }
 }
 
 Table articles {
   id uuid [pk]
-  title varchar [not null]
-  slug varchar [unique, not null, note: 'jurassic-world-bung-no-phong-ve (URL chuẩn SEO)']
-  thumbnail_url varchar [note: 'Ảnh thumbnail hiển thị card trên trang Tin tức']
-  content text [not null, note: 'Nội dung bài viết đầy đủ (HTML hoặc Markdown)']
-  excerpt varchar(500) [note: 'Tóm tắt ngắn — hiển thị trên card, không cần render full content']
-  category varchar [not null, note: 'TIN_DIEN_ANH, REVIEW, SU_KIEN, KHUYEN_MAI, CONG_DONG']
-  tags text [note: 'JSON array tags: ["Bom tấn","Hành động","Marvel"]']
-  author_name varchar
-  views int [default: 0, note: 'Tăng mỗi khi có người đọc']
-  is_featured boolean [default: false, note: 'Hiển thị vị trí hero banner trang Tin tức']
-  is_trending boolean [default: false, note: 'Hiển thị section "Xu hướng đọc nhiều"']
-  movie_id uuid [ref: > movies.id, note: 'Liên kết tới phim nếu bài viết review/tin về phim cụ thể']
-  published_at timestamp [note: 'NULL = bài draft chưa đăng. Có giá trị = đã published']
+  title varchar [not null, note: 'Tieu de bai viet / tin tuc / blog dien anh']
+  slug varchar [unique, not null, note: 'Duong dan SEO-friendly']
+  thumbnail_url varchar [note: 'Anh dai dien bai viet']
+  content text [not null, note: 'Noi dung chi tiet (HTML/Markdown)']
+  excerpt text [note: 'Doan trich dan ngan']
+  category varchar [not null, note: 'ArticleCategory: NEWS, PROMOTION, REVIEW, EVENT']
+  status varchar [not null, default: 'DRAFT', note: 'ArticleStatus: DRAFT, PUBLISHED, ARCHIVED']
+  tags varchar [note: 'Cac the tag cach nhau boi dau phay']
+  author_name varchar [note: 'Tac gia bai viet']
+  views integer [default: 0, note: 'Luot xem']
+  is_featured boolean [default: false, note: 'Tin noi bat']
+  is_trending boolean [default: false, note: 'Tin thinh hanh xu huong']
+  movie_id uuid [ref: > movies.id, note: 'Lien ket voi phim neu la bai review phim']
+  published_at timestamp [note: 'Thoi diem xuat ban']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    slug
-    category
-    is_featured
-    is_trending
-    published_at
-    movie_id
+    slug [unique, name: 'idx_articles_slug']
+    status [name: 'idx_articles_status']
+    category [name: 'idx_articles_category']
+    published_at [name: 'idx_articles_published_at']
+    is_featured [name: 'idx_articles_is_featured']
+    is_trending [name: 'idx_articles_is_trending']
   }
 }
 
 Table events {
   id uuid [pk]
-  title varchar [not null]
-  description text
-  thumbnail_url varchar
-  event_date date [not null]
-  event_time time
-  location_name varchar [note: 'Tên địa điểm — có thể khác rạp trong hệ thống']
-  cinema_id uuid [ref: > cinemas.id, note: 'Nếu tổ chức tại rạp CGV thì ref vào đây']
-  registration_url varchar [note: 'Link đăng ký — có thể là form ngoài hoặc API nội bộ']
-  max_attendees int
-  current_attendees int [default: 0]
-  status varchar [not null, default: 'UPCOMING', note: 'UPCOMING, ONGOING, ENDED, CANCELLED']
+  title varchar [not null, note: 'Tieu de su kien: Premiere, Giao luu fan, Tri an hoi vien']
+  description text [not null, note: 'Noi dung chi tiet su kien']
+  thumbnail_url varchar [note: 'Anh banner su kien']
+  event_date date [not null, note: 'Ngay dien ra su kien']
+  event_time time [not null, note: 'Gio dien ra su kien']
+  location_name varchar [not null, note: 'Ten dia diem / ranh gioi to chuc']
+  cinema_id uuid [ref: > cinemas.id, note: 'Cum rap dien ra su kien (neu co)']
+  registration_url varchar [note: 'Link form dang ky tham gia']
+  max_attendees integer [note: 'So luong nguoi tham gia toi da']
+  current_attendees integer [default: 0, note: 'So luong da dang ky hien tai']
+  status varchar [not null, default: 'UPCOMING', note: 'EventStatus: UPCOMING, ONGOING, COMPLETED, CANCELLED']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    event_date
-    status
-    cinema_id
+    event_date [name: 'idx_events_event_date']
+    status [name: 'idx_events_status']
+    cinema_id [name: 'idx_events_cinema_id']
   }
 }
 
-
 // ================================================================
-// BookingService
+// 3. BOOKING SERVICE
 // ================================================================
 
 TableGroup BookingService {
-  seat_locks
   bookings
   booking_seats
-  cinema_rentals
-  outbox_events_booking
-}
-// redis + lua scrip
-// permistic locking
-
-
-Table seat_locks {
-  id uuid [pk]
-  showtime_id uuid [not null, note: 'Suất chiếu đang lock ghế']
-  seat_id uuid [not null, note: 'Ghế đang bị lock']
-  user_id uuid [not null, note: 'User đang giữ ghế này']
-  session_id varchar [note: 'Session ID của browser — để release khi user đóng tab']
-  expires_at timestamp [not null, note: 'now() + 15 phút — hết hạn thì tự giải phóng ghế']
-  status varchar [default: 'LOCKED', note: 'LOCKED, RELEASED, CONVERTED_TO_BOOKING']
-  created_at timestamp [default: `now()`]
-
-  indexes {
-    (showtime_id, seat_id) [unique, note: 'Đảm bảo 1 ghế trong 1 suất chỉ có 1 người lock']
-    user_id
-    expires_at [note: 'Scheduled job cleanup ghế hết hạn mỗi phút']
-    status
-  }
+  outbox_booking_events
 }
 
 Table bookings {
   id uuid [pk]
-  user_id uuid [not null]
-  showtime_id uuid [not null]
-  promotion_id uuid [ref: > promotions.id, note: 'Mã giảm giá được áp dụng — NULL nếu không có']
-  total_base_amount decimal [not null, note: 'Tổng tiền trước khi trừ giảm giá = Σ(base_price + surcharge)']
-  discount_amount decimal [default: 0, note: 'Số tiền được giảm từ promotion']
-  final_amount decimal [not null, note: 'Số tiền thực tế phải thanh toán = total_base_amount - discount_amount']
-  status varchar [default: 'SEAT_RESERVED', note: 'SEAT_RESERVED → PAYMENT_PENDING → CONFIRMED → USED | CANCELLED | REFUNDED']
-  payment_deadline timestamp [note: 'now() + 15 phút — sau deadline tự động hủy booking nếu chưa thanh toán']
-  qr_code_url varchar [note: 'Link ảnh QR code dùng để soát vé tại rạp']
-  cancelled_at timestamp
-  cancel_reason varchar [note: 'USER_CANCELLED, PAYMENT_TIMEOUT, ADMIN_CANCELLED']
+  user_id varchar [note: 'ID nguoi dung tu IdentityService hoac guest_phone neu la khach vang lai']
+  guest_name varchar(100) [note: 'Ho ten khach vang lai']
+  guest_email varchar(100) [note: 'Email khach vang lai nhan thong tin ve']
+  guest_phone varchar(20) [note: 'SDT khach vang lai']
+  showtime_id uuid [not null, note: 'Tham chieu logic toi CatalogService.showtimes.id']
+  promotion_id uuid [note: 'Tham chieu logic toi MarketingService.promotions.id (neu co dung voucher)']
+  total_base_amount decimal [not null, note: 'Tong tien ve goc (chua tru voucher)']
+  discount_amount decimal [default: 0, note: 'So tien duoc giam tu voucher']
+  final_amount decimal [not null, note: 'So tien thuc te khach phai thanh toan qua VNPay']
+  payment_deadline timestamp [note: 'Han chot thanh toan (Mac dinh 10 phut sau khi tao don)']
+  qr_code_url varchar [note: 'URL ma QR de render ra ma soat ve tai rap']
+  status varchar [not null, default: 'PAYMENT_PENDING', note: 'BookingStatus: PAYMENT_PENDING, CONFIRMED, CANCELLED, REFUNDED, CHECKED_IN']
+  cancelled_at timestamp [note: 'Thoi diem don bi huy neu qua han thanh toan']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    user_id
-    showtime_id
-    status
-    payment_deadline [note: 'Job tự hủy booking quá hạn thanh toán']
-    created_at
+    user_id [name: 'idx_cgv_booking_user_id']
+    showtime_id [name: 'idx_cgv_booking_showtime_id']
+    status [name: 'idx_cgv_booking_status']
+    created_at [name: 'idx_cgv_booking_created_at']
   }
 }
 
 Table booking_seats {
-  booking_id uuid [ref: > bookings.id, not null]
-  seat_id uuid [not null, note: 'Ref tới seats trong CatalogService — cross-service nên không đặt FK cứng']
-  showtime_id uuid [not null, note: 'Denormalized để tránh JOIN — cần khi check conflict']
-  price decimal [not null, note: 'Giá chốt cuối = base_price + seat_type.surcharge tại thời điểm đặt']
-  seat_label varchar [note: 'Denormalized: "H5", "VIP-B3" — để hiển thị vé mà không cần join']
-
-  indexes {
-    (booking_id, seat_id) [pk]
-    (showtime_id, seat_id) [unique, note: 'ĐẢNH BẠI DOUBLE BOOKING: 1 ghế trong 1 suất chỉ có 1 booking']
-  }
-}
-
-Table cinema_rentals {
   id uuid [pk]
-  user_id uuid [note: 'Có thể NULL nếu khách không đăng nhập — chỉ cần điền form']
-  contact_name varchar [not null]
-  contact_phone varchar(20) [not null]
-  contact_email varchar [not null]
-  company_name varchar
-  address varchar
-  service_type varchar [not null, note: 'GROUP_BOOKING, PRIVATE_SHOW, HALL_RENTAL, CORPORATE_EVENT']
-  preferred_cinema_id uuid [ref: > cinemas.id, note: 'Rạp yêu cầu — NULL nếu không chọn cụ thể']
-  rental_date date
-  guest_count int
-  preferred_area varchar [note: 'Khu vực ưu tiên: TP.HCM, Hà Nội...']
-  budget_range varchar [note: 'Under 10M, 10M-50M, Over 50M']
-  notes text
-  status varchar [default: 'PENDING', note: 'PENDING, CONTACTED, QUOTED, APPROVED, REJECTED']
+  booking_id uuid [not null, ref: > bookings.id, note: 'Don dat ve so huu ghe nay']
+  seat_id uuid [not null, note: 'Tham chieu logic toi CatalogService.seats.id']
+  showtime_id uuid [not null, note: 'Tham chieu logic toi CatalogService.showtimes.id']
+  price decimal [not null, note: 'Gia ban cua ghe nay (gia goc suat chieu + phu thu loai ghe)']
+  seat_label varchar [note: 'Nhan ghe hien thi truc quan: A01, H05, VIP-C02']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    status
-    created_at
-    user_id
+    (seat_id, booking_id) [name: 'idx_cgv_booking_seat_booking_id_seat_id']
+    (showtime_id, seat_id) [name: 'idx_cgv_booking_seat_showtime_id_seat_id']
   }
 }
 
-Table outbox_events_booking {
+
+Table outbox_booking_events {
   id uuid [pk]
-  aggregate_id varchar [not null, note: 'ID của booking/seat_lock liên quan']
-  aggregate_type varchar [not null, note: 'BOOKING, SEAT_LOCK']
-  event_type varchar [not null, note: 'BookingCreated, BookingConfirmed, BookingCancelled, SeatsLocked']
-  payload jsonb [not null]
-  is_published boolean [default: false]
-  published_at timestamp
-  retry_count int [default: 0, note: 'Số lần đã thử publish — dừng sau 3 lần']
+  aggregate_id varchar [not null, note: 'ID doi tuong nghiep vu (Booking ID)']
+  aggregate_type varchar [not null, note: 'Loai doi tuong: BOOKING']
+  eventType varchar [not null, note: 'Ten su kien: BookingCreatedEvent, BookingConfirmedEvent']
+  payload text [not null, note: 'Chuoi JSON du lieu su kien']
+  is_published boolean [default: false, note: 'Trang thai da day sang Kafka broker hay chua']
+  retry_count integer [default: 0, note: 'So lan retry day event neu Kafka gap su co']
   created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
   indexes {
-    (is_published, created_at) [note: 'Poller lấy các event chưa publish theo thứ tự']
-    aggregate_id
+    (is_published, created_at) [name: 'idx_cgv_outbox_created_at_is_published']
+    aggregate_id [name: 'idx_cgv_outbox_aggregate_id']
   }
 }
 
-
 // ================================================================
-// PaymentService
+// 4. PAYMENT SERVICE
 // ================================================================
 
 TableGroup PaymentService {
   payments
   payment_logs
-  outbox_events_payment
+  outbox_payment_events
 }
 
 Table payments {
   id uuid [pk]
-  booking_id uuid [unique, not null, note: 'unique: 1 booking chỉ có 1 payment record active']
-  provider varchar [not null, note: 'VNPAY, MOMO, ZALOPAY, BANK_TRANSFER']
-  transaction_id varchar [unique, note: 'Mã giao dịch đối soát từ cổng thanh toán — unique để idempotency']
-  payment_method varchar [note: 'QR_CODE, ATM_CARD, CREDIT_CARD, EWALLET']
-  currency varchar(3) [default: 'VND']
-  amount decimal [not null]
-  status varchar [default: 'PENDING', note: 'PENDING, SUCCESS, FAILED, CANCELLED, REFUND_PENDING, REFUNDED']
-  paid_at timestamp [note: 'Thời điểm thanh toán thành công — NULL nếu chưa thanh toán']
-  refund_amount decimal [note: 'Số tiền hoàn trả — có thể hoàn một phần']
-  refunded_at timestamp
-  metadata jsonb [note: 'Raw response từ payment gateway — lưu để đối soát']
+  provider varchar [not null, note: 'Cong thanh toan: VNPAY, MOMO, ZALOPAY']
+  booking_id uuid [not null, note: 'Tham chieu logic toi BookingService.bookings.id']
+  user_id varchar [not null, note: 'ID nguoi dung thuc hien thanh toan']
+  amount decimal [not null, note: 'So tien giao dich']
+  status varchar [not null, default: 'PENDING', note: 'PaymentStatus: PENDING, SUCCESS, FAILED, REFUNDED']
+  transaction_id varchar [note: 'Ma giao dich phia cong thanh toan tra ve (vnp_TxnRef, vnp_TransactionNo)']
+  payment_method varchar [note: 'Phuong thuc: VNPAY_NCB, VNPAY_VISA, VNPAY_QR...']
+  currency varchar [default: 'VND']
+  paid_at timestamp [note: 'Thoi diem thanh toan thanh cong']
+  refund_amount decimal [note: 'So tien hoan lai neu giao dich bi huy']
+  refunded_at timestamp [note: 'Thoi diem hoan tien']
+  raw text [note: 'Toan bo thong tin payload phan hoi nguyen ban tu cong thanh toan']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    booking_id
-    status
-    transaction_id
-    provider
+    booking_id [name: 'idx_cgv_payment_booking_id']
+    status [name: 'idx_cgv_payment_status']
+    transaction_id [name: 'idx_cgv_payment_transaction_id']
+    provider [name: 'idx_cgv_payment_provider']
   }
 }
 
 Table payment_logs {
   id uuid [pk]
-  payment_id uuid [ref: > payments.id, not null]
-  event varchar [not null, note: 'INITIATED, REDIRECT, CALLBACK_RECEIVED, SUCCESS, FAILED, REFUND_REQUESTED, REFUNDED']
-  description varchar
-  raw_request jsonb [note: 'Request gửi lên payment gateway']
-  raw_response jsonb [note: 'Response từ payment gateway — dùng để debug và đối soát']
-  ip_address varchar
+  payment_id uuid [not null, ref: > payments.id, note: 'Giao dich thanh toan can ghi log']
+  description text [note: 'Mo ta chi tiet buoc xu ly / trang thai loi']
+  raw_request text [note: 'Request gui sang cong thanh toan']
+  raw_response text [note: 'Response phan hoi tu cong thanh toan']
+  ip_address varchar [note: 'Dia chi IP cua client thuc hien request']
   created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
   indexes {
-    payment_id
-    created_at
+    payment_id [name: 'idx_cgv_payment_log_payment_id']
+    created_at [name: 'idx_cgv_payment_created_at']
   }
 }
 
-Table outbox_events_payment {
+Table outbox_payment_events {
   id uuid [pk]
-  aggregate_id varchar [not null]
-  aggregate_type varchar [not null, note: 'PAYMENT']
-  event_type varchar [not null, note: 'PaymentCompleted, PaymentFailed, RefundProcessed']
-  payload jsonb [not null]
-  is_published boolean [default: false]
-  published_at timestamp
-  retry_count int [default: 0]
+  aggregate_id varchar [not null, note: 'ID doi tuong nghiep vu (Payment ID)']
+  aggregate_type varchar [not null, note: 'Loai doi tuong: PAYMENT']
+  eventType varchar [not null, note: 'Ten su kien: PaymentCompletedEvent, PaymentFailedEvent']
+  payload text [not null, note: 'Chuoi JSON du lieu su kien']
+  is_published boolean [default: false, note: 'Trang thai da day sang Kafka topic payment.completed']
+  retry_count integer [default: 0, note: 'So lan thu lai neu Kafka broker bi ngat ket noi']
   created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
 
   indexes {
-    (is_published, created_at)
-    aggregate_id
+    (is_published, created_at) [name: 'idx_cgv_outbox_created_at_is_published']
+    aggregate_id [name: 'idx_cgv_outbox_aggregate_id']
   }
 }
 
-
 // ================================================================
-// MarketingService
+// 5. MARKETING SERVICE
 // ================================================================
-// Redis + lua script + optimistic locking
-// trong môi trường đa luồng , sau này deploy scale nhiều pod , chia sẻ tài nguyên như nào
-// Cơ chế Giữ chỗ tạm thời (TTL Reservation): Thay vì cộng dồn vĩnh viễn ngay lập tức trong Redis, hãy dùng Redis để giữ chỗ (Hold) trong 5-10 phút.
 
-// Nếu trong 5 phút đó user hoàn tất tạo đơn hàng, chuyển trạng thái thành chính thức.
-
-// Nếu hết 5 phút mà user không thanh toán/tạo đơn, Redis tự động giải phóng (expire) trả lại lượt cho mã giảm giá.
 TableGroup MarketingService {
   promotions
   promotion_usages
@@ -532,197 +448,39 @@ TableGroup MarketingService {
 
 Table promotions {
   id uuid [pk]
-  code varchar [unique, not null, note: 'Mã nhập: VVIPBIRTHDAY, MEGASALE55K — uppercase']
-  name varchar [not null, note: 'Tên hiển thị: "Mega Sale Thứ 4"']
-  description text [note: 'Mô tả đầy đủ điều kiện áp dụng']
-  // banner_url varchar [note: 'Ảnh banner hiển thị trên trang Ưu đãi']
-  discount_type varchar [default: 'FIXED', note: 'FIXED (Giảm tiền mặt: 55000đ) hoặc PERCENT (Giảm %: 30%)']
-  discount_value decimal [not null, note: 'Giá trị giảm: 55000 (nếu FIXED) hoặc 30 (nếu PERCENT = 30%)']
-  max_discount_amount decimal [note: 'Trần giảm tối đa khi dùng PERCENT — VD: giảm 30% nhưng tối đa 100K']
-  applicable_tier varchar [note: 'SILVER, GOLD, PLATINUM — NULL = tất cả hạng đều dùng được']
-  min_order_value decimal [default: 0, note: 'Đơn hàng tối thiểu để áp dụng mã']
-  valid_from timestamp [not null]
-  valid_to timestamp [not null]
-  usage_limit int [note: 'Tổng số lượt toàn hệ thống — NULL = không giới hạn']
-  max_uses_per_user int [default: 1, note: 'Số lần tối đa 1 user có thể dùng mã này']
-  is_active boolean [default: true, note: 'Admin bật/tắt thủ công không phụ thuộc vào valid_from/valid_to']
-  version int [default: 1, note: 'OPTIMISTIC LOCKING: Chống race condition khi nhiều request cùng dùng 1 mã (kết hợp Redis Lua script chặn trước khi xuống DB)']
+  code varchar(50) [unique, not null, note: 'Ma voucher giam gia: CGV2026, VIPDISCOUNT, TIKTOK50K']
+  name varchar(200) [not null, note: 'Ten chuong trinh uu dai']
+  description text [note: 'Noi dung chi tiet the le chuong trinh']
+  discount_type varchar(20) [not null, note: 'DiscountType: PERCENTAGE (giam %), FIXED_AMOUNT (giam so tien co dinh)']
+  discount_value decimal [not null, note: 'Gia tri giam: VD 20 cho 20%, hoac 50000 cho 50.000d']
+  max_discount_amount decimal [note: 'So tien giam toi da khi chon kieu PERCENTAGE']
+  min_order_value decimal [default: 0, note: 'Gia tri don hang toi thieu de duoc ap dung voucher']
+  applicable_tier varchar(20) [note: 'Hang thanh vien toi thieu: ALL, MEMBER, VIP, VVIP']
+  valid_from timestamp [not null, note: 'Ngay bat dau co hieu luc']
+  valid_to timestamp [not null, note: 'Ngay het han ap dung']
+  usage_limit integer [note: 'Tong so luong ma phat hanh (null neu khong gioi han)']
+  max_uses_per_user integer [not null, default: 1, note: 'So lan toi da 1 user duoc phep su dung ma nay']
+  is_active boolean [not null, default: true, note: 'Trang thai voucher con hoat dong hay khong']
+  version bigint [not null, note: 'OPTIMISTIC LOCKING (@Version): Chong vuot han muc usage_limit khi hang ngan nguoi cung dung voucher']
   created_at timestamp [default: `now()`]
   updated_at timestamp [default: `now()`]
 
   indexes {
-    code [note: 'Lookup nhanh khi user nhập mã']
-    (is_active, valid_from, valid_to) [note: 'Query danh sách promotion đang hoạt động']
-    applicable_tier
+    (is_active, valid_from, valid_to) [name: 'idx_promotions_active_dates']
+    (applicable_tier, min_order_value) [name: 'idx_promotions_tier_min_order']
   }
 }
 
 Table promotion_usages {
   id uuid [pk]
-  promotion_id uuid [ref: > promotions.id, not null]
-  user_id uuid [not null]
-  booking_id uuid [not null, note: 'Booking đã dùng mã này']
-  discount_applied decimal [not null, note: 'Số tiền thực tế được giảm (sau khi áp dụng max_discount_amount)']
-  used_at timestamp [default: `now()`]
+  promotion_id uuid [not null, ref: > promotions.id, note: 'Ma voucher da su dung']
+  user_id varchar [not null, note: 'Nguoi dung da su dung voucher']
+  booking_id uuid [unique, not null, note: 'Don dat ve ap dung voucher (Moi don chi dung duy nhat 1 voucher)']
+  discount_applied decimal(12,2) [not null, note: 'So tien giam thuc te da duoc tru vao don']
+  used_at timestamp [not null, default: `now()`, note: 'Thoi diem su dung ma']
 
   indexes {
-    (promotion_id, user_id) [note: 'Check nhanh: user này đã dùng mã này chưa?']
-    promotion_id [note: 'Đếm tổng số lượt dùng để so với usage_limit']
-    user_id
-    booking_id [unique, note: '1 booking chỉ dùng được 1 mã — unique đảm bảo không insert 2 lần']
+    (promotion_id, user_id) [name: 'idx_promo_usage_user']
+    booking_id [unique, name: 'idx_promo_usage_booking']
   }
 }
-
-
-
-// // ================================================================
-// // ContentService (hoặc gộp vào MarketingService)
-// // Quản lý Banner & Quảng cáo linh động
-// // ================================================================
-
-// TableGroup ContentService {
-//   banners
-//   banner_targets
-//   advertisements
-// }
-
-// // ----------------------------------------------------------------
-// // BANNERS — Hero banner carousel trên từng trang
-// // Admin tạo/sửa/xóa/sắp xếp banner không cần deploy lại code
-// // ----------------------------------------------------------------
-// Table banners {
-//   id uuid [pk]
-
-//   // Vị trí hiển thị
-//   placement varchar [not null
-//     // HOME_HERO: Carousel chính trang chủ
-//     // MOVIES_HERO: Carousel trang Phim
-//     // CINEMAS_HERO: Carousel trang Rạp chiếu
-//     // PROMOTIONS_HERO: Carousel trang Ưu đãi
-//     // NEWS_HERO: Carousel trang Tin tức
-//   ]
-
-//   // Nội dung hiển thị
-//   title varchar [not null, note: 'Tiêu đề lớn trên banner — VD: MEGA SALE THỨ 4']
-//   subtitle varchar [note: 'Phụ đề — VD: Đồng giá vé từ 55K trên toàn hệ thống']
-//   description text [note: 'Mô tả ngắn hiện bên dưới subtitle']
-//   badge_text varchar [note: 'Label nhỏ góc trên — VD: 🔥 Hot deal, ⭐ Nổi bật']
-//   badge_color varchar [note: 'Màu badge: #e91e8c, #ffd700 — hex code']
-
-//   // Media
-//   image_url varchar [note: 'Ảnh background banner — upload S3/MinIO']
-//   image_mobile_url varchar [note: 'Ảnh riêng cho mobile (tỷ lệ dọc hơn)']
-//   gradient_css varchar [note: 'Gradient CSS fallback khi không có ảnh — VD: linear-gradient(135deg,#1a0535,#6200ea)']
-//   accent_color varchar [note: 'Màu accent text/button — VD: #bb86fc']
-
-//   // Call to Action buttons (tối đa 2 nút)
-//   cta_primary_text varchar [note: 'Text nút chính — VD: Đặt vé ngay, Nhận ưu đãi']
-//   cta_primary_url varchar [note: 'Link nút chính — có thể là deeplink: /movies/123']
-//   cta_secondary_text varchar [note: 'Text nút phụ — VD: Xem trailer, Xem thể lệ']
-//   cta_secondary_url varchar
-
-//   // Liên kết tới entity (tùy chọn — để deeplink)
-//   link_type varchar [note: 'MOVIE, CINEMA, PROMOTION, ARTICLE, EXTERNAL, NONE']
-//   movie_id uuid [ref: > movies.id, note: 'Nếu banner quảng bá phim — click vào trang phim']
-//   promotion_id uuid [ref: > promotions.id, note: 'Nếu banner quảng bá mã giảm giá']
-//   article_id uuid [ref: > articles.id, note: 'Nếu banner dẫn vào bài tin tức']
-//   external_url varchar [note: 'Link ngoài nếu link_type = EXTERNAL']
-
-//   // Scheduling — Tự động hiện/ẩn theo thời gian
-//   starts_at timestamp [note: 'Thời điểm bắt đầu hiển thị — NULL = hiện ngay']
-//   ends_at timestamp [note: 'Thời điểm kết thúc — NULL = không hết hạn']
-
-//   // Hiển thị
-//   display_order int [default: 0, note: 'Thứ tự trong carousel — số nhỏ hiện trước']
-//   is_active boolean [default: true, note: 'Admin bật/tắt nhanh không cần xóa']
-
-//   created_at timestamp [default: `now()`]
-//   updated_at timestamp [default: `now()`]
-
-//   indexes {
-//     placement
-//     (placement, is_active, display_order) [note: 'Query banner đang active theo vị trí, sắp xếp thứ tự']
-//     (starts_at, ends_at) [note: 'Filter banner theo thời gian hiệu lực']
-//     is_active
-//   }
-// }
-
-// // ----------------------------------------------------------------
-// // BANNER_TARGETS — Nhắm banner tới đối tượng cụ thể
-// // VD: Banner "Ưu đãi PLATINUM" chỉ hiện với user PLATINUM
-// // ----------------------------------------------------------------
-// Table banner_targets {
-//   banner_id uuid [ref: > banners.id, not null]
-//   target_type varchar [not null, note: 'ALL, MEMBERSHIP_TIER, REGION, LOGGED_IN, GUEST']
-//   target_value varchar [
-//     // Nếu target_type=MEMBERSHIP_TIER → SILVER, GOLD, PLATINUM
-//     // Nếu target_type=REGION → ID hoặc slug của region
-//     // Nếu target_type=ALL/LOGGED_IN/GUEST → để NULL
-//   ]
-
-//   indexes {
-//     (banner_id, target_type, target_value) [pk]
-//     (target_type, target_value) [note: 'Lookup nhanh banner theo đối tượng user']
-//   }
-// }
-
-// // ----------------------------------------------------------------
-// // ADVERTISEMENTS — Quảng cáo sidebar & inline
-// // Linh động hơn banner: có thể đặt ở sidebar, giữa danh sách, footer
-// // ----------------------------------------------------------------
-// Table advertisements {
-//   id uuid [pk]
-
-//   // Vị trí đặt quảng cáo
-//   slot varchar [not null
-//     // SIDEBAR_MOVIES: Sidebar trang Phim
-//     // SIDEBAR_CINEMAS: Sidebar trang Rạp chiếu
-//     // SIDEBAR_NEWS: Sidebar trang Tin tức
-//     // INLINE_PROMOTIONS: Quảng cáo xen giữa danh sách ưu đãi
-//     // POPUP: Popup khi vào trang
-//     // FOOTER_BANNER: Banner nằm cuối trang
-//   ]
-
-//   // Nội dung
-//   title varchar [not null, note: 'VD: ƯU ĐÃI TẠI RẠP']
-//   body_text varchar [note: 'VD: Combo bắp nước giảm đến 30%']
-//   fine_print varchar [note: 'Chữ nhỏ phía dưới — VD: Cho thành viên CineGo']
-//   image_url varchar [note: 'Ảnh quảng cáo — tỷ lệ tùy slot']
-//   gradient_css varchar [note: 'Gradient CSS background khi không có ảnh']
-//   accent_color varchar [note: 'Màu nhấn — dùng cho border, icon, badge']
-//   icon_emoji varchar [note: 'Icon emoji hiển thị — VD: 🎬 🍿 🎟️']
-
-//   // CTA
-//   cta_text varchar [note: 'VD: Xem ngay →, Đăng ký →']
-//   cta_url varchar [note: 'Link khi click']
-
-//   // Liên kết entity
-//   link_type varchar [note: 'MOVIE, CINEMA, PROMOTION, ARTICLE, EXTERNAL, NONE']
-//   movie_id uuid [ref: > movies.id]
-//   promotion_id uuid [ref: > promotions.id]
-
-//   // Scheduling
-//   starts_at timestamp
-//   ends_at timestamp
-
-//   // Targeting
-//   target_membership_tier varchar [note: 'NULL = tất cả. SILVER/GOLD/PLATINUM = chỉ hạng đó']
-//   target_region_id int [ref: > regions.id, note: 'NULL = tất cả khu vực']
-
-//   // Hiển thị
-//   display_order int [default: 0]
-//   is_active boolean [default: true]
-//   click_count int [default: 0, note: 'Đếm số lần click để đo hiệu quả quảng cáo']
-//   impression_count int [default: 0, note: 'Đếm số lần hiển thị']
-
-//   created_at timestamp [default: `now()`]
-//   updated_at timestamp [default: `now()`]
-
-//   indexes {
-//     slot
-//     (slot, is_active, display_order)
-//     (starts_at, ends_at)
-//     target_membership_tier
-//     target_region_id
-//   }
-// }
