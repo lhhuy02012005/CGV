@@ -20,4 +20,6 @@ public class SeatLockRequest {
 
     @NotEmpty(message = "Vui lòng chọn danh sách ghế !")
     List<UUID> seatIds;
+
+    String guestSessionId;
 }

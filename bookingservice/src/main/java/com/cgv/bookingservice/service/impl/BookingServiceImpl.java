@@ -93,10 +93,17 @@ public class BookingServiceImpl implements BookingService {
             }
         }
 
+        String guestSessionId = request.getGuestSessionId();
+
         for (UUID seatId : seatIds) {
             String seatKey = LOCK_KEY_PREFIX + showtimeId + ":" + seatId;
             String currentHolder = redisTemplate.opsForValue().get(seatKey);
-            if (currentHolder == null || (!currentHolder.equals(userId) && !(isGuest && currentHolder.startsWith("guest_")))) {
+            boolean isHolder = currentHolder != null && (
+                    currentHolder.equals(userId)
+                    || (guestSessionId != null && !guestSessionId.isBlank() && currentHolder.equals(guestSessionId))
+                    || (isGuest && currentHolder.startsWith("guest_"))
+            );
+            if (!isHolder) {
                 throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã hết hạn giữ hoặc không thuộc quyền sở hữu của bạn. Vui lòng chọn lại ghế!");
             }
         }
@@ -196,12 +203,15 @@ public class BookingServiceImpl implements BookingService {
 
         Booking savedBooking = bookingRepository.save(booking);
 
-        // Gia hạn lock Redis thêm 10 phút thanh toán
+        // Gia hạn lock Redis thêm 10 phút thanh toán và đảm bảo gán quyền sở hữu cho userId
         for (UUID seatId : seatIds) {
             String lockKey = LOCK_KEY_PREFIX + showtimeId + ":" + seatId;
-            redisTemplate.expire(lockKey, Duration.ofMinutes(LOCK_KEY_DURATION));
+            redisTemplate.opsForValue().set(lockKey, userId, Duration.ofMinutes(LOCK_KEY_DURATION));
         }
-        redisTemplate.expire("user:active_showtime:" + userId, Duration.ofMinutes(LOCK_KEY_DURATION));
+        redisTemplate.opsForValue().set("user:active_showtime:" + userId, showtimeId.toString(), Duration.ofMinutes(LOCK_KEY_DURATION));
+        if (guestSessionId != null && !guestSessionId.isBlank()) {
+            redisTemplate.delete("user:active_showtime:" + guestSessionId);
+        }
         redisTemplate.delete("user:expired_count:" + userId);
 
         try {
@@ -250,7 +260,7 @@ public class BookingServiceImpl implements BookingService {
 
         // Broadcast Realtime SSE PAYMENT_CONFIRMED to client waiting on checkout screen
         try {
-            bookingRealtimeService.broadcastBooking(bookingId, "PAYMENT_CONFIRMED", java.util.Map.of(
+            bookingRealtimeService.broadcastBooking(bookingId, "PAYMENT_CONFIRMED", Map.of(
                     "bookingId", bookingId.toString(),
                     "status", "CONFIRMED",
                     "qrCodeUrl", booking.getQrCodeUrl() != null ? booking.getQrCodeUrl() : "",

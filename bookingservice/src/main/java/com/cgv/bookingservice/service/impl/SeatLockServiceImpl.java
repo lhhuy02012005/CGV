@@ -113,10 +113,14 @@ public class SeatLockServiceImpl implements SeatLockService {
     public void releaseSeats(String userId, SeatLockRequest request) {
         String showtimePrefix = seatLockKey + request.getShowtimeId();
         List<UUID> releasedSeatIds = new ArrayList<>();
+        String guestSessionId = request.getGuestSessionId();
         for(UUID seatId : request.getSeatIds()) {
             String lockKey = showtimePrefix + ":" + seatId;
             String currentHolder = redisTemplate.opsForValue().get(lockKey);
-            if (userId != null && userId.equals(currentHolder)) {
+            if (currentHolder != null && (
+                    (userId != null && userId.equals(currentHolder))
+                    || (guestSessionId != null && !guestSessionId.isBlank() && guestSessionId.equals(currentHolder))
+            )) {
                 redisTemplate.delete(lockKey);
                 releasedSeatIds.add(seatId);
             }
@@ -131,16 +135,49 @@ public class SeatLockServiceImpl implements SeatLockService {
         String pattern = seatLockKey + request.getShowtimeId() + ":*";
         Set<String> keys = redisTemplate.keys(pattern);
         boolean stillHasSeats = false;
-        if (keys != null && userId != null) {
+        if (keys != null) {
             for (String k : keys) {
-                if (userId.equals(redisTemplate.opsForValue().get(k))) {
+                String holder = redisTemplate.opsForValue().get(k);
+                if ((userId != null && userId.equals(holder)) || (guestSessionId != null && guestSessionId.equals(holder))) {
                     stillHasSeats = true;
                     break;
                 }
             }
         }
         if (!stillHasSeats) {
-            redisTemplate.delete(userActiveKey);
+            if (userId != null) redisTemplate.delete(userActiveKey);
+            if (guestSessionId != null) redisTemplate.delete("user:active_showtime:" + guestSessionId);
+        }
+    }
+
+    @Override
+    public void transferSeats(String userId, SeatLockRequest request) {
+        if (userId == null || userId.isBlank() || request.getGuestSessionId() == null || request.getGuestSessionId().isBlank()) {
+            return;
+        }
+        String guestSessionId = request.getGuestSessionId();
+        String showtimePrefix = seatLockKey + request.getShowtimeId();
+        List<UUID> transferredSeats = new ArrayList<>();
+
+        for (UUID seatId : request.getSeatIds()) {
+            String lockKey = showtimePrefix + ":" + seatId;
+            String currentHolder = redisTemplate.opsForValue().get(lockKey);
+            if (currentHolder != null && currentHolder.equals(guestSessionId)) {
+                Long ttl = redisTemplate.getExpire(lockKey, TimeUnit.SECONDS);
+                if (ttl != null && ttl > 0) {
+                    redisTemplate.opsForValue().set(lockKey, userId, Duration.ofSeconds(ttl));
+                    transferredSeats.add(seatId);
+                }
+            }
+        }
+
+        if (!transferredSeats.isEmpty()) {
+            String userActiveKey = "user:active_showtime:" + userId;
+            redisTemplate.opsForValue().set(userActiveKey, request.getShowtimeId().toString(), Duration.ofSeconds(LOCK_TTL_SECONDS));
+            redisTemplate.delete("user:active_showtime:" + guestSessionId);
+            log.info("Chuyển quyền giữ {} ghế suất chiếu {} từ guest {} sang user {}",
+                    transferredSeats.size(), request.getShowtimeId(), guestSessionId, userId);
+            broadcastSeatEvent("LOCK", request.getShowtimeId(), transferredSeats, userId);
         }
     }
 

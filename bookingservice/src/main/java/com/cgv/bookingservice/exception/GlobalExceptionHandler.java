@@ -16,6 +16,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Date;
@@ -39,6 +40,13 @@ public class GlobalExceptionHandler {
                 .data(ex.getData())
                 .build();
         return new ResponseEntity<>(errorResponse, ex.getStatus());
+    }
+
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncRequestTimeoutException(AsyncRequestTimeoutException ex) {
+        // SSE timeout là sự kiện bình thường khi client đóng tab hoặc kết nối hết hạn.
+        // Chỉ log debug hoặc bỏ qua để tránh làm rác log hệ thống.
+        log.debug("SSE connection closed normally: {}", ex.getMessage());
     }
 
     @ExceptionHandler(AccessDeniedException.class)

@@ -25,4 +25,5 @@ public class BookingCreateRequest {
     String guestName;
     String guestEmail;
     String guestPhone;
+    String guestSessionId;
 }

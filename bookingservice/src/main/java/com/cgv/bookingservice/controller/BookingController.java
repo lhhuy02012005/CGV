@@ -53,9 +53,13 @@ public class BookingController {
     public ApiResponse<BookingResponse> create(
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
+            @RequestHeader(value = "X-Guest-Session-Id", required = false) String headerGuestSessionId,
             @RequestBody BookingCreateRequest request
     ) {
         String userId = resolveUserId(jwt, headerUserId);
+        if ((request.getGuestSessionId() == null || request.getGuestSessionId().isBlank()) && headerGuestSessionId != null && !headerGuestSessionId.isBlank()) {
+            request.setGuestSessionId(headerGuestSessionId);
+        }
         var result = bookingService.createBooking(userId, request);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.CREATED.value())

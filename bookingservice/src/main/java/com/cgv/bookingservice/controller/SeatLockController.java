@@ -49,13 +49,35 @@ public class SeatLockController {
     public ApiResponse<Void> releaseSeats(
             @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
+            @RequestHeader(value = "X-Guest-Session-Id", required = false) String headerGuestSessionId,
             @RequestBody @Valid SeatLockRequest request
     ) {
         String userId = resolveUserId(jwt, headerUserId);
+        if ((request.getGuestSessionId() == null || request.getGuestSessionId().isBlank()) && headerGuestSessionId != null && !headerGuestSessionId.isBlank()) {
+            request.setGuestSessionId(headerGuestSessionId);
+        }
         seatLockService.releaseSeats(userId, request);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())
                 .message("Giải phóng ghế thành công")
+                .build();
+    }
+
+    @PostMapping("/transfer")
+    public ApiResponse<Void> transferSeats(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
+            @RequestHeader(value = "X-Guest-Session-Id", required = false) String headerGuestSessionId,
+            @RequestBody @Valid SeatLockRequest request
+    ) {
+        String userId = resolveUserId(jwt, headerUserId);
+        if ((request.getGuestSessionId() == null || request.getGuestSessionId().isBlank()) && headerGuestSessionId != null && !headerGuestSessionId.isBlank()) {
+            request.setGuestSessionId(headerGuestSessionId);
+        }
+        seatLockService.transferSeats(userId, request);
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Chuyển quyền giữ ghế sang tài khoản đăng nhập thành công")
                 .build();
     }
 

@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface SeatLockService {
     SeatLockResponse lockSeats(String userId , SeatLockRequest seatLockRequest);
     void releaseSeats(String userId , SeatLockRequest seatLockRequest);
+    void transferSeats(String userId, SeatLockRequest seatLockRequest);
     List<UUID> getActiveLockedSeatIds(UUID showtimeId);
     List<UUID> getBookedSeatIds(UUID showtimeId);
     void reportExpiredLock(String userId, UUID showtimeId);
