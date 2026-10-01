@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: cgv-prod
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:24.0.1
+          imagePullPolicy: IfNotPresent
+          # =========================================================================
+          # COMMAND KHỞI ĐỘNG KEYCLOAK:
+          # - start-dev: Chế độ dev cho phép chạy HTTP (không bắt buộc TLS/SSL local)
+          # - --import-realm: Tự động import file realm JSON đặt trong /opt/keycloak/data/import/
+          # =========================================================================
+          command:
+            - "/opt/keycloak/bin/kc.sh"
+            - "start-dev"
+            - "--import-realm"
+          env:
+            # 1. Cơ sở dữ liệu: Chọn PostgreSQL
+            - name: KC_DB
+              value: "postgres"
+            # 2. Chuỗi kết nối JDBC tới AWS RDS PostgreSQL
+            - name: KC_DB_URL
+              value: "jdbc:postgresql://cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com:5432/cgv"
+            # 3. Schema riêng biệt trong Postgres: gom 121 bảng Keycloak vào schema 'keycloak' để không làm bẩn public schema của Microservices
+            - name: KC_DB_SCHEMA
+              value: "keycloak"
+            # 4. Tài khoản đăng nhập AWS RDS PostgreSQL
+            - name: KC_DB_USERNAME
+              value: "postgres"
+            - name: KC_DB_PASSWORD
+              value: "CGVPassword2026"
+            # 5. Tài khoản quản trị Keycloak Admin Console (master realm)
+            - name: KEYCLOAK_ADMIN
+              value: "admin"
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              value: "admin"
+            # 6. Cấu hình HTTP & HTTPS (Vì chạy sau Kong Ingress / ALB reverse proxy terminate SSL):
+            # - KC_HTTP_ENABLED: Bật cổng HTTP plaintext 8080 cho giao tiếp nội bộ K8s
+            # - KC_HOSTNAME_STRICT_HTTPS: Tắt bắt buộc HTTPS trực tiếp vào container
+            # - KC_HOSTNAME_STRICT: Cho phép truy cập qua internal DNS k8s (keycloak.cgv-prod.svc)
+            # - KC_HOSTNAME_STRICT_BACKCHANNEL: Cho phép microservice gọi trực tiếp qua private IP
+            # - KC_PROXY_HEADERS: Nhận diện X-Forwarded-* headers từ Reverse Proxy (Kong / AWS ALB)
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME_STRICT_HTTPS
+              value: "true"
+            - name: KC_HOSTNAME_STRICT_BACKCHANNEL
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+            - name: KC_HOSTNAME_URL
+              value: "https://d2z63drupmmdh8.cloudfront.net"
+            - name: KC_HOSTNAME_ADMIN_URL
+              value: "https://d2z63drupmmdh8.cloudfront.net"
+            # 7. OAuth2 Social Login Providers (Google, Facebook)
+            - name: GOOGLE_CLIENT_ID
+              value: "REDACTED"
+            - name: GOOGLE_CLIENT_SECRET
+              value: "REDACTED"
+            - name: FACEBOOK_CLIENT_ID
+              value: "REDACTED"
+            - name: FACEBOOK_CLIENT_SECRET
+              value: "REDACTED"
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: "500m"     # Cấp 500m CPU giúp Quarkus build nhanh
+              memory: "1024Mi" # Cấp 1GB RAM để JVM thoải mái bộ nhớ
+            limits:
+              cpu: "2000m"    # Cho phép burst tối đa 2 core
+              memory: "2048Mi" # Giới hạn tối đa 2GB RAM an toàn
+          # =========================================================================
+          # PROBES KIỂM TRA SỨC KHỎE POD (CỰC KỲ QUAN TRỌNG TRÁNH CRASH LOOP):
+          # Dùng tcpSocket cổng 8080 để kiểm tra cổng mở, tránh bị timeout do /realms/master
+          # =========================================================================
+          startupProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            # Mount file cgv-realm-export.json từ ConfigMap vào thư mục auto-import của Keycloak
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import/cgv-realm-export.json
+              subPath: cgv-realm-export.json
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: cgv-prod
+  labels:
+    app: keycloak
+spec:
+  type: ClusterIP  # Dịch vụ nội bộ: DNS = keycloak.cgv-prod.svc.cluster.local:8080
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

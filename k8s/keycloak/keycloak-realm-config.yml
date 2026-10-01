@@ -1,0 +1,495 @@
+apiVersion: v1
+data:
+  cgv-realm-export.json: |
+    {
+      "id": "cgv-realm",
+      "realm": "cgv-realm",
+      "displayName": "CGV Cinemas",
+      "enabled": true,
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": true,
+      "editUsernameAllowed": false,
+      "bruteForceProtected": true,
+      "failureFactor": 5,
+      "waitIncrementSeconds": 60,
+      "maxFailureWaitSeconds": 900,
+      "maxDeltaTimeSeconds": 43200,
+      "accessTokenLifespan": 300,
+      "refreshTokenMaxReuse": 0,
+      "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
+      "roles": {
+        "realm": [
+          {
+            "name": "movie:manage",
+            "description": "Them, sua, xoa thong tin Phim, the loai, dien vien",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "cinema:manage",
+            "description": "Quan ly cum rap, phong chieu, ma tran ghe va tien ich rap",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "showtime:manage",
+            "description": "Tao va xep lich chieu phim, dieu phoi gio chieu",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "ticket:book",
+            "description": "Dat ve, giu ghe va thanh toan ve xem phim",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "ticket:view",
+            "description": "Xem danh sach va chi tiet ve da dat, soat ve QR",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "ticket:refund",
+            "description": "Huy ve va xu ly hoan tien cho khach hang",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "rental:manage",
+            "description": "Tiep nhan, bao gia va duyet don thue tron rap su kien",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "promotion:manage",
+            "description": "Quan ly ma giam gia, voucher va chien dich marketing",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "content:manage",
+            "description": "Quan ly hero banner, quang cao sidebar, tin tuc va su kien",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "report:view",
+            "description": "Xem bao cao thong ke doanh thu va ty le lap day rap",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "user:manage",
+            "description": "Khoa, mo khoa va quan ly tai khoan nguoi dung",
+            "composite": false,
+            "clientRole": false
+          },
+          {
+            "name": "SUPER_ADMIN",
+            "description": "Ban giam doc, CTO, System Admin - toan quyen he thong",
+            "composite": true,
+            "clientRole": false,
+            "composites": {
+              "realm": [
+                "movie:manage",
+                "cinema:manage",
+                "showtime:manage",
+                "ticket:book",
+                "ticket:view",
+                "ticket:refund",
+                "rental:manage",
+                "promotion:manage",
+                "content:manage",
+                "report:view",
+                "user:manage"
+              ]
+            }
+          },
+          {
+            "name": "CONTENT_MANAGER",
+            "description": "Doi ngu quan ly noi dung truyen thong, marketing, banner va tin tuc",
+            "composite": true,
+            "clientRole": false,
+            "composites": {
+              "realm": [
+                "content:manage",
+                "promotion:manage",
+                "movie:manage"
+              ]
+            }
+          },
+          {
+            "name": "CINEMA_MANAGER",
+            "description": "Quan ly cum rap chi nhanh, phong chieu, suat chieu va don thue rap",
+            "composite": true,
+            "clientRole": false,
+            "composites": {
+              "realm": [
+                "cinema:manage",
+                "showtime:manage",
+                "rental:manage",
+                "ticket:refund",
+                "ticket:view",
+                "report:view"
+              ]
+            }
+          },
+          {
+            "name": "TICKET_STAFF",
+            "description": "Nhan vien ban ve tai quay va soat ve QR cua rap",
+            "composite": true,
+            "clientRole": false,
+            "composites": {
+              "realm": [
+                "ticket:book",
+                "ticket:view"
+              ]
+            }
+          },
+          {
+            "name": "MEMBER_USER",
+            "description": "Thanh vien CGV - role mac dinh khi dang ky tai khoan",
+            "composite": true,
+            "clientRole": false,
+            "composites": {
+              "realm": [
+                "ticket:book",
+                "ticket:view"
+              ]
+            }
+          }
+        ]
+      },
+      "defaultRole": {
+        "name": "MEMBER_USER",
+        "description": "Thanh vien CGV - role mac dinh khi dang ky tai khoan"
+      },
+      "groups": [
+        {
+          "name": "CGV_BoardOfDirectors",
+          "path": "/CGV_BoardOfDirectors",
+          "realmRoles": [
+            "SUPER_ADMIN"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        },
+        {
+          "name": "CGV_MarketingTeam",
+          "path": "/CGV_MarketingTeam",
+          "realmRoles": [
+            "CONTENT_MANAGER"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        },
+        {
+          "name": "CGV_Vincom_DongKhoi_Managers",
+          "path": "/CGV_Vincom_DongKhoi_Managers",
+          "realmRoles": [
+            "CINEMA_MANAGER"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        },
+        {
+          "name": "CGV_Vincom_DongKhoi_Staffs",
+          "path": "/CGV_Vincom_DongKhoi_Staffs",
+          "realmRoles": [
+            "TICKET_STAFF"
+          ],
+          "clientRoles": {},
+          "subGroups": []
+        }
+      ],
+      "users": [
+        {
+          "username": "service-account-cgv_app",
+          "enabled": true,
+          "serviceAccountClientId": "CGV_App",
+          "credentials": [],
+          "clientRoles": {
+            "realm-management": [
+              "realm-admin"
+            ]
+          }
+        },
+        {
+          "username": "superadmin.headquarters.enterprise@cgv.vn",
+          "email": "superadmin.headquarters.enterprise@cgv.vn",
+          "firstName": "Enterprise",
+          "lastName": "CGV SuperAdmin",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            {
+              "type": "password",
+              "value": "12345678",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "SUPER_ADMIN"
+          ],
+          "groups": [
+            "/CGV_BoardOfDirectors"
+          ]
+        },
+        {
+          "username": "cinemamanager.vincom.dongkhoi@cgv.vn",
+          "email": "cinemamanager.vincom.dongkhoi@cgv.vn",
+          "firstName": "Dong Khoi",
+          "lastName": "Manager Vincom",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            {
+              "type": "password",
+              "value": "12345678",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "CINEMA_MANAGER"
+          ],
+          "groups": [
+            "/CGV_Vincom_DongKhoi_Managers"
+          ]
+        },
+        {
+          "username": "ticketstaff.boxoffice.crescentmall@cgv.vn",
+          "email": "ticketstaff.boxoffice.crescentmall@cgv.vn",
+          "firstName": "Crescent",
+          "lastName": "Staff BoxOffice",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            {
+              "type": "password",
+              "value": "12345678",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "TICKET_STAFF"
+          ],
+          "groups": [
+            "/CGV_Vincom_DongKhoi_Staffs"
+          ]
+        },
+        {
+          "username": "marketing.contentlead.digital@cgv.vn",
+          "email": "marketing.contentlead.digital@cgv.vn",
+          "firstName": "Campaign Lead",
+          "lastName": "Marketing Content",
+          "enabled": true,
+          "emailVerified": true,
+          "credentials": [
+            {
+              "type": "password",
+              "value": "12345678",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "CONTENT_MANAGER"
+          ],
+          "groups": [
+            "/CGV_MarketingTeam"
+          ]
+        }
+      ],
+      "clients": [
+        {
+          "clientId": "CGV_App",
+          "name": "CGV Application",
+          "enabled": true,
+          "clientAuthenticatorType": "client-secret",
+          "secret": "${env.KEYCLOAK_CLIENT_SECRET}",
+          "redirectUris": [
+            "https://cgvcinema.vn/*",
+            "${env.FRONTEND_URL}/*"
+          ],
+          "webOrigins": [
+            "https://cgvcinema.vn",
+            "${env.FRONTEND_URL}"
+          ],
+          "standardFlowEnabled": true,
+          "implicitFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "serviceAccountsEnabled": true,
+          "publicClient": false,
+          "protocol": "openid-connect",
+          "attributes": {
+            "access.token.lifespan": "300",
+            "use.refresh.tokens": "true"
+          },
+          "protocolMappers": [
+            {
+              "name": "realm roles mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-realm-role-mapper",
+              "consentRequired": false,
+              "config": {
+                "multivalued": "true",
+                "userinfo.token.claim": "true",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "realm_access.roles",
+                "jsonType.label": "String"
+              }
+            },
+            {
+              "name": "groups mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-group-membership-mapper",
+              "consentRequired": false,
+              "config": {
+                "full.path": "false",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "groups",
+                "userinfo.token.claim": "true"
+              }
+            },
+            {
+              "name": "email mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "userinfo.token.claim": "true",
+                "user.attribute": "email",
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "claim.name": "email",
+                "jsonType.label": "String"
+              }
+            },
+            {
+              "name": "full name mapper",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-full-name-mapper",
+              "consentRequired": false,
+              "config": {
+                "id.token.claim": "true",
+                "access.token.claim": "true",
+                "userinfo.token.claim": "true"
+              }
+            }
+          ]
+        }
+      ],
+      "smtpServer": {},
+      "eventsEnabled": true,
+      "eventsExpiration": 604800,
+      "adminEventsEnabled": true,
+      "adminEventsDetailsEnabled": true,
+      "identityProviders": [
+        {
+          "alias": "google",
+          "displayName": "Google",
+          "providerId": "google",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "off",
+          "trustEmail": true,
+          "storeToken": false,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "firstBrokerLoginFlowAlias": "first broker login auto link",
+          "config": {
+            "clientId": "${env.GOOGLE_CLIENT_ID:}",
+            "clientSecret": "${env.GOOGLE_CLIENT_SECRET:}",
+            "syncMode": "FORCE",
+            "useJwksUrl": "true"
+          }
+        },
+        {
+          "alias": "facebook",
+          "displayName": "Facebook",
+          "providerId": "facebook",
+          "enabled": true,
+          "updateProfileFirstLoginMode": "off",
+          "trustEmail": true,
+          "storeToken": false,
+          "addReadTokenRoleOnCreate": false,
+          "authenticateByDefault": false,
+          "linkOnly": false,
+          "firstBrokerLoginFlowAlias": "first broker login auto link",
+          "config": {
+            "clientId": "${env.FACEBOOK_CLIENT_ID:}",
+            "clientSecret": "${env.FACEBOOK_CLIENT_SECRET:}",
+            "syncMode": "FORCE"
+          }
+        }
+      ],
+      "authenticationFlows": [
+        {
+          "alias": "first broker login auto link",
+          "description": "Flow for first login via identity provider with automatic account linking",
+          "providerId": "basic-flow",
+          "topLevel": true,
+          "builtIn": false,
+          "authenticationExecutions": [
+            {
+              "authenticator": "idp-create-user-if-unique",
+              "authenticatorFlow": false,
+              "requirement": "ALTERNATIVE",
+              "priority": 10,
+              "autheticatorFlow": false
+            },
+            {
+              "authenticatorFlow": true,
+              "requirement": "ALTERNATIVE",
+              "priority": 20,
+              "flowAlias": "first broker login auto link handle existing"
+            }
+          ]
+        },
+        {
+          "alias": "first broker login auto link handle existing",
+          "description": "Handle existing account by automatically linking without confirmation",
+          "providerId": "basic-flow",
+          "topLevel": false,
+          "builtIn": false,
+          "authenticationExecutions": [
+            {
+              "authenticator": "idp-detect-existing-broker-user",
+              "authenticatorFlow": false,
+              "requirement": "REQUIRED",
+              "priority": 10,
+              "autheticatorFlow": false
+            },
+            {
+              "authenticator": "idp-auto-link",
+              "authenticatorFlow": false,
+              "requirement": "REQUIRED",
+              "priority": 20,
+              "autheticatorFlow": false
+            }
+          ]
+        }
+      ],
+      "components": {
+        "org.keycloak.userprofile.UserProfileProvider": [
+          {
+            "providerId": "declarative-user-profile",
+            "config": {
+              "kc.user.profile.config": [
+                "{\"attributes\":[{\"name\":\"username\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\"]}},{\"name\":\"email\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"firstName\",\"validations\":{\"length\":{\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}},{\"name\":\"lastName\",\"validations\":{\"length\":{\"max\":255}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]}}]}"
+              ]
+            }
+          }
+        ]
+      }
+    }
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-config
+  namespace: cgv-prod
