@@ -535,10 +535,10 @@
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
     "id" : "2434983f-0796-423b-a134-e4a24b9e8643",
-    "username" : "admin_test",
+    "username" : "admin@gmail.com",
     "firstName" : "CGV",
     "lastName" : "SuperAdmin",
-    "email" : "admin@cgv.vn",
+    "email" : "admin@gmail.com",
     "emailVerified" : true,
     "enabled" : true,
     "totp" : false,
@@ -591,6 +591,62 @@
     },
     "notBefore" : 0,
     "groups" : [ ]
+  }, {
+    "username" : "superadmin.headquarters.enterprise@cgv.vn",
+    "email" : "superadmin.headquarters.enterprise@cgv.vn",
+    "firstName" : "Enterprise",
+    "lastName" : "CGV SuperAdmin",
+    "enabled" : true,
+    "emailVerified" : true,
+    "credentials" : [ {
+      "type" : "password",
+      "value" : "12345678",
+      "temporary" : false
+    } ],
+    "realmRoles" : [ "SUPER_ADMIN" ],
+    "groups" : [ "/CGV_BoardOfDirectors" ]
+  }, {
+    "username" : "cinemamanager.vincom.dongkhoi@cgv.vn",
+    "email" : "cinemamanager.vincom.dongkhoi@cgv.vn",
+    "firstName" : "Dong Khoi",
+    "lastName" : "Manager Vincom",
+    "enabled" : true,
+    "emailVerified" : true,
+    "credentials" : [ {
+      "type" : "password",
+      "value" : "12345678",
+      "temporary" : false
+    } ],
+    "realmRoles" : [ "CINEMA_MANAGER" ],
+    "groups" : [ "/CGV_Vincom_DongKhoi_Managers" ]
+  }, {
+    "username" : "ticketstaff.boxoffice.crescentmall@cgv.vn",
+    "email" : "ticketstaff.boxoffice.crescentmall@cgv.vn",
+    "firstName" : "Crescent",
+    "lastName" : "Staff BoxOffice",
+    "enabled" : true,
+    "emailVerified" : true,
+    "credentials" : [ {
+      "type" : "password",
+      "value" : "12345678",
+      "temporary" : false
+    } ],
+    "realmRoles" : [ "TICKET_STAFF" ],
+    "groups" : [ "/CGV_Vincom_DongKhoi_Staffs" ]
+  }, {
+    "username" : "marketing.contentlead.digital@cgv.vn",
+    "email" : "marketing.contentlead.digital@cgv.vn",
+    "firstName" : "Campaign Lead",
+    "lastName" : "Marketing Content",
+    "enabled" : true,
+    "emailVerified" : true,
+    "credentials" : [ {
+      "type" : "password",
+      "value" : "12345678",
+      "temporary" : false
+    } ],
+    "realmRoles" : [ "CONTENT_MANAGER" ],
+    "groups" : [ "/CGV_MarketingTeam" ]
   } ],
   "scopeMappings" : [ {
     "clientScope" : "offline_access",
