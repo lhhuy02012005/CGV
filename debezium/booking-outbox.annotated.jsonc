@@ -1,0 +1,109 @@
+// BẢN GIẢI THÍCH TỪNG DÒNG — chỉ đọc, không gửi file JSONC này lên Kafka Connect.
+// File chạy thật: booking-outbox.json; scripts/register-outbox-cdc.py chỉ đọc file .json.
+// Các giá trị phía dưới giống file chạy thật tại thời điểm bổ sung chú thích.
+// Bắt đầu đối tượng gồm các cặp tên tham số : giá trị.
+{
+  // Chọn plugin Debezium PostgreSQL đã cài trong Kafka Connect worker.
+  "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+  // Giới hạn một task; connector PostgreSQL này đọc một luồng WAL, không tăng song song bằng cách tăng số này.
+  "tasks.max": "1",
+  // Địa chỉ PostgreSQL nhìn từ container Connect: local là postgres, cloud dùng endpoint writer phù hợp.
+  "database.hostname": "${CDC_DB_HOST}",
+  // Cổng PostgreSQL, mặc định script là 5432; không phải cổng REST Kafka Connect.
+  "database.port": "${CDC_DB_PORT}",
+  // Tài khoản cdc_user được cấp quyền đăng nhập, đọc bảng và logical replication.
+  "database.user": "${CDC_DB_USER}",
+  // Script lấy mật khẩu từ môi trường khi đăng ký; template không chứa mật khẩu production.
+  "database.password": "${CDC_DB_PASSWORD}",
+  // Tên database PostgreSQL chứa bảng Outbox, hiện mặc định cgv.
+  "database.dbname": "${CDC_DB_NAME}",
+  // disable cho local; verify-full cho RDS để kiểm tra CA và hostname khi kết nối PostgreSQL.
+  "database.sslmode": "${CDC_DB_SSLMODE}",
+  // Đường dẫn CA bên trong container Connect. Local disable thì script thay bằng chuỗi rỗng.
+  "database.sslrootcert": "${CDC_DB_SSLROOTCERT}",
+  // Dùng pgoutput có sẵn trong PostgreSQL để giải mã logical replication, làm việc với publication.
+  "plugin.name": "pgoutput",
+  // Không tự tạo publication; phải chạy publications.sql bằng tài khoản có quyền trước khi connector hoạt động.
+  "publication.autocreate.mode": "disabled",
+  // Giữ replication slot khi connector dừng bình thường; không tự bỏ thông tin giữ WAL cần đọc tiếp.
+  "slot.drop.on.stop": "false",
+  // Khi chưa có offset, lấy snapshot ban đầu rồi stream WAL; khởi động lại có offset thì tiếp tục vị trí đã lưu.
+  "snapshot.mode": "initial",
+  // Không phát thêm bản tin giá trị null sau DELETE; EventRouter cũng lọc DELETE của Outbox.
+  "tombstones.on.delete": "false",
+  // Ghi key thành bytes của chuỗi UTF-8, để StringDeserializer ở consumer đọc đúng aggregate_id.
+  "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+  // Chuyển giá trị Kafka Connect sau biến đổi sang JSON gửi Kafka.
+  "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+  // Chỉ ghi JSON dữ liệu; không bọc trong schema/payload envelope của JsonConverter.
+  "value.converter.schemas.enable": "false",
+  // Chuyển header Connect thành bytes dạng chuỗi; header tên loại sự kiện được Spring đọc bằng UTF-8.
+  "header.converter": "org.apache.kafka.connect.storage.SimpleHeaderConverter",
+  // Không bỏ qua lỗi thuộc cơ chế xử lý lỗi Connect; lỗi cần được phát hiện, không coi task RUNNING là đủ.
+  "errors.tolerance": "none",
+  // Đặt tên điều kiện isOutbox; điều kiện được tham chiếu bởi biến đổi outbox phía dưới.
+  "predicates": "isOutbox",
+  // Điều kiện so tên topic đầu vào của bản ghi CDC bằng biểu thức chính quy.
+  "predicates.isOutbox.type": "org.apache.kafka.connect.transforms.predicates.TopicNameMatches",
+  // Thứ tự: lấy key/header/payload từ bản ghi CDC, sau đó lần lượt thử bốn phép đổi tên topic.
+  "transforms": "outbox,bookingCreated,bookingConfirmed,paymentCompleted,paymentFailed",
+  // SMT Outbox Event Router biến bản ghi CDC có before/after thành sự kiện nghiệp vụ.
+  "transforms.outbox.type": "io.debezium.transforms.outbox.EventRouter",
+  // Chỉ áp dụng EventRouter nếu topic CDC ban đầu khớp isOutbox; tránh áp vào thông điệp cấu trúc khác.
+  "transforms.outbox.predicate": "isOutbox",
+  // Lấy UUID sự kiện từ cột id; EventRouter đặt định danh này vào header id mặc định.
+  "transforms.outbox.table.field.event.id": "id",
+  // Lấy cột aggregate_id làm key: Booking lưu bookingId; Payment hiện lưu paymentId.
+  "transforms.outbox.table.field.event.key": "aggregate_id",
+  // Lấy cột payload làm nội dung; cột này đang là TEXT chứa JSON do Service tuần tự hóa.
+  "transforms.outbox.table.field.event.payload": "payload",
+  // Dùng giá trị event_type để định tuyến; aggregate_type BOOKING/PAYMENT không được dùng để chọn topic ở đây.
+  "transforms.outbox.route.by.field": "event_type",
+  // Debezium thay routedByValue bằng event_type, ví dụ PaymentCompletedEvent; đây không phải biến môi trường CDC_.
+  "transforms.outbox.route.topic.replacement": "${routedByValue}",
+  // Mở rộng chuỗi JSON trong payload thành dữ liệu JSON để consumer nhận object. Payload phải hợp lệ; parsing lỗi có thể giữ nguyên chuỗi.
+  "transforms.outbox.table.expand.json.payload": "true",
+  // Thêm event_type vào header __TypeId__ và id vào outbox-event-id; không thêm envelope vào value.
+  "transforms.outbox.table.fields.additional.placement": "event_type:header:__TypeId__,id:header:outbox-event-id",
+  // Nếu Outbox bị UPDATE, dừng xử lý theo fatal; thiết kế đang dùng bản ghi sự kiện INSERT-only.
+  "transforms.outbox.table.op.invalid.behavior": "fatal",
+  // RegexRouter chỉ đổi tên topic; không sửa key, header hoặc payload.
+  "transforms.bookingCreated.type": "org.apache.kafka.connect.transforms.RegexRouter",
+  // Chỉ khớp toàn bộ tên BookingCreatedEvent; dấu ^ và $ chặn khớp một phần.
+  "transforms.bookingCreated.regex": "^BookingCreatedEvent$",
+  // Đổi tên topic BookingCreatedEvent thành booking.created; hiện chưa có listener nghiệp vụ cho topic này.
+  "transforms.bookingCreated.replacement": "booking.created",
+  // Phép RegexRouter tiếp theo; các bản ghi không khớp regex đi qua với tên topic giữ nguyên.
+  "transforms.bookingConfirmed.type": "org.apache.kafka.connect.transforms.RegexRouter",
+  // Chỉ nhận topic tạm BookingConfirmedEvent sau EventRouter.
+  "transforms.bookingConfirmed.regex": "^BookingConfirmedEvent$",
+  // Topic booking.confirmed được Identity và Marketing đăng ký; mỗi dịch vụ cần group độc lập.
+  "transforms.bookingConfirmed.replacement": "booking.confirmed",
+  // Phép RegexRouter cho sự kiện thanh toán thành công; không thực hiện nghiệp vụ thanh toán.
+  "transforms.paymentCompleted.type": "org.apache.kafka.connect.transforms.RegexRouter",
+  // Chỉ nhận topic tạm PaymentCompletedEvent.
+  "transforms.paymentCompleted.regex": "^PaymentCompletedEvent$",
+  // Topic payment.completed được PaymentEventConsumer ở BookingService đọc để xác nhận booking.
+  "transforms.paymentCompleted.replacement": "payment.completed",
+  // Phép RegexRouter cho sự kiện thanh toán thất bại.
+  "transforms.paymentFailed.type": "org.apache.kafka.connect.transforms.RegexRouter",
+  // Chỉ nhận topic tạm PaymentFailedEvent.
+  "transforms.paymentFailed.regex": "^PaymentFailedEvent$",
+  // Topic payment.failed được BookingService đọc để hoàn tác/hủy booking theo xử lý hiện có.
+  "transforms.paymentFailed.replacement": "payment.failed",
+  // Tên nguồn CDC booking; topic trước biến đổi có dạng cinematrix_booking.public.outbox_booking_events. Không phải tên topic nghiệp vụ cuối.
+  "topic.prefix": "cinematrix_booking",
+  // Tên replication slot PostgreSQL riêng cho booking; một slot không được hai connector active cùng đọc.
+  "slot.name": "cinematrix_booking_outbox",
+  // Tên publication PostgreSQL phải khớp publications.sql; xác định bảng được server công bố qua pgoutput.
+  "publication.name": "cinematrix_booking_outbox_pub",
+  // Bộ lọc regex tên schema.bảng: chỉ public.outbox_booking_events. Trong JSON, \\ là cách biểu diễn một ký tự backslash cho regex.
+  "table.include.list": "public\\.outbox_booking_events",
+  // Khớp topic CDC trước EventRouter, không phải topic nghiệp vụ cuối; gồm topic.prefix + schema + tên bảng.
+  "predicates.isOutbox.pattern": "cinematrix_booking\\.public\\.outbox_booking_events",
+  // Chỉ định bảng public.outbox_booking_events cần dùng câu SELECT snapshot tùy chỉnh ở dòng tiếp theo.
+  "snapshot.select.statement.overrides": "public.outbox_booking_events",
+  // Snapshot ban đầu lấy false hoặc NULL, bỏ true của polling cũ. Điều kiện chỉ áp vào snapshot, không lọc các INSERT mới trong WAL.
+  "snapshot.select.statement.overrides.public.outbox_booking_events": "SELECT * FROM public.outbox_booking_events WHERE is_published IS DISTINCT FROM TRUE"
+// Kết thúc cấu hình. Các dấu phẩy ngăn cách thuộc tính; thuộc tính cuối không có dấu phẩy.
+}

@@ -21,6 +21,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,33 +31,22 @@ import java.util.UUID;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class BookingController {
     BookingService bookingService;
-
-    private String resolveUserId(Jwt jwt, String headerUserId) {
-        if (jwt != null && jwt.getSubject() != null) {
-            return jwt.getSubject();
-        }
-        if (headerUserId != null && !headerUserId.isBlank() && !headerUserId.equalsIgnoreCase("anonymous")) {
-            return headerUserId;
-        }
-        return null;
-    }
-
-    private String requireAuthenticatedUserId(Jwt jwt, String headerUserId) {
-        String userId = resolveUserId(jwt, headerUserId);
-        if (userId == null || userId.startsWith("guest_") || userId.equalsIgnoreCase("guest")) {
+    private String requireAuthenticatedUserId(Jwt jwt) {
+        String userId = jwt == null ? null : jwt.getSubject();
+        if (userId == null || userId.isBlank() || userId.startsWith("guest_") || userId.equalsIgnoreCase("guest")) {
             throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập trước khi thực hiện thao tác này!");
         }
         return userId;
     }
 
     @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<BookingResponse> create(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
-            @RequestBody BookingCreateRequest request
+            @Valid @RequestBody BookingCreateRequest request
     ) {
-        String userId = resolveUserId(jwt, headerUserId);
-        var result = bookingService.createBooking(userId, request);
+        String userId = requireAuthenticatedUserId(jwt);
+        var result = bookingService.createBooking(userId, jwt.getClaimAsString("email"), request);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.CREATED.value())
                 .data(result)
@@ -67,10 +57,9 @@ public class BookingController {
     @GetMapping("/{id}")
     public ApiResponse<BookingResponse> getById(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @PathVariable UUID id
     ) {
-        String userId = resolveUserId(jwt, headerUserId);
+        String userId = requireAuthenticatedUserId(jwt);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.OK.value())
                 .data(bookingService.getBookingById(id, userId))
@@ -81,11 +70,10 @@ public class BookingController {
     @GetMapping("/my-bookings")
     public ApiResponse<PageResponse<BookingResponse>> getMyBookings(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @ModelAttribute BookingFilterRequest filter,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        String userId = requireAuthenticatedUserId(jwt, headerUserId);
+        String userId = requireAuthenticatedUserId(jwt);
         return ApiResponse.<PageResponse<BookingResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(bookingService.getMyBookings(userId, filter, pageable))
@@ -93,13 +81,23 @@ public class BookingController {
                 .build();
     }
 
+    @GetMapping("/my-pending")
+    public ApiResponse<BookingResponse> getMyPending(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestParam UUID showtimeId
+    ) {
+        return ApiResponse.<BookingResponse>builder()
+                .status(HttpStatus.OK.value())
+                .data(bookingService.getPendingBooking(requireAuthenticatedUserId(jwt), showtimeId))
+                .build();
+    }
+
     @PutMapping("/{id}/cancel")
     public ApiResponse<Void> cancel(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @PathVariable UUID id
     ) {
-        String userId = resolveUserId(jwt, headerUserId);
+        String userId = requireAuthenticatedUserId(jwt);
         bookingService.cancelBooking(id, userId);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())
@@ -125,8 +123,9 @@ public class BookingController {
 
     @PostMapping("/admin/check-in/{id}")
     @PreAuthorize("hasAnyAuthority('ticket:view', 'TICKET_STAFF', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
-    public ApiResponse<BookingResponse> adminCheckIn(@PathVariable UUID id) {
-        var result = bookingService.adminCheckIn(id);
+    public ApiResponse<BookingResponse> adminCheckIn(@PathVariable String id) {
+        UUID bookingId = parseBookingUuid(id);
+        var result = bookingService.adminCheckIn(bookingId);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.OK.value())
                 .data(result)
@@ -136,13 +135,28 @@ public class BookingController {
 
     @PostMapping("/admin/refund/{id}")
     @PreAuthorize("hasAnyAuthority('ticket:refund', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
-    public ApiResponse<BookingResponse> adminRefund(@PathVariable UUID id) {
-        var result = bookingService.adminRefund(id);
+    public ApiResponse<BookingResponse> adminRefund(@PathVariable String id) {
+        UUID bookingId = parseBookingUuid(id);
+        var result = bookingService.adminRefund(bookingId);
         return ApiResponse.<BookingResponse>builder()
                 .status(HttpStatus.OK.value())
                 .data(result)
                 .message("Hoàn vé và hủy chỗ ngồi thành công!")
                 .build();
+    }
+
+    private UUID parseBookingUuid(String rawId) {
+        if (rawId == null || rawId.isBlank()) {
+            throw new IllegalArgumentException("Mã đơn đặt vé không được để trống");
+        }
+        String trimmed = rawId.trim();
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+                .compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                .matcher(trimmed);
+        if (matcher.find()) {
+            return UUID.fromString(matcher.group());
+        }
+        return UUID.fromString(trimmed.replaceAll("(?i)^(CGV_TICKET_|TICKET_|BK-|BOOKING_)", ""));
     }
 
     @GetMapping("/admin/statistics")

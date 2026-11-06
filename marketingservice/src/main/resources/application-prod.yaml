@@ -20,12 +20,18 @@ spring:
       max-lifetime: 1800000
 
   flyway:
-    enabled: false
+    enabled: true
+    # Separate history because all five services use public in the same database.
+    table: flyway_marketing_schema_history
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    # Local bootstrap runs V1 even when other services have already created tables.
+    baseline-version: 0
 
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:

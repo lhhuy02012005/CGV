@@ -67,6 +67,16 @@ data:
             paths:
               - /api/v1/media
             strip_path: false
+      - name: keycloak-service
+        url: http://keycloak.cgv-prod.svc.cluster.local:8080
+        routes:
+          - name: keycloak-route
+            paths:
+              - /realms
+              - /resources
+              - /js
+              - /admin
+            strip_path: false
     plugins:
       - name: cors
         config:

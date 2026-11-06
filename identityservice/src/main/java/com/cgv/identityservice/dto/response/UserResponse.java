@@ -8,6 +8,8 @@ import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.List;
+import java.time.Instant;
 
 @Data
 @Builder
@@ -21,4 +23,7 @@ public class UserResponse {
     String phone;
     MemberShipTierResponse membershipTier;
     BigDecimal total_spend_ytd;
+    String status;
+    List<String> roles;
+    Instant createdAt;
 }

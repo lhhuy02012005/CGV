@@ -13,7 +13,7 @@ spring:
     password: ${DB_PASSWORD:postgrespassword}
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -37,7 +37,7 @@ spring:
       enable-auto-commit: false
       properties:
         # Delegate thực sự xử lý deserialization JSON
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
         spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"
         # 50 records/poll: notification service có thể call Brevo API,
         # giữ batch nhỏ hơn identity-service để tránh timeout bên ngoài

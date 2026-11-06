@@ -40,6 +40,8 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JacksonJsonDeserializer.class.getName());
         props.put(JacksonJsonDeserializer.TRUSTED_PACKAGES, "com.cgv.commondto.event,com.cgv.*");
+        props.put(JacksonJsonDeserializer.TYPE_MAPPINGS,
+                "BookingConfirmedEvent:com.cgv.commondto.event.BookingConfirmedEvent");
 
         return new DefaultKafkaConsumerFactory<>(props);
     }

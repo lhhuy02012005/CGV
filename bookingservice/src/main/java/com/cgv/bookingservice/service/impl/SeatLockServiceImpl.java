@@ -11,9 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import lombok.experimental.NonFinal;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import com.cgv.bookingservice.repository.BookingSeatRepository;
 import com.cgv.bookingservice.enums.BookingStatus;
+import com.cgv.bookingservice.grpc.CatalogGrpcClient;
+import com.cgv.commondto.grpc.SeatPricingInfo;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
@@ -32,8 +33,10 @@ import java.util.concurrent.TimeUnit;
 public class SeatLockServiceImpl implements SeatLockService {
     StringRedisTemplate redisTemplate;
     DefaultRedisScript<Long> seatLockScript;
+    com.cgv.bookingservice.service.SeatLockOwnership seatLockOwnership;
     SimpMessagingTemplate messagingTemplate;
     BookingSeatRepository bookingSeatRepository;
+    CatalogGrpcClient catalogGrpcClient;
     long LOCK_TTL_SECONDS = 240; // Phase 1: 4 phút (240s) giữ ghế
     String seatLockKey = "showtime:lock:";
 
@@ -43,7 +46,7 @@ public class SeatLockServiceImpl implements SeatLockService {
 
     @Override
     public SeatLockResponse lockSeats(String userId, SeatLockRequest request) {
-        if (userId == null || userId.isBlank() || userId.equalsIgnoreCase("guest") || userId.equalsIgnoreCase("anonymous")) {
+        if (userId == null || userId.isBlank() || userId.startsWith("guest_") || userId.equalsIgnoreCase("guest") || userId.equalsIgnoreCase("anonymous")) {
             throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập tài khoản trước khi thực hiện giữ ghế!");
         }
 
@@ -59,42 +62,38 @@ public class SeatLockServiceImpl implements SeatLockService {
             }
         }
 
-        // 2. Chống Spam: Mỗi tài khoản chỉ được mở 1 phiên giữ ghế duy nhất tại một thời điểm
-        String userActiveKey = "user:active_showtime:" + userId;
-        String existingShowtimeId = redisTemplate.opsForValue().get(userActiveKey);
-        if (existingShowtimeId != null && !existingShowtimeId.equals(request.getShowtimeId().toString())) {
-            log.warn("User {} đang giữ ghế ở suất chiếu {} khác suất {}", userId, existingShowtimeId, request.getShowtimeId());
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                    "Tài khoản của bạn đang có phiên giữ ghế tại một suất chiếu khác. Mỗi tài khoản chỉ được giữ ghế tại 1 suất chiếu cùng lúc!");
-        }
-
-        // 3. Giới hạn số lượng ghế tối đa 8 ghế
-        if (request.getSeatIds() == null || request.getSeatIds().isEmpty()) {
+        if (request.getShowtimeId() == null || request.getSeatIds() == null || request.getSeatIds().isEmpty()
+                || request.getSeatIds().stream().anyMatch(Objects::isNull)) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Danh sách ghế không được để trống!");
         }
-        if (request.getSeatIds().size() > 8) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Mỗi tài khoản chỉ được giữ tối đa 8 ghế trong một suất chiếu!");
+        List<UUID> seatIds = request.getSeatIds().stream().distinct().toList();
+        if (seatIds.size() > 8) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Mỗi tài khoản chỉ được giữ tối đa 8 ghế!");
         }
-
-        String showtimePrefix = seatLockKey + request.getShowtimeId();
-
-        List<String> keys = List.of(showtimePrefix);
-        List<String> args = new ArrayList<>();
-        args.add(userId);
-        args.add(String.valueOf(LOCK_TTL_SECONDS));
-        for(UUID seatId : request.getSeatIds()) {
-            args.add(String.valueOf(seatId));
+        var showtime = catalogGrpcClient.getShowtimePricing(request.getShowtimeId());
+        Set<String> validSeatIds = new HashSet<>();
+        for (SeatPricingInfo seat : showtime.getSeatsList()) {
+            if (seat.getIsActive()) validSeatIds.add(seat.getSeatId());
         }
-
-        Long result = redisTemplate.execute(seatLockScript,keys,args.toArray());
-
-        if(result == null || result == 0L) {
-            log.warn("User {} lock ghế thất bại cho suất chiếu {}", userId, request.getShowtimeId());
-            throw new BusinessException(ErrorCode.BAD_REQUEST , "Hàng ghế này đã có người khác chọn hoặc giữ chỗ!");
+        if (!"SCHEDULED".equals(showtime.getShowtimeStatus())
+                || seatIds.stream().map(UUID::toString).anyMatch(id -> !validSeatIds.contains(id))) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Suất chiếu hoặc ghế không hợp lệ!");
         }
-
-        // Cập nhật phiên giữ ghế active của user trong Redis (TTL bằng thời gian giữ ghế)
-        redisTemplate.opsForValue().set(userActiveKey, request.getShowtimeId().toString(), java.time.Duration.ofSeconds(LOCK_TTL_SECONDS));
+        List<UUID> booked = getBookedSeatIds(request.getShowtimeId());
+        if (seatIds.stream().anyMatch(booked::contains)) {
+            throw new BusinessException(ErrorCode.DUPLICATE, "Ghế đã được đặt cho suất chiếu này!");
+        }
+        List<String> keys = new ArrayList<>();
+        keys.add("user:active_showtime:" + userId);
+        seatIds.forEach(id -> keys.add(seatLockKey + request.getShowtimeId() + ":" + id));
+        Long result = redisTemplate.execute(seatLockScript, keys,
+                userId, String.valueOf(LOCK_TTL_SECONDS), request.getShowtimeId().toString());
+        if (result != null && result == -1L) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Bạn đang giữ ghế tại một suất chiếu khác!");
+        }
+        if (result == null || result != 1L) {
+            throw new BusinessException(ErrorCode.DUPLICATE, "Ghế đã có người khác giữ chỗ!");
+        }
 
         Instant expiresAt = Instant.now().plusSeconds(LOCK_TTL_SECONDS);
         log.info("User {} đã lock thành công {} ghế tới {}", userId, request.getSeatIds().size(), expiresAt);
@@ -111,16 +110,9 @@ public class SeatLockServiceImpl implements SeatLockService {
 
     @Override
     public void releaseSeats(String userId, SeatLockRequest request) {
-        String showtimePrefix = seatLockKey + request.getShowtimeId();
         List<UUID> releasedSeatIds = new ArrayList<>();
-        for(UUID seatId : request.getSeatIds()) {
-            String lockKey = showtimePrefix + ":" + seatId;
-            String currentHolder = redisTemplate.opsForValue().get(lockKey);
-            if (userId != null && userId.equals(currentHolder)) {
-                redisTemplate.delete(lockKey);
-                releasedSeatIds.add(seatId);
-            }
-        }
+        releasedSeatIds.addAll(seatLockOwnership.release(userId,
+                request.getShowtimeId(), request.getSeatIds()));
         if (!releasedSeatIds.isEmpty()) {
             // Broadcast realtime WebSocket RELEASE event
             broadcastSeatEvent("RELEASE", request.getShowtimeId(), releasedSeatIds, userId);
@@ -131,9 +123,10 @@ public class SeatLockServiceImpl implements SeatLockService {
         String pattern = seatLockKey + request.getShowtimeId() + ":*";
         Set<String> keys = redisTemplate.keys(pattern);
         boolean stillHasSeats = false;
-        if (keys != null && userId != null) {
+        if (keys != null) {
             for (String k : keys) {
-                if (userId.equals(redisTemplate.opsForValue().get(k))) {
+                String holder = redisTemplate.opsForValue().get(k);
+                if (userId.equals(holder)) {
                     stillHasSeats = true;
                     break;
                 }

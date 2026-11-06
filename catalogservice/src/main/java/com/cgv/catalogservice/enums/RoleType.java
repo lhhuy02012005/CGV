@@ -4,5 +4,10 @@ public enum RoleType {
     DIRECTOR,
     LEAD,
     SUPPORTING,
-    CAMEO
+    CAMEO,
+    ACTOR,
+    ACTRESS,
+    PRODUCER,
+    WRITER,
+    COMPOSER
 }

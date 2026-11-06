@@ -1,6 +1,7 @@
 package com.cgv.notificationservice.consumer;
 
 import com.cgv.commondto.event.NotificationEvent;
+import com.cgv.commondto.event.BookingConfirmedEvent;
 import com.cgv.commondto.exception.BusinessException;
 import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.notificationservice.service.EmailService;
@@ -31,5 +32,13 @@ public class NotificationConsumer {
             log.error("Xử lý gửi email thất bại cho địa chỉ {}: {}", event.getEmail(), e.getMessage());
             throw new BusinessException(ErrorCode.BAD_REQUEST,"Gửi thông báo OTP thất bại");
         }
+    }
+
+    @KafkaListener(topics = "booking.confirmed", groupId = "${spring.kafka.consumer.group-id}")
+    public void handleConfirmedBooking(BookingConfirmedEvent event, Acknowledgment ack) {
+        if (event.getUserEmail() != null && !event.getUserEmail().isBlank()) {
+            emailService.sendTicket(event);
+        }
+        ack.acknowledge();
     }
 }

@@ -18,11 +18,8 @@ public class BookingCreateRequest {
     UUID showtimeId;
 
     @NotEmpty(message = "Danh sách ghế không được để trống !")
-    List<UUID> seatIds;
+    List<@NotNull UUID> seatIds;
 
     UUID promotionId;
 
-    String guestName;
-    String guestEmail;
-    String guestPhone;
 }

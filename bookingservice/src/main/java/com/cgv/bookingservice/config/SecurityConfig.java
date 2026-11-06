@@ -26,9 +26,6 @@ public class SecurityConfig {
             "/ws/seats",
             "/ws/seats/**",
             "/api/v1/ws/**",
-            "/bookings/seat-locks",
-            "/bookings/seat-locks/**",
-            "/bookings",
             "/bookings/realtime/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
@@ -42,6 +39,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/bookings/seat-locks/{showtimeId}", "/bookings/seat-locks/booked/{showtimeId}").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated()
                 )

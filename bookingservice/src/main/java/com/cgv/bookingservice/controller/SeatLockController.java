@@ -4,6 +4,8 @@ import com.cgv.bookingservice.dto.request.SeatLockRequest;
 import com.cgv.bookingservice.dto.response.SeatLockResponse;
 import com.cgv.bookingservice.service.SeatLockService;
 import com.cgv.commondto.dto.ApiResponse;
+import com.cgv.commondto.exception.BusinessException;
+import com.cgv.commondto.exception.ErrorCode;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,24 +21,20 @@ import java.util.UUID;
 public class SeatLockController {
 
     private final SeatLockService seatLockService;
-
-    private String resolveUserId(Jwt jwt, String headerUserId) {
-        if (jwt != null && jwt.getSubject() != null) {
-            return jwt.getSubject();
+    private String requireAuthenticatedUserId(Jwt jwt) {
+        String userId = jwt == null ? null : jwt.getSubject();
+        if (userId == null || userId.isBlank() || userId.startsWith("guest_") || userId.equalsIgnoreCase("guest")) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập trước khi giữ ghế");
         }
-        if (headerUserId != null && !headerUserId.isBlank() && !headerUserId.equalsIgnoreCase("anonymous")) {
-            return headerUserId;
-        }
-        return "guest_" + UUID.randomUUID().toString();
+        return userId;
     }
 
     @PostMapping
     public ApiResponse<SeatLockResponse> lockSeats(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @RequestBody @Valid SeatLockRequest request
     ) {
-        String userId = resolveUserId(jwt, headerUserId);
+        String userId = requireAuthenticatedUserId(jwt);
         SeatLockResponse response = seatLockService.lockSeats(userId, request);
         return ApiResponse.<SeatLockResponse>builder()
                 .status(HttpStatus.OK.value())
@@ -48,10 +46,9 @@ public class SeatLockController {
     @DeleteMapping
     public ApiResponse<Void> releaseSeats(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @RequestBody @Valid SeatLockRequest request
     ) {
-        String userId = resolveUserId(jwt, headerUserId);
+        String userId = requireAuthenticatedUserId(jwt);
         seatLockService.releaseSeats(userId, request);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())
@@ -62,10 +59,9 @@ public class SeatLockController {
     @PostMapping("/report-expired")
     public ApiResponse<Void> reportExpired(
             @AuthenticationPrincipal Jwt jwt,
-            @RequestHeader(value = "X-User-Id", required = false) String headerUserId,
             @RequestParam UUID showtimeId
     ) {
-        String userId = resolveUserId(jwt, headerUserId);
+        String userId = requireAuthenticatedUserId(jwt);
         seatLockService.reportExpiredLock(userId, showtimeId);
         return ApiResponse.<Void>builder()
                 .status(HttpStatus.OK.value())

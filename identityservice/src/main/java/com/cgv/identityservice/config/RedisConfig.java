@@ -1,6 +1,6 @@
 package com.cgv.identityservice.config;
 
-import org.springframework.boot.autoconfigure.data.redis.RedisProperties;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
@@ -24,7 +24,7 @@ import java.util.Map;
 @EnableCaching
 public class RedisConfig {
     @Bean
-    public RedisConnectionFactory redisConnectionFactory(RedisProperties redisProperties) {
+    public RedisConnectionFactory redisConnectionFactory(DataRedisProperties redisProperties) {
         if (redisProperties.getCluster() != null && redisProperties.getCluster().getNodes() != null && !redisProperties.getCluster().getNodes().isEmpty()) {
             RedisClusterConfiguration clusterConfiguration = new RedisClusterConfiguration(redisProperties.getCluster().getNodes());
             return new LettuceConnectionFactory(clusterConfiguration);

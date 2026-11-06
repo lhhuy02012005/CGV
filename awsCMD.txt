@@ -1,0 +1,182 @@
+================================================================================
+CGV CINEMA MICROSERVICES - HƯỚNG DẪN QUẢN TRỊ AWS & CHEATSHEET LỆNH THIẾT YẾU
+================================================================================
+
+A. VỊ TRÍ XEM HỆ THỐNG TRÊN GIAO DIỆN AWS CONSOLE (WEB BROWSER)
+--------------------------------------------------------------------------------
+
+1. XEM KONG LOAD BALANCER (URL CÔNG KHAI CỦA HỆ THỐNG):
+   - Đường dẫn: AWS Console -> Tìm dịch vụ "EC2" -> Cột trái chọn "Load Balancers"
+   - Link trực tiếp: https://ap-southeast-1.console.aws.amazon.com/ec2/home?region=ap-southeast-1#LoadBalancers:
+   - Tên Load Balancer: k8s-cgvprod-kongprox-b0dc6588ff
+   - Thông tin quan trọng cần xem:
+     + DNS name: k8s-cgvprod-kongprox-b0dc6588ff-c408e1f3fa455726.elb.ap-southeast-1.amazonaws.com (Đây chính là VITE_API_GATEWAY_URL)
+     + Listeners: Port 80 (TCP)
+     + Target groups: Kiểm tra xem các Pod IP phía sau có báo "Healthy" không.
+
+2. XEM TOÀN BỘ CỤM KUBERNETES & PODS (EKS CONSOLE):
+   - Đường dẫn: AWS Console -> Tìm dịch vụ "Elastic Kubernetes Service (EKS)" -> Bấm chọn Cluster "cgv-eks-cluster"
+   - Link trực tiếp: https://ap-southeast-1.console.aws.amazon.com/eks/home?region=ap-southeast-1#/clusters/cgv-eks-cluster
+   - Các tab quan trọng:
+     + Tab "Workloads": Chọn Namespace "cgv-prod" để thấy tất cả 21 Pods (Kong, Kafka, 7 Services).
+     + Bấm vào tên bất kỳ Pod nào:
+       * Tab "Overview": Xem trạng thái (Running, Error), số lần Restart, IP nội bộ.
+       * Tab "Events": Xem Kubelet báo lỗi gì (OOMKill, Probe failed, ImagePullBackOff...).
+       * Tab "Logs": Đọc log Spring Boot trực tiếp trên web mà không cần gõ lệnh.
+     + Tab "Services and Ingress": Xem trạng thái Service kong-proxy (External Load Balancer).
+     + Tab "Compute": Xem danh sách các Node EC2 (máy chủ thật) đang gánh cụm K8s.
+
+3. XEM CƠ SỞ DỮ LIỆU POSTGRESQL (RDS):
+   - Đường dẫn: AWS Console -> Tìm dịch vụ "RDS" -> Chọn "Databases" -> Chọn "cgv-db-enterprise"
+   - Link trực tiếp: https://ap-southeast-1.console.aws.amazon.com/rds/home?region=ap-southeast-1#databases:
+   - Thông tin cần xem: Endpoint kết nối, Connectivity & Security (Security Group cho phép cổng 5432).
+
+4. XEM CỤM REDIS CACHE (ELASTICACHE):
+   - Đường dẫn: AWS Console -> Tìm dịch vụ "ElastiCache" -> Chọn "Redis OSS caches" -> Chọn "cgv-redis"
+   - Xem Primary Endpoint cổng 6379.
+
+5. XEM BUCKET CHỨA ẢNH & POSTER (S3):
+   - Đường dẫn: AWS Console -> Tìm dịch vụ "S3" -> Buckets -> "cgv-cinema-media-bucket"
+   - Nơi lưu trữ tất cả ảnh poster phim, avatar do media-service upload lên.
+
+6. XEM KHO CHỨA DOCKER IMAGE (ECR):
+   - Đường dẫn: AWS Console -> Tìm dịch vụ "Elastic Container Registry (ECR)" -> Repositories
+   - 7 repo: cgv/identity-service, cgv/catalog-service, cgv/booking-service, v.v.
+
+
+================================================================================
+B. CÁC LỆNH KUBECTL & AWS THIẾT YẾU (DÙNG TRÊN TERMINAL / CLOUDSHELL)
+================================================================================
+
+1. KẾT NỐI VÀO CỤM EKS:
+--------------------------------------------------------------------------------
+aws eks update-kubeconfig --region ap-southeast-1 --name cgv-eks-cluster
+
+2. KIỂM TRA TRẠNG THÁI HỆ THỐNG:
+--------------------------------------------------------------------------------
+# Xem toàn bộ Pods trong namespace cgv-prod (kèm IP Pod và Node đang chạy)
+kubectl -n cgv-prod get pods -o wide
+
+# Xem danh sách Pod và số lần Restart (thu gọn)
+kubectl -n cgv-prod get pods
+
+# Xem các Service và External IP Load Balancer
+kubectl -n cgv-prod get svc
+
+# Xem Endpoints (kết nối giữa Service và Pod IP - cực kỳ quan trọng)
+kubectl -n cgv-prod get endpoints
+
+# Xem mức tiêu thụ RAM và CPU của từng Pod
+kubectl -n cgv-prod top pods
+
+# Xem mức tiêu thụ RAM và CPU của máy chủ (Nodes)
+kubectl top nodes
+
+3. XEM LOGS CÁC DỊCH VỤ (RẤT QUAN TRỌNG ĐỂ DEBUG):
+--------------------------------------------------------------------------------
+# Xem log chạy thời gian thực (live streaming) của một Service:
+kubectl -n cgv-prod logs -f -l app=catalog-service
+kubectl -n cgv-prod logs -f -l app=booking-service
+kubectl -n cgv-prod logs -f -l app=identity-service
+kubectl -n cgv-prod logs -f -l app=payment-service
+kubectl -n cgv-prod logs -f -l app=notification-service
+kubectl -n cgv-prod logs -f -l app=marketing-service
+kubectl -n cgv-prod logs -f -l app=media-service
+
+# Xem 50 dòng log gần nhất của một Pod cụ thể:
+kubectl -n cgv-prod logs --tail=50 <TÊN_POD>
+
+# Xem log của lần sập trước đó (nếu Pod vừa bị restart do lỗi code hoặc OOM):
+kubectl -n cgv-prod logs --previous <TÊN_POD>
+
+# Xem log của Kong API Gateway (xem request HTTP và WebSocket đi qua):
+kubectl -n cgv-prod logs -f -l app=kong-gateway
+
+4. ĐIỀU TRA & XỬ LÝ LỖI POD (TROUBLESHOOTING):
+--------------------------------------------------------------------------------
+# Soi chi tiết nguyên nhân Pod bị lỗi (Liveness probe, CrashLoop, OOMKill, Events):
+kubectl -n cgv-prod describe pod <TÊN_POD>
+
+# Khởi động lại (Zero-downtime Rolling Restart) một service:
+kubectl -n cgv-prod rollout restart deployment catalog-service
+kubectl -n cgv-prod rollout restart deployment identity-service
+kubectl -n cgv-prod rollout restart deployment booking-service
+
+# Theo dõi tiến độ khởi động lại:
+kubectl -n cgv-prod rollout status deployment catalog-service
+
+# Xóa 1 Pod cụ thể để K8s tự động tạo Pod mới thay thế:
+kubectl -n cgv-prod delete pod <TÊN_POD>
+
+# "Chui" vào bên trong container để test ping / kết nối Database nội bộ:
+kubectl -n cgv-prod exec -it <TÊN_POD> -- sh
+
+5. CẬP NHẬT CẤU HÌNH & TRIỂN KHAI LẠI:
+--------------------------------------------------------------------------------
+# Nạp lại ConfigMap sau khi sửa biến môi trường:
+kubectl apply -f k8s/01-configmap.yml
+
+# Nạp lại Secrets sau khi đổi mật khẩu/token:
+kubectl apply -f k8s/02-secrets.yml
+
+# Nạp lại cấu hình Kong Gateway:
+kubectl apply -f k8s/kong/kong-configmap.yml
+kubectl apply -f k8s/kong/kong-deployment.yml
+
+# Triển khai lại toàn bộ microservices:
+kubectl apply -R -f k8s/services/
+
+6. KIỂM TRA ĐƯỜNG TRUYỀN TỪ INTERNET (CURL TEST):
+--------------------------------------------------------------------------------
+# Gán biến URL Kong NLB để gõ lệnh cho nhanh:
+export KONG_URL="http://k8s-cgvprod-kongprox-b0dc6588ff-c408e1f3fa455726.elb.ap-southeast-1.amazonaws.com"
+
+# Test Kong Gateway có sống không:
+curl -I $KONG_URL
+
+# Test API lấy danh sách phim (Catalog Service):
+curl -s $KONG_URL/api/v1/catalogs/movies | jq .
+
+# Test API Auth (Identity Service):
+curl -i $KONG_URL/api/v1/auth/login
+
+# Test Bắt tay WebSocket giữ ghế (Booking Service):
+curl -i -N \
+  -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  "$KONG_URL/api/v1/ws/seats"
+
+7. LỆNH QUẢN TRỊ KEYCLOAK & KIỂM TRA DATABASE RDS:
+--------------------------------------------------------------------------------
+# Xem log khởi động của Keycloak:
+kubectl -n cgv-prod logs -f -l app=keycloak
+
+# Kiểm tra Service Keycloak và IP Endpoint nội bộ:
+kubectl -n cgv-prod get svc keycloak
+kubectl -n cgv-prod get endpoints keycloak
+
+# Test gọi trực tiếp Keycloak từ trong cụm K8s (qua identity-service):
+kubectl -n cgv-prod exec deploy/identity-service -- curl -s http://keycloak.cgv-prod.svc.cluster.local:8080/realms/cgv-realm
+
+# Chạy container tạm thời để query trực tiếp AWS RDS PostgreSQL:
+kubectl -n cgv-prod run pg-cli --image=postgres:16-alpine --restart=Never --rm -i --env="PGPASSWORD=CGVPassword2026" -- psql -h cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com -U postgres -d cgv -c "SELECT id, email, full_name, membership_tier FROM users;"
+
+8. HƯỚNG DẪN SCALE MÁY CHỦ EC2 (WORKER NODES) TRÊN AWS CONSOLE:
+--------------------------------------------------------------------------------
+Khi hệ thống chạy nhiều Pod (10 microservices + Keycloak + Kafka + Redis + ES):
+Cụm EKS sử dụng "EKS Auto Mode" (Karpenter) tự động cấp phát máy chủ EC2 theo nhu cầu tài nguyên:
+- Cách xem trên AWS Console:
+  1. Vào AWS Console -> EC2 -> Instances (Running).
+  2. Bạn sẽ thấy các máy chủ có tên bắt đầu bằng "eks-..." hoặc "cgv-eks-cluster-...".
+  3. Bấm vào từng máy -> Tab "Status Details" hoặc "Monitoring" để xem % CPU & RAM.
+- Cách nâng Node chủ động nếu dùng Node Group:
+  1. AWS Console -> EKS -> Clusters -> cgv-eks-cluster -> Tab "Compute".
+  2. Trong mục "Node groups", bấm chọn Node group của bạn -> Bấm "Edit".
+  3. Điều chỉnh: Desired size = 2 (hoặc 3), Minimum size = 2, Maximum size = 4.
+  4. Bấm "Save changes" -> AWS sẽ tự bật thêm máy chủ EC2 mới trong vòng 2-3 phút.
+================================================================================
+
+9. Mở port kết nối dbeaver
+kubectl port-forward -n cgv-prod deployment/rds-proxy 5433:5432

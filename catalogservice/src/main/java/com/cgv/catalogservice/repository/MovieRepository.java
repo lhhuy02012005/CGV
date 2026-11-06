@@ -32,13 +32,17 @@ public interface MovieRepository
     )
     @Query("""
             UPDATE Movie m
-            SET m.showingStatus = :endedStatus
-            WHERE m.endDate IS NOT NULL
-              AND m.endDate < :today
-              AND m.showingStatus <> :endedStatus
+            SET m.showingStatus = CASE
+                WHEN m.endDate IS NOT NULL AND m.endDate < :today THEN :endedStatus
+                WHEN m.releaseDate > :today THEN :comingStatus
+                WHEN m.endDate IS NULL AND m.showingStatus = :endedStatus THEN :endedStatus
+                ELSE :showingStatus END
+            WHERE m.releaseDate IS NOT NULL
             """)
-    int updateExpiredMoviesToEnded(
+    int synchronizeShowingStatuses(
             @Param("today") LocalDate today,
-            @Param("endedStatus") ShowingStatus endedStatus
+            @Param("endedStatus") ShowingStatus endedStatus,
+            @Param("comingStatus") ShowingStatus comingStatus,
+            @Param("showingStatus") ShowingStatus showingStatus
     );
 }

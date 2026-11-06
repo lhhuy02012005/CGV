@@ -70,14 +70,14 @@ spec:
             - name: KAFKA_MIN_INSYNC_REPLICAS
               value: "2"
             - name: KAFKA_HEAP_OPTS
-              value: "-Xmx180m -Xms90m"
+              value: "-Xmx512m -Xms256m"
           resources:
             requests:
               cpu: "100m"
-              memory: "150Mi"
+              memory: "350Mi"
             limits:
-              cpu: "300m"
-              memory: "250Mi"
+              cpu: "500m"
+              memory: "750Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -148,14 +148,14 @@ spec:
             - name: KAFKA_MIN_INSYNC_REPLICAS
               value: "2"
             - name: KAFKA_HEAP_OPTS
-              value: "-Xmx180m -Xms90m"
+              value: "-Xmx512m -Xms256m"
           resources:
             requests:
               cpu: "100m"
-              memory: "150Mi"
+              memory: "350Mi"
             limits:
-              cpu: "300m"
-              memory: "250Mi"
+              cpu: "500m"
+              memory: "750Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -226,14 +226,14 @@ spec:
             - name: KAFKA_MIN_INSYNC_REPLICAS
               value: "2"
             - name: KAFKA_HEAP_OPTS
-              value: "-Xmx180m -Xms90m"
+              value: "-Xmx512m -Xms256m"
           resources:
             requests:
               cpu: "100m"
-              memory: "150Mi"
+              memory: "350Mi"
             limits:
-              cpu: "300m"
-              memory: "250Mi"
+              cpu: "500m"
+              memory: "750Mi"
 ---
 apiVersion: v1
 kind: Service

@@ -2,9 +2,7 @@ package com.cgv.identityservice.config;
 
 import feign.Logger;
 import feign.codec.Encoder;
-import org.springframework.beans.factory.ObjectFactory;
-import org.springframework.boot.autoconfigure.http.HttpMessageConverters;
-import org.springframework.cloud.openfeign.support.SpringEncoder;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,14 +16,14 @@ public class FeignConfig {
 
     @Bean
     Logger.Level feignLoggerLevel() {
-        return Logger.Level.FULL;
+        return Logger.Level.BASIC;
     }
 
     @Bean
-    public Encoder feignEncoder(ObjectFactory<HttpMessageConverters> converters) {
-        Encoder defaultEncoder = new SpringEncoder(converters);
+    public Encoder feignEncoder(ObjectMapper objectMapper) {
         return (object, bodyType, template) -> {
-            if (object instanceof Map<?, ?> map) {
+            if (object instanceof Map<?, ?> map && template.headers().getOrDefault("Content-Type", java.util.List.of())
+                    .stream().anyMatch(value -> value.startsWith("application/x-www-form-urlencoded"))) {
                 StringBuilder builder = new StringBuilder();
                 for (Map.Entry<?, ?> entry : map.entrySet()) {
                     Object val = entry.getValue();
@@ -40,7 +38,12 @@ public class FeignConfig {
                 template.header("Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
                 template.body(builder.toString().getBytes(StandardCharsets.UTF_8), StandardCharsets.UTF_8);
             } else {
-                defaultEncoder.encode(object, bodyType, template);
+                try {
+                    template.header("Content-Type", "application/json");
+                    template.body(objectMapper.writeValueAsBytes(object), StandardCharsets.UTF_8);
+                } catch (java.io.IOException ex) {
+                    throw new feign.codec.EncodeException("Cannot serialize request", ex);
+                }
             }
         };
     }

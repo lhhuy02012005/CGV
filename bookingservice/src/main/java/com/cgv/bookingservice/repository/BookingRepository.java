@@ -21,6 +21,10 @@ import java.util.UUID;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpecificationExecutor<Booking> {
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select b from Booking b where b.id = :id")
+    Optional<Booking> findByIdForUpdate(@Param("id") UUID id);
+
     @Override
     @EntityGraph(attributePaths = {"bookingSeats"})
     Optional<Booking> findById(UUID id);
@@ -33,16 +37,13 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     List<Booking> findByUserIdOrderByCreatedAtDesc(String userId);
 
     @EntityGraph(attributePaths = {"bookingSeats"})
+    List<Booking> findByUserIdAndShowtimeIdAndStatus(String userId, UUID showtimeId, BookingStatus status);
+
+    @EntityGraph(attributePaths = {"bookingSeats"})
+    Optional<Booking> findFirstByUserIdAndShowtimeIdAndStatusOrderByCreatedAtDesc(String userId, UUID showtimeId, BookingStatus status);
+
+    @EntityGraph(attributePaths = {"bookingSeats"})
     Page<Booking> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
-
-    @EntityGraph(attributePaths = {"bookingSeats"})
-    List<Booking> findByGuestPhoneOrderByCreatedAtDesc(String guestPhone);
-
-    @EntityGraph(attributePaths = {"bookingSeats"})
-    List<Booking> findByGuestEmailOrderByCreatedAtDesc(String guestEmail);
-
-    @EntityGraph(attributePaths = {"bookingSeats"})
-    List<Booking> findByGuestPhoneAndGuestEmailOrderByCreatedAtDesc(String guestPhone, String guestEmail);
 
     @Query("""
         SELECT b FROM Booking b 

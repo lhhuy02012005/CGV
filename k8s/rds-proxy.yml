@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rds-proxy
+  namespace: cgv-prod
+  labels:
+    app: rds-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rds-proxy
+  template:
+    metadata:
+      labels:
+        app: rds-proxy
+    spec:
+      containers:
+        - name: socat
+          image: alpine/socat
+          args:
+            - "tcp-listen:5432,fork,reuseaddr"
+            - "tcp:cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com:5432"
+          ports:
+            - containerPort: 5432
+          resources:
+            requests:
+              cpu: "10m"
+              memory: "16Mi"
+            limits:
+              cpu: "100m"
+              memory: "64Mi"

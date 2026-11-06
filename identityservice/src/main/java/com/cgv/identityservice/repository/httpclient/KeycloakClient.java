@@ -2,7 +2,7 @@ package com.cgv.identityservice.repository.httpclient;
 
 import com.cgv.identityservice.dto.request.RoleRepresentation;
 import com.cgv.identityservice.dto.request.UserCreationParam;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +29,35 @@ public interface KeycloakClient {
             @PathVariable("realm") String realm,
             @RequestBody UserCreationParam param
     );
+
+    @PutMapping(value = "/admin/realms/{realm}/users/{userId}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    void updateUser(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                    @PathVariable String userId, @RequestBody Map<String, ?> user);
+
+    @DeleteMapping("/admin/realms/{realm}/users/{userId}")
+    void deleteUser(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                    @PathVariable String userId);
+
+    @PostMapping("/admin/realms/{realm}/users/{userId}/logout")
+    void logoutUser(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                    @PathVariable String userId);
+
+    @GetMapping("/admin/realms/{realm}/users")
+    List<Map<String, Object>> listUsers(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                                        @RequestParam("first") int first, @RequestParam("max") int max);
+
+    @GetMapping("/admin/realms/{realm}/users/{userId}")
+    Map<String, Object> getUser(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                                @PathVariable String userId);
+
+    @GetMapping("/admin/realms/{realm}/users/{userId}/role-mappings/realm")
+    List<RoleRepresentation> getUserRoles(@RequestHeader("Authorization") String token,
+                                           @PathVariable String realm, @PathVariable String userId);
+
+    @DeleteMapping(value = "/admin/realms/{realm}/users/{userId}/role-mappings/realm",
+            consumes = MediaType.APPLICATION_JSON_VALUE)
+    void removeUserRoles(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                         @PathVariable String userId, @RequestBody List<RoleRepresentation> roles);
 
     @PostMapping(value = "/realms/{realm}/protocol/openid-connect/logout",
             consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)

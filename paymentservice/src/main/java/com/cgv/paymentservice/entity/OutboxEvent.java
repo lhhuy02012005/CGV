@@ -35,10 +35,14 @@ public class OutboxEvent extends BaseEntity {
     @Column(name = "payload" , columnDefinition = "TEXT" , nullable = false)
     String payload;
 
+    /** Legacy polling metadata; CDC progress is tracked by Connect offsets and replication slots. */
     @Column(name = "is_published")
     Boolean isPublished;
 
     @Column
     @Builder.Default
     Integer retryCount = 0;
+
+    @Column(name = "next_attempt_at")
+    java.time.Instant nextAttemptAt;
 }

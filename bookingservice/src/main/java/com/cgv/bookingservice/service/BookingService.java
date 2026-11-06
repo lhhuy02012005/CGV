@@ -12,9 +12,10 @@ import java.util.List;
 import java.util.UUID;
 
 public interface BookingService {
-    BookingResponse createBooking(String userId, BookingCreateRequest request);
+    BookingResponse createBooking(String userId, String userEmail, BookingCreateRequest request);
     void confirmBooking(PaymentCompletedEvent event);
     BookingResponse getBookingById(UUID bookingId, String userId);
+    BookingResponse getPendingBooking(String userId, UUID showtimeId);
     PageResponse<BookingResponse> getMyBookings(String userId, BookingFilterRequest filter, Pageable pageable);
     void cancelBooking(UUID bookingId, String userId);
     void rollbackBooking(UUID bookingId, String reason);

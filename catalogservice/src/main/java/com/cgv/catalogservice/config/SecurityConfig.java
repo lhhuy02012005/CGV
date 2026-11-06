@@ -39,7 +39,9 @@ public class SecurityConfig {
             "/articles/**",
             "/events/**",
             "/catalogs/**",
-            "/realtime/**"
+            "/realtime/**",
+            "/movie-casts/**",
+            "/movie-genres/**"
     };
 
     @Bean

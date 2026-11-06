@@ -6,7 +6,7 @@ metadata:
   labels:
     app: identity-service
 spec:
-  replicas: 1 # Chạy 1 Pod (Xác thực JWT nhẹ, ít tải DB)
+  replicas: 2 # Tăng lên 2 Pods để đảm bảo tính sẵn sàng cao cho xác thực người dùng
   selector:
     matchLabels:
       app: identity-service
@@ -15,13 +15,19 @@ spec:
       labels:
         app: identity-service
     spec:
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
       containers:
         - name: identity-service
-          image: cgv/identity-service:latest
+          image: 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/identity-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8081
+          env:
+            - name: SPRING_KAFKA_CONSUMER_GROUP_ID
+              value: identity-service-group
           envFrom:
             - configMapRef:
                 name: cgv-global-config
@@ -29,20 +35,25 @@ spec:
                 name: cgv-global-secrets
           resources:
             requests:
-              cpu: "80m"
-              memory: "150Mi"
+              cpu: "300m"
+              memory: "350Mi"
             limits:
-              cpu: "400m"
-              memory: "300Mi"
-          readinessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/readiness
+              cpu: "1000m"
+              memory: "750Mi"
+          startupProbe:
+            tcpSocket:
               port: 8081
-            initialDelaySeconds: 30
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: 8081
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/liveness
+            tcpSocket:
               port: 8081
-            initialDelaySeconds: 40
+            initialDelaySeconds: 30
             periodSeconds: 15
+            failureThreshold: 5

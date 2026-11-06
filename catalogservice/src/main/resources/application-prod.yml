@@ -30,12 +30,17 @@ spring:
       max-lifetime: 1800000
 
   flyway:
-    enabled: false
-    baseline-on-migrate: true
+    enabled: true
+    # Separate history because all five services use public in the same database.
+    table: flyway_catalog_schema_history
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    # Local bootstrap runs V1 even when other services have already created tables.
+    baseline-version: 0
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -47,7 +52,7 @@ spring:
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       properties:
         acks: all
         retries: 3
@@ -66,7 +71,7 @@ spring:
       group-id: ${KAFKA_CONSUMER_GROUP_ID:catalog-service-group}
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
       enable-auto-commit: false
       properties:
         spring.json.trusted.packages: "com.cgv.commondto.event,com.cgv.*"

@@ -15,9 +15,12 @@ spec:
       labels:
         app: media-service
     spec:
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
       containers:
         - name: media-service
-          image: cgv/media-service:latest
+          image: 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/media-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
@@ -29,20 +32,24 @@ spec:
                 name: cgv-global-secrets
           resources:
             requests:
-              cpu: "80m"
-              memory: "150Mi"
+              cpu: "150m"
+              memory: "250Mi"
             limits:
-              cpu: "400m"
-              memory: "300Mi"
-          readinessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/readiness
+              cpu: "1000m"
+              memory: "750Mi"
+          startupProbe:
+            tcpSocket:
               port: 8087
-            initialDelaySeconds: 30
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: 8087
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/liveness
+            tcpSocket:
               port: 8087
-            initialDelaySeconds: 40
+            initialDelaySeconds: 30
             periodSeconds: 15

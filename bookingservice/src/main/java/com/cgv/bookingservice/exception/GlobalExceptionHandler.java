@@ -16,6 +16,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.Date;
@@ -32,13 +33,20 @@ public class GlobalExceptionHandler {
         log.error("Business Exception occurred: {}", ex.getMessage());
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .timestamp(new Date())
-                .status(ex.getCode())
+                .status(ex.getStatus().value())
                 .path(request.getRequestURI())
                 .error(ex.getStatus().getReasonPhrase())
                 .message(ex.getMessage())
                 .data(ex.getData())
                 .build();
         return new ResponseEntity<>(errorResponse, ex.getStatus());
+    }
+
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    public void handleAsyncRequestTimeoutException(AsyncRequestTimeoutException ex) {
+        // SSE timeout là sự kiện bình thường khi client đóng tab hoặc kết nối hết hạn.
+        // Chỉ log debug hoặc bỏ qua để tránh làm rác log hệ thống.
+        log.debug("SSE connection closed normally: {}", ex.getMessage());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -69,6 +77,16 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(errorResponse, HttpStatus.UNSUPPORTED_MEDIA_TYPE);
     }
 
+    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(org.springframework.web.bind.MethodArgumentNotValidException ex,
+                                                         HttpServletRequest request) {
+        List<String> details = ex.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage()).toList();
+        return ResponseEntity.badRequest().body(ErrorResponse.builder().timestamp(new Date())
+                .status(400).path(request.getRequestURI()).error("Bad Request")
+                .message("Validation failed").details(details).build());
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
         ErrorCode errorCode = ErrorCode.INVALID_KEY;
@@ -92,15 +110,15 @@ public class GlobalExceptionHandler {
 
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
         log.error("Data integrity violation: ", ex);
         return ErrorResponse.builder()
                 .timestamp(new Date())
-                .status(HttpStatus.BAD_REQUEST.value())
+                .status(HttpStatus.CONFLICT.value())
                 .path(request.getRequestURI())
-                .error("Bad Request")
-                .message("Dữ liệu không hợp lệ hoặc đã tồn tại trên hệ thống!")
+                .error("Conflict")
+                .message("Dữ liệu xung đột với yêu cầu khác!")
                 .build();
     }
 
