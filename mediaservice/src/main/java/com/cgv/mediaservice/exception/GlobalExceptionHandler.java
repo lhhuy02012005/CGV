@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +25,17 @@ import java.util.stream.Collectors;
 @Slf4j(topic = "GLOBAL-EXCEPTION")
 public class GlobalExceptionHandler {
     private static final String VALIDATION_FAILED_PREFIX = "Validation failed: ";
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex, HttpServletRequest request) {
+        return new ResponseEntity<>(ErrorResponse.builder()
+                .timestamp(new Date())
+                .status(ex.getStatusCode().value())
+                .path(request.getRequestURI())
+                .error(HttpStatus.valueOf(ex.getStatusCode().value()).getReasonPhrase())
+                .message(ex.getReason())
+                .build(), ex.getStatusCode());
+    }
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> handleBusinessException(BusinessException ex, HttpServletRequest request) {

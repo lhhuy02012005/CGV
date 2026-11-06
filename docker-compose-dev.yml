@@ -398,9 +398,13 @@ services:
       DB_USERNAME: ${DB_USERNAME:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgrespassword}
       AWS_REGION: ${AWS_REGION:-ap-southeast-1}
+      AWS_S3_ENABLED: ${AWS_S3_ENABLED:-false}
       AWS_BUCKET_NAME: ${AWS_BUCKET_NAME:-cgv-media-bucket}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-mock-access-key}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-mock-secret-key}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
       KEYCLOAK_URL: http://keycloak:8080
       REALM: ${REALM:-cgv-realm}
     #        REDIS_HOST: redis

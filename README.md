@@ -4,6 +4,12 @@ Spring Boot **4.1.1**, **JDK 17**, Maven multi-module. Repository gồm 7 servic
 
 Hướng dẫn IntelliJ/Maven, test Booking/Payment trên H2, Redis và PostgreSQL thật, cùng k6 có JWT: [`docs/TESTING_BOOKING_PAYMENT.md`](docs/TESTING_BOOKING_PAYMENT.md). Chỉ ghi kết quả thực đo của mỗi RUN_ID; không coi k6 giữ ghế là test thanh toán VNPay.
 
+### Upload poster Cloudinary
+
+MediaService cấp chữ ký qua `GET /api/v1/media/cloudinary/upload-signature` (JWT có `CONTENT_MANAGER`, `SUPER_ADMIN` hoặc `movie:manage`). FE quản trị gửi ảnh trực tiếp tới Cloudinary rồi lưu `secure_url` trong phim. API secret chỉ đặt ở BE; S3 presigned URL cũ vẫn giữ, nhưng FE quản trị không dùng nữa.
+
+Đặt `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` trong `.env` (không commit); Docker Compose tự đọc `.env` khi chạy từ thư mục BE. Build JAR MediaService trước, rồi chạy `docker compose -f docker-compose-dev.yml up -d --build --no-deps media-service`. Nếu chạy IntelliJ, đặt ba biến trong Run Configuration của MediaService. Thiếu biến, endpoint ký trả 503; Cloudinary phải cho phép signed upload, tài khoản cần đủ quota. Giá trị cloud name xem tại Cloudinary Console. Không đưa API secret vào `VITE_*`, Git hoặc báo cáo. Các môi trường Kubernetes cần cấp ba biến tương ứng qua Secret/ConfigMap trước khi deploy. S3 mặc định tắt; nếu cần dùng endpoint S3 cũ, đặt `AWS_S3_ENABLED=true` cùng bucket và thông tin xác thực AWS hợp lệ.
+
 ## 1. Phạm vi chạy được trong gói bàn giao
 
 Lát cắt demo: **giữ ghế → tranh chấp → kiểm tra chủ sở hữu → nhả ghế → chạy k6 1.000 request tranh cùng một ghế**.
