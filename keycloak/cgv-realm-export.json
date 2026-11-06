@@ -1507,24 +1507,6 @@
       "clientId" : "${GOOGLE_CLIENT_ID}",
       "useJwksUrl" : "true"
     }
-  }, {
-    "alias" : "facebook",
-    "displayName" : "Facebook",
-    "internalId" : "2ad01d86-3f1d-4a2d-a0c7-845f46ec49d6",
-    "providerId" : "facebook",
-    "enabled" : true,
-    "updateProfileFirstLoginMode" : "off",
-    "trustEmail" : true,
-    "storeToken" : false,
-    "addReadTokenRoleOnCreate" : false,
-    "authenticateByDefault" : false,
-    "linkOnly" : false,
-    "firstBrokerLoginFlowAlias" : "first broker login auto link",
-    "config" : {
-      "syncMode" : "FORCE",
-      "clientSecret" : "${FACEBOOK_CLIENT_SECRET}",
-      "clientId" : "${FACEBOOK_CLIENT_ID}"
-    }
   } ],
   "identityProviderMappers" : [ ],
   "components" : {

@@ -5,6 +5,7 @@ import com.cgv.commondto.dto.PageResponse;
 import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.commondto.exception.BusinessException;
 import com.cgv.identityservice.dto.request.UpdateProfileRequest;
+import com.cgv.identityservice.dto.request.AdminUserRequest;
 import com.cgv.identityservice.dto.response.UserResponse;
 import com.cgv.identityservice.service.UserService;
 import jakarta.validation.Valid;
@@ -45,6 +46,51 @@ public class UserController {
                 .data(response)
                 .message("Danh sách người dùng")
                 .build();
+    }
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public ApiResponse<UserResponse> create(@RequestBody @Valid AdminUserRequest request) {
+        return ApiResponse.<UserResponse>builder().status(HttpStatus.CREATED.value())
+                .data(userService.createAdminUser(request)).build();
+    }
+
+    @PatchMapping("/{userId}")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public ApiResponse<UserResponse> update(@PathVariable String userId, @RequestBody @Valid AdminUserRequest request) {
+        return ApiResponse.<UserResponse>builder().status(HttpStatus.OK.value())
+                .data(userService.updateAdminUser(userId, request)).build();
+    }
+
+    @PatchMapping("/{userId}/block")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public void block(@PathVariable String userId, @AuthenticationPrincipal Jwt jwt) {
+        userService.setBlocked(userId, getUserId(jwt), true);
+    }
+
+    @PatchMapping("/{userId}/unblock")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public void unblock(@PathVariable String userId, @AuthenticationPrincipal Jwt jwt) {
+        userService.setBlocked(userId, getUserId(jwt), false);
+    }
+
+    @DeleteMapping("/{userId}")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public void delete(@PathVariable String userId, @AuthenticationPrincipal Jwt jwt) {
+        userService.deleteAdminUser(userId, getUserId(jwt));
+    }
+
+    @PostMapping("/{userId}/roles")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public void assignRole(@PathVariable String userId, @RequestBody java.util.Map<String, String> request,
+                           @AuthenticationPrincipal Jwt jwt) {
+        userService.assignAdminRole(userId, getUserId(jwt), request.get("role"));
+    }
+
+    @DeleteMapping("/{userId}/roles/{role}")
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    public void removeRole(@PathVariable String userId, @PathVariable String role, @AuthenticationPrincipal Jwt jwt) {
+        userService.removeAdminRole(userId, getUserId(jwt), role);
     }
 
     @GetMapping("/me")

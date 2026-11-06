@@ -33,6 +33,8 @@ export const options = {
     // ĐIỀU KIỆN TIÊN QUYẾT CỦA BÀI TEST:
     // 1. Chỉ DUY NHẤT 1 người được giữ ghế thành công (count == 1)
     cgv_seat_lock_success: ['count==1'],
+    cgv_seat_lock_conflict_blocked: ['count==' + (CONCURRENT_USERS - 1)],
+    checks: ['rate==1'],
     // 2. Không được có bất kỳ lỗi 500 nào xảy ra trong lúc tranh chấp cao điểm
     cgv_unexpected_5xx_errors: ['count==0'],
   },
@@ -157,7 +159,7 @@ export default function (data) {
     // Người duy nhất giữ ghế thành công
     successfulLocks.add(1);
     console.log(`>>> [CHIẾN THẮNG] VU #${__VU} (User: ${userId}) giữ ghế thành công!`);
-  } else if (res.status === 400 || res.status === 409 || res.status === 422) {
+  } else if (res.status === 409) {
     // Bị hệ thống khóa phân tán (Distributed Lock / Redis / DB) chặn lại
     blockedLocks.add(1);
   } else if (res.status >= 500) {
@@ -167,7 +169,7 @@ export default function (data) {
   }
 
   check(res, {
-    'Phản hồi hợp lệ (200, 400 hoặc 409)': (r) => [200, 201, 400, 409, 422].includes(r.status),
+    'Phản hồi hợp lệ (200/201 hoặc 409)': (r) => [200, 201, 409].includes(r.status),
     'Không bị sập 500': (r) => r.status < 500,
   });
 }

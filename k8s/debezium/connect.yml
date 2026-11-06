@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-connect
+  namespace: cgv-prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debezium-connect
+  template:
+    metadata:
+      labels:
+        app: debezium-connect
+    spec:
+      containers:
+        - name: connect
+          image: debezium/connect:2.5
+          ports:
+            - name: rest
+              containerPort: 8083
+          volumeMounts:
+            - name: rds-ca
+              mountPath: /etc/cdc
+              readOnly: true
+          env:
+            - name: BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef:
+                  name: cgv-global-config
+                  key: SPRING_KAFKA_BOOTSTRAP_SERVERS
+            - name: GROUP_ID
+              value: cinematrix-connect
+            - name: CONFIG_STORAGE_TOPIC
+              value: debezium_connect_configs
+            - name: OFFSET_STORAGE_TOPIC
+              value: debezium_connect_offsets
+            - name: STATUS_STORAGE_TOPIC
+              value: debezium_connect_statuses
+            - name: CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR
+              value: "3"
+            - name: CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR
+              value: "3"
+            - name: CONNECT_STATUS_STORAGE_REPLICATION_FACTOR
+              value: "3"
+            - name: KEY_CONVERTER
+              value: org.apache.kafka.connect.storage.StringConverter
+            - name: VALUE_CONVERTER
+              value: org.apache.kafka.connect.json.JsonConverter
+            - name: CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE
+              value: "false"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          startupProbe:
+            httpGet:
+              path: /
+              port: rest
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /connector-plugins
+              port: rest
+            periodSeconds: 10
+      volumes:
+        - name: rds-ca
+          configMap:
+            name: debezium-rds-ca
+            items:
+              - key: global-bundle.pem
+                path: rds-ca.pem
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: debezium-connect
+  namespace: cgv-prod
+spec:
+  type: ClusterIP
+  selector:
+    app: debezium-connect
+  ports:
+    - name: rest
+      port: 8083
+      targetPort: rest

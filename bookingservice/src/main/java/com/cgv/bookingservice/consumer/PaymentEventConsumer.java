@@ -26,6 +26,7 @@ public class PaymentEventConsumer {
             log.info("Đã commit Kafka offset cho đơn vé: {}", event.getBookingId());
         } catch (Exception e) {
             log.error("Lỗi khi xử lý PaymentCompletedEvent: ", e);
+            throw new IllegalStateException("Payment event processing failed", e);
         }
     }
 
@@ -38,6 +39,7 @@ public class PaymentEventConsumer {
             log.info("Đã rollback đơn vé thành công và commit Kafka offset cho: {}", event.getBookingId());
         } catch (Exception e) {
             log.error("Lỗi khi xử lý rollback PaymentFailedEvent: ", e);
+            throw new IllegalStateException("Payment failure event processing failed", e);
         }
     }
 }

@@ -33,15 +33,15 @@ public class MovieStatusScheduler {
     @Caching(
             evict = {
                     @CacheEvict(
-                            value = "movie",
+                            value = "movies:detail",
                             allEntries = true
                     ),
                     @CacheEvict(
-                            value = "nowShowingMovies",
+                            value = "movies:now-showing",
                             allEntries = true
                     ),
                     @CacheEvict(
-                            value = "comingSoonMovies",
+                            value = "movies:coming-soon",
                             allEntries = true
                     )
             }
@@ -57,9 +57,11 @@ public class MovieStatusScheduler {
                 today
         );
 
-        movieRepository.updateExpiredMoviesToEnded(
+        movieRepository.synchronizeShowingStatuses(
                 today,
-                ShowingStatus.ENDED
+                ShowingStatus.ENDED,
+                ShowingStatus.COMING_SOON,
+                ShowingStatus.NOW_SHOWING
         );
 
         log.info(

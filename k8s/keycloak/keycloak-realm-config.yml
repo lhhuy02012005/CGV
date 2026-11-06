@@ -409,24 +409,6 @@ data:
             "syncMode": "FORCE",
             "useJwksUrl": "true"
           }
-        },
-        {
-          "alias": "facebook",
-          "displayName": "Facebook",
-          "providerId": "facebook",
-          "enabled": true,
-          "updateProfileFirstLoginMode": "off",
-          "trustEmail": true,
-          "storeToken": false,
-          "addReadTokenRoleOnCreate": false,
-          "authenticateByDefault": false,
-          "linkOnly": false,
-          "firstBrokerLoginFlowAlias": "first broker login auto link",
-          "config": {
-            "clientId": "${env.FACEBOOK_CLIENT_ID:}",
-            "clientSecret": "${env.FACEBOOK_CLIENT_SECRET:}",
-            "syncMode": "FORCE"
-          }
         }
       ],
       "authenticationFlows": [

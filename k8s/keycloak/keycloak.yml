@@ -68,14 +68,12 @@ spec:
               value: "https://d2z63drupmmdh8.cloudfront.net"
             - name: KC_HOSTNAME_ADMIN_URL
               value: "https://d2z63drupmmdh8.cloudfront.net"
-            # 7. OAuth2 Social Login Providers (Google, Facebook)
+            # 7. OAuth2 Social Login Providers (Google)
             - name: GOOGLE_CLIENT_ID
               value: "REDACTED"
             - name: GOOGLE_CLIENT_SECRET
               value: "REDACTED"
-            - name: FACEBOOK_CLIENT_ID
               value: "REDACTED"
-            - name: FACEBOOK_CLIENT_SECRET
               value: "REDACTED"
           ports:
             - name: http

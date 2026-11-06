@@ -11,13 +11,19 @@ spring:
     driver-class-name: org.postgresql.Driver
 
   flyway:
-    enabled: false
+    enabled: true
+    # Separate history because all five services use public in the same database.
+    table: flyway_marketing_schema_history
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    # Local bootstrap runs V1 even when other services have already created tables.
+    baseline-version: 0
 
   jpa:
     open-in-view: false
     hibernate:
       # ponytail: dev only; use Flyway migrations before deployment.
-      ddl-auto: update
+      ddl-auto: validate
 
   kafka:
     # Khai báo đủ 3 broker → client tự failover khi 1 broker down

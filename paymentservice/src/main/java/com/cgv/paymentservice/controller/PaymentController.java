@@ -1,9 +1,8 @@
 package com.cgv.paymentservice.controller;
 
 import com.cgv.commondto.dto.ApiResponse;
-import com.cgv.commondto.exception.BusinessException;
-import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.paymentservice.service.PaymentService;
+import com.cgv.paymentservice.service.BookingPaymentAccess;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -22,22 +21,22 @@ import java.util.UUID;
 public class PaymentController {
 
     PaymentService paymentService;
+    BookingPaymentAccess bookingPaymentAccess;
 
     /**
      * API Tạo link thanh toán VNPAY
      */
     @PostMapping("/vnpay/create-url")
+    @org.springframework.transaction.annotation.Transactional
     public ApiResponse<String> createVnpayUrl(
             HttpServletRequest request,
             @AuthenticationPrincipal Jwt jwt,
-            @RequestParam UUID bookingId,
-            @RequestParam BigDecimal amount
+            @RequestParam(required = false) UUID bookingId,
+            @RequestParam(required = false) BigDecimal amount
     ) {
-        if (jwt == null || jwt.getSubject() == null) {
-            throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập trước khi tạo liên kết thanh toán!");
-        }
-        String userId = jwt.getSubject();
-        String paymentUrl = paymentService.add(request, bookingId, amount, userId);
+        BookingPaymentAccess.Access access = bookingPaymentAccess.verify(bookingId, amount,
+                jwt == null ? null : jwt.getSubject());
+        String paymentUrl = paymentService.add(request, bookingId, amount, access.owner(), access.deadline());
         return ApiResponse.<String>builder()
                 .status(200)
                 .message("Tạo URL thanh toán VNPAY thành công!")
@@ -56,6 +55,18 @@ public class PaymentController {
                 .message(success ? "Thanh toán thành công!" : "Thanh toán thất bại hoặc đã bị huỷ!")
                 .data(success)
                 .build();
+    }
+
+    @GetMapping("/vnpay-ipn")
+    public java.util.Map<String, String> vnpayIpn(HttpServletRequest request) {
+        try {
+            paymentService.callback(request);
+            return java.util.Map.of("RspCode", "00", "Message", "Notification processed");
+        } catch (com.cgv.commondto.exception.BusinessException exception) {
+            return java.util.Map.of("RspCode", "97", "Message", "Invalid payment notification");
+        } catch (Exception exception) {
+            return java.util.Map.of("RspCode", "99", "Message", "Processing error");
+        }
     }
 
     /**

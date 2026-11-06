@@ -37,6 +37,9 @@ public class KafkaConsumerConfig {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ErrorHandlingDeserializer.class);
         props.put(ErrorHandlingDeserializer.VALUE_DESERIALIZER_CLASS, JacksonJsonDeserializer.class.getName());
         props.put(JacksonJsonDeserializer.TRUSTED_PACKAGES, "com.cgv.commondto.event,com.cgv.*");
+        // Debezium emits the event_type column as the __TypeId__ header.
+        props.put(JacksonJsonDeserializer.TYPE_MAPPINGS,
+                "BookingCreatedEvent:com.cgv.commondto.event.BookingCreatedEvent,BookingConfirmedEvent:com.cgv.commondto.event.BookingConfirmedEvent,PaymentCompletedEvent:com.cgv.commondto.event.PaymentCompletedEvent,PaymentFailedEvent:com.cgv.commondto.event.PaymentFailedEvent");
 
         return new DefaultKafkaConsumerFactory<>(props);
     }

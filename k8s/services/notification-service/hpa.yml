@@ -8,7 +8,7 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: notification-service
-  minReplicas: 2 # Tối thiểu 2 Pods
+  minReplicas: 1 # Tối thiểu 1 Pod
   maxReplicas: 3 # Tối đa 3 Pods
   metrics:
     - type: Resource

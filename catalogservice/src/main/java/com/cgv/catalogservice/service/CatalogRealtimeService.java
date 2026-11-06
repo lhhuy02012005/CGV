@@ -33,10 +33,19 @@ public class CatalogRealtimeService {
         SseEmitter emitter = new SseEmitter(EMITTER_TIMEOUT);
         emitters.add(emitter);
 
-        Runnable cleanup = () -> emitters.remove(emitter);
-        emitter.onCompletion(cleanup);
-        emitter.onTimeout(cleanup);
-        emitter.onError(e -> cleanup.run());
+        emitter.onCompletion(() -> emitters.remove(emitter));
+        emitter.onTimeout(() -> {
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
+            emitters.remove(emitter);
+        });
+        emitter.onError(e -> {
+            try {
+                emitter.complete();
+            } catch (Exception ignored) {}
+            emitters.remove(emitter);
+        });
 
         // Send initial connection acknowledgement
         try {

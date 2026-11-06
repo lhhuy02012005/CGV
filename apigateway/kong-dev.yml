@@ -51,6 +51,10 @@ services:
         paths:
           - /api/v1/catalogs
         strip_path: true
+  # Direct endpoints already contain /api/v1; do not prepend it a second time.
+  - name: catalog-direct-service
+    url: http://catalog-service:8083
+    routes:
       - name: catalog-direct-route
         paths:
           - /api/v1/movies

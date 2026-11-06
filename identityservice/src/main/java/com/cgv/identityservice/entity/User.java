@@ -34,6 +34,10 @@ public class User extends BaseEntity {
     @Column(name = "phone", length = 20)
     String phone;
 
+    @Builder.Default
+    @Column(nullable = false)
+    String status = "ACTIVE";
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "membership_tier", nullable = false)

@@ -55,7 +55,7 @@ Table users {
 Table user_connected_accounts {
   id uuid [pk]
   user_id varchar [not null, ref: > users.id, note: 'Tham chieu nguoi dung']
-  provider varchar [not null, note: 'GOOGLE, FACEBOOK, APPLE']
+  provider varchar [not null, note: 'GOOGLE']
   provider_id varchar [not null, note: 'ID nguoi dung tren nha cung cap OAuth']
   provider_email varchar [note: 'Email tra ve tu nha cung cap']
   access_token text [note: 'OAuth access token']

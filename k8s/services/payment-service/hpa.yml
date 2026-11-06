@@ -9,7 +9,7 @@ spec:
     kind: Deployment
     name: payment-service
   minReplicas: 2 # Tối thiểu 2 Pods
-  maxReplicas: 3 # Tối đa 3 Pods
+  maxReplicas: 4 # Tối đa 4 Pods
   metrics:
     - type: Resource
       resource:

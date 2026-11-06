@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: kong
-          image: kong:3.4-alpine
+          image: kong:3.4
           imagePullPolicy: IfNotPresent
           env:
             - name: KONG_DATABASE #Chạy chế độ DB-less (không dùng PostgreSQL cho Kong), tiết kiệm 100% RAM và CPU của DB.
@@ -47,25 +47,24 @@ spec:
             - name: admin
               containerPort: 8001
           resources:
-            requests: # Cam kết tối thiểu
-              cpu: "80m" #(0.08 CPU): Mức chiếm dụng CPU lúc rảnh rỗi.
-              memory: "90Mi" #Mỗi con chỉ cần 90MB RAM là chạy được. (2 con ~= 180MB ram)
-            limits: # Tối đa
-              cpu: "300m"
-              memory: "200Mi" #Giới hạn an toàn. Nếu 1 con Kong bị tràn bộ nhớ vượt quá 200MB, K8s sẽ tự reset lại con đó, không để ảnh hưởng đến máy chủ.
+            requests:
+              cpu: "100m"
+              memory: "150Mi"
+            limits:
+              cpu: "1000m"
+              memory: "500Mi"
 
           readinessProbe:
-            httpGet:
-              path: /status #Kiểm tra xem Kong đã sẵn sàng đón khách chưa qua endpoint http://localhost:8001/status.
-              port: 8001
-            initialDelaySeconds: 5
-            periodSeconds: 10
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 5
           livenessProbe:
-            httpGet:
-              path: /status
-              port: 8001
-            initialDelaySeconds: 10
-            periodSeconds: 15 #Định kỳ mỗi 15 giây gõ cửa con Kong một lần. Nếu Kong bị đơ hay treo tiến trình, K8s sẽ tự động giết và bật lại con mới.
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            failureThreshold: 5
           volumeMounts:
             - name: kong-config-vol # Chọn chiếc USB vừa tạo ở Bước 2
               mountPath: /etc/kong # Cắm thẳng vào thư mục /etc/kong của container Kong
@@ -79,12 +78,15 @@ kind: Service
 metadata:
   name: kong-proxy
   namespace: cgv-prod
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
 spec:
-  type: NodePort #Mở cổng từ ngoài máy chủ vật lý / máy ảo EC2 vào trong cụm K8s.
+  type: LoadBalancer # Cấp phát AWS Network Load Balancer (NLB) công khai toàn cầu
   selector:
-    app: kong-gateway #Tự động gom 2 con Kong Pod ở trên vào làm việc cho Service này. Service sẽ chia đều request luân phiên (Round-Robin) cho 2 con
+    app: kong-gateway
   ports:
     - name: proxy
-      port: 8000 #Cổng nội bộ của Service bên trong mạng K8s.
-      targetPort: 8000 #Cổng thực tế bên trong container Kong nhận request.
-      nodePort: 30080 #Cổng thật trên máy chủ. Bạn truy cập qua http://<IP_MAY>:30080
+      port: 80 # Cổng chuẩn HTTP bên ngoài
+      targetPort: 8000 # Cổng bên trong container Kong nhận request

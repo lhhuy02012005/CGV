@@ -8,6 +8,7 @@ import com.cgv.bookingservice.dto.response.DashboardStatisticsResponse;
 import com.cgv.bookingservice.entity.Booking;
 import com.cgv.bookingservice.entity.BookingSeat;
 import com.cgv.bookingservice.entity.OutboxEvent;
+import com.cgv.bookingservice.entity.SeatClaim;
 import com.cgv.bookingservice.enums.BookingStatus;
 import com.cgv.bookingservice.grpc.CatalogGrpcClient;
 import com.cgv.bookingservice.grpc.MarketingGrpcClient;
@@ -58,14 +59,16 @@ public class BookingServiceImpl implements BookingService {
     OutboxEventRepository outboxEventRepository;
     CatalogGrpcClient catalogGrpcClient;
     StringRedisTemplate redisTemplate;
-    KafkaTemplate<String, Object> kafkaTemplate;
+    com.cgv.bookingservice.repository.SeatClaimRepository seatClaimRepository;
+    com.cgv.bookingservice.service.SeatLockOwnership seatLockOwnership;
+    com.cgv.bookingservice.service.AfterCommit afterCommit;
     ObjectMapper objectMapper;
     MarketingGrpcClient marketingGrpcClient;
     SimpMessagingTemplate messagingTemplate;
     com.cgv.bookingservice.service.BookingRealtimeService bookingRealtimeService;
+    org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
 
     static String USER_TIER_KEY_PREFIX = "user:tier:";
-    static String LOCK_KEY_PREFIX = "showtime:lock:";
     static int LOCK_KEY_DURATION = 10;
     static int PAYMENT_DEADLINE_DURATION = 10;
 
@@ -73,36 +76,45 @@ public class BookingServiceImpl implements BookingService {
     @lombok.experimental.NonFinal
     boolean cooldownEnabled;
 
+    private boolean hasUnsettledPayment(UUID bookingId) {
+        // ponytail: Unresolved VNPay attempts keep seats until IPN/QUERYDR or operator reconciliation.
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM payments WHERE booking_id = ? AND provider = 'VNPAY' " +
+                        "AND status IN ('PENDING', 'SUCCESS', 'REFUND_PENDING'))",
+                Boolean.class, bookingId));
+    }
+
     @Override
     @Transactional
-    public BookingResponse createBooking(String userId, BookingCreateRequest request) {
+    public BookingResponse createBooking(String userId, String userEmail, BookingCreateRequest request) {
         UUID showtimeId = request.getShowtimeId();
-        List<UUID> seatIds = request.getSeatIds();
-
-        boolean isGuest = userId == null || userId.isBlank() || userId.startsWith("guest_")
-                || "guest".equalsIgnoreCase(userId) || "anonymous".equalsIgnoreCase(userId);
-
-        if (isGuest) {
-            if (request.getGuestName() == null || request.getGuestName().isBlank()
-                    || request.getGuestPhone() == null || request.getGuestPhone().isBlank()
-                    || request.getGuestEmail() == null || request.getGuestEmail().isBlank()) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "Khách hàng vui lòng điền đầy đủ Họ và tên, Số điện thoại và Email liên hệ để nhận vé!");
-            }
-            if (userId == null || userId.isBlank() || "guest".equalsIgnoreCase(userId) || "anonymous".equalsIgnoreCase(userId)) {
-                userId = "guest_" + request.getGuestPhone().trim();
-            }
+        if (request.getSeatIds() == null || request.getSeatIds().isEmpty()
+                || request.getSeatIds().stream().anyMatch(Objects::isNull) || request.getShowtimeId() == null) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Suất chiếu và danh sách ghế phải hợp lệ!");
+        }
+        List<UUID> seatIds = request.getSeatIds().stream().distinct().toList();
+        if (seatIds.size() > 8) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Mỗi đơn chỉ được đặt tối đa 8 ghế!");
         }
 
-        String guestSessionId = request.getGuestSessionId();
+        if (userId == null || userId.isBlank() || userId.startsWith("guest_") || "guest".equalsIgnoreCase(userId)) {
+            throw new BusinessException(ErrorCode.UNAUTHENTICATED, "Vui lòng đăng nhập để đặt vé");
+        }
 
         // 1. Tự động dọn dẹp đơn cũ: Nếu user đã có đơn vé PAYMENT_PENDING ở chính suất chiếu này (ví dụ quay lại từ cổng VNPay để thanh toán lại),
         // hủy đơn cũ để giải phóng trạng thái trong DB trước khi tạo đơn mới
         List<Booking> oldPendingBookings = bookingRepository.findByUserIdAndShowtimeIdAndStatus(userId, showtimeId, BookingStatus.PAYMENT_PENDING);
         if (oldPendingBookings != null && !oldPendingBookings.isEmpty()) {
-            for (Booking oldB : oldPendingBookings) {
+            for (Booking candidate : oldPendingBookings) {
+                Booking oldB = bookingRepository.findByIdForUpdate(candidate.getId()).orElseThrow();
+                if (oldB.getStatus() != BookingStatus.PAYMENT_PENDING) continue;
+                if (hasUnsettledPayment(oldB.getId())) {
+                    throw new BusinessException(ErrorCode.INVALID_OPERATION, "Đơn trước còn giao dịch VNPay cần đối soát; không thể giải phóng ghế");
+                }
                 oldB.setStatus(BookingStatus.CANCELLED);
                 oldB.setCancelledAt(Instant.now());
                 bookingRepository.save(oldB);
+                seatClaimRepository.releaseByBookingId(oldB.getId());
                 log.info("Tự động hủy đơn pending cũ {} của user {} để khởi tạo đơn mới", oldB.getId(), userId);
             }
         }
@@ -110,36 +122,17 @@ public class BookingServiceImpl implements BookingService {
         // 2. Kiểm tra xem ghế đã bị ai mua hoặc ai khác đang thanh toán chưa
         List<UUID> activeBookedSeatIds = bookingSeatRepository.findBookedSeatIdsByShowtimeId(
                 showtimeId,
-                List.of(BookingStatus.CONFIRMED, BookingStatus.PAYMENT_PENDING)
+                List.of(BookingStatus.CONFIRMED, BookingStatus.PAYMENT_PENDING, BookingStatus.SEAT_RESERVED, BookingStatus.USED)
         );
         for (UUID seatId : seatIds) {
             if (activeBookedSeatIds.contains(seatId)) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã có người đặt hoặc đang trong quá trình thanh toán. Vui lòng chọn ghế khác!");
-            }
-        }
-
-        // 3. Kiểm tra quyền sở hữu ghế trên Redis (hỗ trợ cả userId, guestSessionId và re-acquire an toàn)
-        for (UUID seatId : seatIds) {
-            String seatKey = LOCK_KEY_PREFIX + showtimeId + ":" + seatId;
-            String currentHolder = redisTemplate.opsForValue().get(seatKey);
-            boolean isHolder = currentHolder != null && (
-                    currentHolder.equals(userId)
-                    || (guestSessionId != null && !guestSessionId.isBlank() && currentHolder.equals(guestSessionId))
-                    || (isGuest && currentHolder.startsWith("guest_"))
-            );
-            // Fallback: nếu key trên Redis bị thiếu (do unmount hoặc timeout), nhưng ghế hoàn toàn trống ở DB
-            if (!isHolder && currentHolder == null && !activeBookedSeatIds.contains(seatId)) {
-                redisTemplate.opsForValue().set(seatKey, userId, Duration.ofMinutes(LOCK_KEY_DURATION));
-                isHolder = true;
-            }
-            if (!isHolder) {
-                throw new BusinessException(ErrorCode.BAD_REQUEST, "Ghế đã hết hạn giữ hoặc không thuộc quyền sở hữu của bạn. Vui lòng chọn lại ghế!");
+                throw new BusinessException(ErrorCode.DUPLICATE, "Ghế đã có người đặt hoặc đang trong quá trình thanh toán. Vui lòng chọn ghế khác!");
             }
         }
 
         ShowtimePricingResponse pricingResponse = catalogGrpcClient.getShowtimePricing(showtimeId);
-        if (BookingStatus.CANCELLED.equals(pricingResponse.getShowtimeStatus())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Suất chiếu này đã bị huỷ bởi ban quản lý rạp!");
+        if (!"SCHEDULED".equals(pricingResponse.getShowtimeStatus())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Suất chiếu không còn mở bán!");
         }
 
         Map<String, SeatPricingInfo> seatInfoMap = pricingResponse.getSeatsList().stream()
@@ -169,15 +162,11 @@ public class BookingServiceImpl implements BookingService {
             bookingSeats.add(bookingSeat);
         }
 
-        String userTier;
-        if (isGuest) {
-            userTier = "GUEST";
-        } else {
-            userTier = (String) redisTemplate.opsForValue().get(USER_TIER_KEY_PREFIX + userId);
-            if (userTier == null) {
-                userTier = "MEMBER";
-            }
-        }
+        seatLockOwnership.claim(userId, showtimeId, seatIds,
+                Duration.ofMinutes(LOCK_KEY_DURATION).toSeconds());
+
+        String userTier = (String) redisTemplate.opsForValue().get(USER_TIER_KEY_PREFIX + userId);
+        if (userTier == null) userTier = "MEMBER";
         log.info("Khách hàng {} có hạng thành viên: {}", userId, userTier);
 
         BigDecimal discountAmount = BigDecimal.ZERO;
@@ -203,9 +192,7 @@ public class BookingServiceImpl implements BookingService {
 
         Booking booking = Booking.builder()
                 .userId(userId)
-                .guestName(isGuest ? request.getGuestName().trim() : null)
-                .guestPhone(isGuest ? request.getGuestPhone().trim() : null)
-                .guestEmail(isGuest ? request.getGuestEmail().trim() : null)
+                .guestEmail(userEmail)
                 .showtimeId(showtimeId)
                 .promotionId(request.getPromotionId())
                 .totalBaseAmount(totalBaseAmount)
@@ -220,17 +207,13 @@ public class BookingServiceImpl implements BookingService {
             bs.setBooking(booking);
         }
 
-        Booking savedBooking = bookingRepository.save(booking);
-
-        // Gia hạn lock Redis thêm 10 phút thanh toán và đảm bảo gán quyền sở hữu cho userId
+        Booking savedBooking = bookingRepository.saveAndFlush(booking);
         for (UUID seatId : seatIds) {
-            String lockKey = LOCK_KEY_PREFIX + showtimeId + ":" + seatId;
-            redisTemplate.opsForValue().set(lockKey, userId, Duration.ofMinutes(LOCK_KEY_DURATION));
+            seatClaimRepository.saveAndFlush(SeatClaim.builder()
+                    .showtimeId(showtimeId).seatId(seatId).bookingId(savedBooking.getId()).build());
         }
+
         redisTemplate.opsForValue().set("user:active_showtime:" + userId, showtimeId.toString(), Duration.ofMinutes(LOCK_KEY_DURATION));
-        if (guestSessionId != null && !guestSessionId.isBlank()) {
-            redisTemplate.delete("user:active_showtime:" + guestSessionId);
-        }
         redisTemplate.delete("user:expired_count:" + userId);
 
         try {
@@ -266,52 +249,36 @@ public class BookingServiceImpl implements BookingService {
     public void confirmBooking(PaymentCompletedEvent event) {
         UUID bookingId = event.getBookingId();
 
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "Không tìm thấy đơn đặt vé: " + bookingId));
 
-        if (booking.getStatus() == BookingStatus.CONFIRMED) {
+        if (booking.getStatus() == BookingStatus.CONFIRMED || booking.getStatus() == BookingStatus.USED) {
             log.warn("Đơn đặt vé {} đã được xác nhận trước đó.", bookingId);
             return;
+        }
+        if (booking.getStatus() != BookingStatus.PAYMENT_PENDING) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION, "Đơn vé không còn chờ thanh toán!");
+        }
+        if (event.getAmount() == null || event.getAmount().compareTo(booking.getFinalAmount()) != 0) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Số tiền thanh toán không khớp đơn vé!");
         }
         booking.setStatus(BookingStatus.CONFIRMED);
         booking.setQrCodeUrl("https://api.cgv.vn/api/v1/tickets/qr/" + booking.getId());
         bookingRepository.save(booking);
 
-        // Broadcast Realtime SSE PAYMENT_CONFIRMED to client waiting on checkout screen
-        try {
+        afterCommit.run(() -> {
+            seatLockOwnership.release(booking.getUserId(), booking.getShowtimeId(),
+                    booking.getBookingSeats().stream().map(BookingSeat::getSeatId).toList());
             bookingRealtimeService.broadcastBooking(bookingId, "PAYMENT_CONFIRMED", Map.of(
-                    "bookingId", bookingId.toString(),
-                    "status", "CONFIRMED",
-                    "qrCodeUrl", booking.getQrCodeUrl() != null ? booking.getQrCodeUrl() : "",
-                    "showtimeId", booking.getShowtimeId() != null ? booking.getShowtimeId().toString() : "",
-                    "finalAmount", booking.getFinalAmount() != null ? booking.getFinalAmount() : 0
-            ));
-        } catch (Exception e) {
-            log.warn("Failed to broadcast PAYMENT_CONFIRMED: {}", e.getMessage());
-        }
-
-        for (BookingSeat seat : booking.getBookingSeats()) {
-            String lockKey = LOCK_KEY_PREFIX + booking.getShowtimeId() + ":" + seat.getSeatId();
-            redisTemplate.delete(lockKey);
-        }
-        log.info("Đã giải phóng lock Redis cho các ghế của Booking: {}", bookingId);
-
-        // Broadcast WebSocket BOOKED event
-        try {
-            List<UUID> bookedSeatIds = booking.getBookingSeats().stream()
-                    .map(BookingSeat::getSeatId)
-                    .toList();
-            SeatRealtimeEvent realtimeEvent = SeatRealtimeEvent.builder()
-                    .type("BOOKED")
-                    .showtimeId(booking.getShowtimeId())
-                    .seatIds(bookedSeatIds)
-                    .userId(booking.getUserId())
-                    .timestamp(Instant.now())
-                    .build();
-            messagingTemplate.convertAndSend("/topic/showtimes." + booking.getShowtimeId() + ".seats", realtimeEvent);
-        } catch (Exception e) {
-            log.error("Failed to broadcast BOOKED event: {}", e.getMessage());
-        }
+                    "bookingId", bookingId.toString(), "status", "CONFIRMED",
+                    "qrCodeUrl", booking.getQrCodeUrl(), "showtimeId", booking.getShowtimeId().toString(),
+                    "finalAmount", booking.getFinalAmount()));
+            SeatRealtimeEvent realtime = SeatRealtimeEvent.builder().type("BOOKED")
+                    .showtimeId(booking.getShowtimeId()).userId(booking.getUserId())
+                    .seatIds(booking.getBookingSeats().stream().map(BookingSeat::getSeatId).toList())
+                    .timestamp(Instant.now()).build();
+            messagingTemplate.convertAndSend("/topic/showtimes." + booking.getShowtimeId() + ".seats", realtime);
+        });
 
         ShowtimePricingResponse pricing = catalogGrpcClient.getShowtimePricing(booking.getShowtimeId());
         List<String> seatLabels = booking.getBookingSeats().stream()
@@ -346,10 +313,9 @@ public class BookingServiceImpl implements BookingService {
                     .build();
             outboxEventRepository.save(outboxEvent);
             log.info("Đã lưu OutboxEvent BookingConfirmedEvent cho NotificationService!");
-            kafkaTemplate.send("booking.confirmed", confirmedEvent);
-            log.info("Đã phát sự kiện booking.confirmed sang Kafka cho đơn vé: {}", booking.getId());
+
         } catch (Exception e) {
-            log.error("Lỗi khi serialize BookingConfirmedEvent: ", e);
+            throw new IllegalStateException("Cannot persist BookingConfirmedEvent; transaction must roll back", e);
         }
     }
 
@@ -359,12 +325,8 @@ public class BookingServiceImpl implements BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "Không tìm thấy đơn vé: " + bookingId));
 
-        if (userId != null && !userId.isBlank()) {
-            boolean isOwner = booking.getUserId() != null && booking.getUserId().equals(userId);
-            boolean isGuestMatch = booking.getGuestPhone() != null && userId.contains(booking.getGuestPhone());
-            if (!isOwner && !isGuestMatch) {
-                log.warn("User {} truy vấn booking {}, có thể là nhân viên rạp hoặc admin", userId, bookingId);
-            }
+        if (!Objects.equals(booking.getUserId(), userId)) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "Bạn không có quyền xem đơn vé này!");
         }
 
         return mapToBookingResponse(booking, null);
@@ -393,6 +355,15 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
+    public BookingResponse getPendingBooking(String userId, UUID showtimeId) {
+        return bookingRepository.findFirstByUserIdAndShowtimeIdAndStatusOrderByCreatedAtDesc(
+                        userId, showtimeId, BookingStatus.PAYMENT_PENDING)
+                .map(booking -> mapToBookingResponse(booking, null))
+                .orElse(null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResponse<BookingResponse> adminSearchBookings(String keyword, Pageable pageable) {
         Page<Booking> page = bookingRepository.searchBookingsByKeyword(keyword, pageable);
         Map<UUID, ShowtimePricingResponse> showtimeCache = new HashMap<>();
@@ -413,7 +384,7 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     @CacheEvict(value = "dashboard:statistics", allEntries = true)
     public BookingResponse adminCheckIn(UUID bookingId) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_EXISTED, "Không tìm thấy vé: " + bookingId));
 
         if (booking.getStatus() == BookingStatus.USED) {
@@ -444,13 +415,14 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     @CacheEvict(value = "dashboard:statistics", allEntries = true)
     public BookingResponse adminRefund(UUID bookingId) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_EXISTED, "Không tìm thấy vé: " + bookingId));
 
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Chỉ có thể hoàn tiền cho vé ĐÃ XÁC NHẬN (CONFIRMED)!");
         }
 
+        seatClaimRepository.releaseByBookingId(bookingId);
         booking.setStatus(BookingStatus.REFUNDED);
         booking.setCancelledAt(Instant.now());
         Booking saved = bookingRepository.save(booking);
@@ -466,8 +438,7 @@ public class BookingServiceImpl implements BookingService {
 
         // Giải phóng ghế
         for (BookingSeat seat : booking.getBookingSeats()) {
-            String lockKey = LOCK_KEY_PREFIX + booking.getShowtimeId() + ":" + seat.getSeatId();
-            redisTemplate.delete(lockKey);
+            seatLockOwnership.release(booking.getUserId(), booking.getShowtimeId(), List.of(seat.getSeatId()));
         }
         if (booking.getPromotionId() != null) {
             marketingGrpcClient.releasePromotion(booking.getPromotionId(), booking.getUserId());
@@ -636,7 +607,7 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public void cancelBooking(UUID bookingId, String userId) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "Không tìm thấy đơn đặt vé: " + bookingId));
 
         if (!booking.getUserId().equals(userId)) {
@@ -646,15 +617,18 @@ public class BookingServiceImpl implements BookingService {
         if (booking.getStatus() != BookingStatus.PAYMENT_PENDING) {
             throw new BusinessException(ErrorCode.BAD_REQUEST, "Chỉ có thể hủy đơn vé đang chờ thanh toán!");
         }
+        if (hasUnsettledPayment(bookingId)) {
+            throw new BusinessException(ErrorCode.INVALID_OPERATION, "Giao dịch VNPay còn chờ đối soát; không thể hủy vé");
+        }
 
+        seatClaimRepository.releaseByBookingId(bookingId);
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancelledAt(Instant.now());
         bookingRepository.save(booking);
 
         List<UUID> releasedSeatIds = new ArrayList<>();
         for (BookingSeat seat : booking.getBookingSeats()) {
-            String lockKey = LOCK_KEY_PREFIX + booking.getShowtimeId() + ":" + seat.getSeatId();
-            redisTemplate.delete(lockKey);
+            seatLockOwnership.release(booking.getUserId(), booking.getShowtimeId(), List.of(seat.getSeatId()));
             releasedSeatIds.add(seat.getSeatId());
         }
         redisTemplate.delete("user:active_showtime:" + userId);
@@ -684,14 +658,19 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public void rollbackBooking(UUID bookingId, String reason) {
-        Booking booking = bookingRepository.findById(bookingId)
+        Booking booking = bookingRepository.findByIdForUpdate(bookingId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "Không tìm thấy đơn đặt vé: " + bookingId));
 
-        if (booking.getStatus() == BookingStatus.CANCELLED) {
+        if (booking.getStatus() != BookingStatus.PAYMENT_PENDING && booking.getStatus() != BookingStatus.SEAT_RESERVED) {
             log.warn("Đơn đặt vé {} đã bị hủy trước đó.", bookingId);
             return;
         }
+        if (hasUnsettledPayment(bookingId)) {
+            log.warn("Giữ ghế đơn {} quá hạn: giao dịch VNPay chưa đối soát; không tự bán lại", bookingId);
+            return;
+        }
 
+        seatClaimRepository.releaseByBookingId(bookingId);
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancelledAt(Instant.now());
         bookingRepository.save(booking);
@@ -708,8 +687,7 @@ public class BookingServiceImpl implements BookingService {
 
         List<UUID> releasedSeatIds = new ArrayList<>();
         for (BookingSeat seat : booking.getBookingSeats()) {
-            String lockKey = LOCK_KEY_PREFIX + booking.getShowtimeId() + ":" + seat.getSeatId();
-            redisTemplate.delete(lockKey);
+            seatLockOwnership.release(booking.getUserId(), booking.getShowtimeId(), List.of(seat.getSeatId()));
             releasedSeatIds.add(seat.getSeatId());
         }
 

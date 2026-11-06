@@ -8,6 +8,7 @@ import com.cgv.catalogservice.dto.request.movie.MovieUpdateStatusRequest;
 import com.cgv.catalogservice.dto.request.movie.MovieUpdateShowingStatusRequest;
 import com.cgv.catalogservice.dto.response.MovieResponse;
 import com.cgv.catalogservice.entity.Movie;
+import com.cgv.catalogservice.enums.ShowingStatus;
 import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.MovieMapper;
 import com.cgv.catalogservice.repository.MovieRepository;
@@ -29,6 +30,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.stream.Collectors;
 
 @Service
@@ -37,6 +40,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MovieServiceImpl implements MovieService {
 
+    org.springframework.context.ApplicationEventPublisher eventPublisher;
     MovieRepository movieRepository;
     MovieMapper movieMapper;
     MovieSearchRepository movieSearchRepository;
@@ -47,6 +51,8 @@ public class MovieServiceImpl implements MovieService {
     @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieResponse createMovie(MovieCreateRequest request) {
 
+        validateMoviePeriod(request.releaseDate(), request.endDate());
+
         if (movieRepository.existsByTitleIgnoreCase(request.title().trim())) {
             throw new ResourceConflictException(
                     "Phim với tên '" + request.title() + "' đã tồn tại"
@@ -54,18 +60,10 @@ public class MovieServiceImpl implements MovieService {
         }
 
         Movie movie = movieMapper.toEntity(request);
+        movie.setShowingStatus(showingStatusFor(movie.getReleaseDate(), movie.getEndDate(), today()));
 
         Movie savedMovie = movieRepository.save(movie);
-        MovieDocument doc = MovieDocument.builder()
-                .id(savedMovie.getId().toString())
-                .title(savedMovie.getTitle())
-                .originalTitle(savedMovie.getOriginalTitle())
-                .synopsis(savedMovie.getSynopsis())
-                .director(savedMovie.getDirector())
-                .ageRating(savedMovie.getAgeRating())
-                .showingStatus(savedMovie.getShowingStatus().name())
-                .build();
-        movieSearchRepository.save(doc);
+        eventPublisher.publishEvent(savedMovie);
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
@@ -94,9 +92,14 @@ public class MovieServiceImpl implements MovieService {
 
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
+        validateMoviePeriod(request.releaseDate() != null ? request.releaseDate() : movie.getReleaseDate(),
+                request.endDate() != null ? request.endDate() : movie.getEndDate());
+
         movieMapper.updateEntity(request, movie);
+        movie.setShowingStatus(showingStatusFor(movie.getReleaseDate(), movie.getEndDate(), today()));
 
         movieRepository.saveAndFlush(movie);
+        eventPublisher.publishEvent(movie);
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
@@ -112,6 +115,25 @@ public class MovieServiceImpl implements MovieService {
         return movieMapper.toResponse(movie);
     }
 
+    private static void validateMoviePeriod(LocalDate releaseDate, LocalDate endDate) {
+        if (releaseDate == null) {
+            throw new IllegalArgumentException("Cần ngày khởi chiếu để xác định trạng thái phim");
+        }
+        if (endDate != null && endDate.isBefore(releaseDate)) {
+            throw new IllegalArgumentException("Ngày kết thúc chiếu không được trước ngày khởi chiếu");
+        }
+    }
+
+    private static LocalDate today() {
+        return LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+    }
+
+    static ShowingStatus showingStatusFor(LocalDate releaseDate, LocalDate endDate, LocalDate today) {
+        validateMoviePeriod(releaseDate, endDate);
+        if (endDate != null && today.isAfter(endDate)) return ShowingStatus.ENDED;
+        return today.isBefore(releaseDate) ? ShowingStatus.COMING_SOON : ShowingStatus.NOW_SHOWING;
+    }
+
     @Override
     @Transactional
     @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
@@ -122,6 +144,7 @@ public class MovieServiceImpl implements MovieService {
         movie.setStatus(request.status());
 
         movieRepository.saveAndFlush(movie);
+        eventPublisher.publishEvent(movie);
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
@@ -141,8 +164,13 @@ public class MovieServiceImpl implements MovieService {
     @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieResponse updateMovieShowingStatus(UUID movieId, MovieUpdateShowingStatusRequest request) {
         Movie movie = movieRepository.findById(movieId).orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
+        ShowingStatus expected = showingStatusFor(movie.getReleaseDate(), movie.getEndDate(), today());
+        if (request.showingStatus() != expected) {
+            throw new IllegalArgumentException("Trạng thái theo ngày chiếu phải là " + expected + "; hãy chỉnh ngày khởi/kết thúc chiếu");
+        }
         movie.setShowingStatus(request.showingStatus());
         movieRepository.saveAndFlush(movie);
+        eventPublisher.publishEvent(movie);
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(

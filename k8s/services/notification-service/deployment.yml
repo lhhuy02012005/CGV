@@ -6,7 +6,7 @@ metadata:
   labels:
     app: notification-service
 spec:
-  replicas: 2 # Mặc định 2 Pods để gửi Email/OTP kịp thời, không bị dồn ứ Kafka consumer
+  replicas: 1 # Chạy 1 Pod (Giảm tải tài nguyên, gửi Email/OTP)
   selector:
     matchLabels:
       app: notification-service
@@ -15,13 +15,20 @@ spec:
       labels:
         app: notification-service
     spec:
+      tolerations:
+        - key: "CriticalAddonsOnly"
+          operator: "Exists"
+          effect: "NoSchedule"
       containers:
         - name: notification-service
-          image: cgv/notification-service:latest
+          image: 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/notification-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8086
+          env:
+            - name: SERVER_PORT
+              value: "8086"
           envFrom:
             - configMapRef:
                 name: cgv-global-config
@@ -29,20 +36,24 @@ spec:
                 name: cgv-global-secrets
           resources:
             requests:
-              cpu: "80m"
-              memory: "150Mi"
+              cpu: "150m"
+              memory: "250Mi"
             limits:
-              cpu: "400m"
-              memory: "300Mi"
-          readinessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/readiness
+              cpu: "1000m"
+              memory: "750Mi"
+          startupProbe:
+            tcpSocket:
               port: 8086
-            initialDelaySeconds: 30
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            tcpSocket:
+              port: 8086
+            initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/liveness
+            tcpSocket:
               port: 8086
-            initialDelaySeconds: 40
+            initialDelaySeconds: 30
             periodSeconds: 15

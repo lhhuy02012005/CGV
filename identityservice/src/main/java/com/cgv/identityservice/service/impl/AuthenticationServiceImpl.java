@@ -11,7 +11,7 @@ import com.cgv.identityservice.mapper.UserMapper;
 import com.cgv.identityservice.repository.UserRepository;
 import com.cgv.identityservice.repository.httpclient.KeycloakClient;
 import com.cgv.identityservice.service.AuthenticationService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;

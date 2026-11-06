@@ -142,7 +142,7 @@ Dùng để đăng nhập trang quản trị Keycloak để cấu hình Client, 
 
 ### 5.1. Đăng nhập trên giao diện Web (UI)
 - **Dành cho Ban Quản trị / Nhân viên**: Truy cập [CGV Admin Portal](https://cgvfeadmin.vercel.app), nhập email của vai trò tương ứng và mật khẩu `12345678`.
-- **Dành cho Khán giả / Khách hàng**: Truy cập [CGV Cinema Web](https://cgvfeuser.vercel.app), đăng nhập bằng email `lhhuy.2005@gmail.com` hoặc dùng Social Login (Google / Facebook).
+- **Dành cho Khán giả / Khách hàng**: Truy cập [CGV Cinema Web](https://cgvfeuser.vercel.app), đăng nhập bằng email `lhhuy.2005@gmail.com` hoặc dùng Social Login (Google).
 
 ### 5.2. Lấy JWT Token qua cURL (Production Gateway)
 ```bash

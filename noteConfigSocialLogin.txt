@@ -26,26 +26,4 @@ Kéo xuống dưới, để ý ô Redirect URI, copy đường dẫn này lại 
 
 Bấm Save ở cuối trang.
 
-Bước 2: Cấu hình Facebook Login trên Keycloak
-Lấy App ID & App Secret từ Facebook Developers:
-
-Truy cập Facebook for Developers.
-
-Tạo một ứng dụng mới (chọn loại Consumer hoặc None).
-
-Thêm sản phẩm Facebook Login vào ứng dụng.
-
-Vào phần Facebook Login > Settings, tại mục Valid OAuth Redirect URIs, điền đường dẫn callback của Keycloak:
-http://localhost:8180/realms/cgv-realm/broker/facebook/endpoint
-
-Lưu thay đổi.
-
-Vào phần Settings > Basic ở menu trái để lấy App ID (tương ứng Client ID) và App Secret (tương ứng Client Secret).
-
-Kích hoạt trên Keycloak:
-
-Quay lại Keycloak, bấm vào ô Facebook trong mục Social.
-
-Điền Client ID (App ID) và Client Secret (App Secret).
-
-Bấm Save.
+Chỉ hỗ trợ đăng nhập Google.

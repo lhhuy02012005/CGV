@@ -17,13 +17,16 @@ spec:
     spec:
       containers:
         - name: marketing-service
-          image: cgv/marketing-service:latest
+          image: 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/marketing-service:latest
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 8084
             - name: grpc
               containerPort: 9099
+          env:
+            - name: SPRING_KAFKA_CONSUMER_GROUP_ID
+              value: marketing-service-group
           envFrom:
             - configMapRef:
                 name: cgv-global-config
@@ -31,20 +34,25 @@ spec:
                 name: cgv-global-secrets
           resources:
             requests:
-              cpu: "80m"
-              memory: "150Mi"
+              cpu: "300m"
+              memory: "350Mi"
             limits:
-              cpu: "400m"
-              memory: "300Mi"
-          readinessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/readiness
+              cpu: "1000m"
+              memory: "750Mi"
+          startupProbe:
+            tcpSocket:
               port: 8084
             initialDelaySeconds: 30
             periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /api/v1/actuator/health/liveness
+            failureThreshold: 60
+          readinessProbe:
+            tcpSocket:
               port: 8084
-            initialDelaySeconds: 40
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8084
+            initialDelaySeconds: 30
             periodSeconds: 15
+            failureThreshold: 5

@@ -20,12 +20,17 @@ spring:
     driver-class-name: org.postgresql.Driver
 
   flyway:
-    enabled: false
+    enabled: true
+    # Separate history because all five services use public in the same database.
+    table: flyway_catalog_schema_history
+    locations: classpath:db/migration,classpath:db/demo
     baseline-on-migrate: true
+    # Local bootstrap runs V1 even when other services have already created tables.
+    baseline-version: 0
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: true
     properties:
       hibernate:
@@ -39,7 +44,7 @@ spring:
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       properties:
         # acks=all (-1): producer chờ TẤT CẢ ISR replica xác nhận mới coi là ghi thành công
         # → đây là chế độ an toàn nhất, tránh mất message khi broker chết ngay sau khi ghi
@@ -81,7 +86,7 @@ spring:
       # → đảm bảo không bỏ sót event nào khi service restart
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
       # enable-auto-commit=false: KHÔNG tự động commit offset
       # → chỉ commit sau khi xử lý thành công → at-least-once delivery
       # (nếu auto-commit, message có thể bị mất khi service crash giữa chừng)
@@ -149,3 +154,9 @@ springdoc:
 grpc:
   server:
     port: 9090
+
+# Local diagnostics: expose contributor details to diagnose readiness dependencies.
+management:
+  endpoint:
+    health:
+      show-details: always

@@ -8,8 +8,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: identity-service
-  minReplicas: 1 # Mặc định 1 Pod
-  maxReplicas: 2 # Tối đa 2 Pods
+  minReplicas: 2 # Mặc định 2 Pods
+  maxReplicas: 4 # Tối đa 4 Pods
   metrics:
     - type: Resource
       resource:

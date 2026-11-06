@@ -301,67 +301,146 @@ Vào **Security Groups** -> Tạo lần lượt 5 Security Groups:
 --------------------------------------------------------------------------------
 BƯỚC 3: TẠO AMAZON RDS POSTGRESQL MULTI-AZ (HIGH AVAILABILITY)
 --------------------------------------------------------------------------------
-3.1. Thao tác trên AWS Console:
-1. Vào **RDS** -> **Subnet groups** -> **Create DB Subnet Group**:
-   - Tên: `cgv-rds-data-subnet-group`.
-   - VPC: `cgv-enterprise-vpc`.
-   - Subnets: Chọn 2 Private Data Subnets (`10.0.20.0/24` và `10.0.21.0/24`).
-2. Vào **Databases** -> **Create database**:
-   - Engine: `PostgreSQL` (Version `16.x`).
-   - Template: **Production**.
-   - Deployment options: **Multi-AZ DB cluster** (hoặc Multi-AZ DB instance).
-   - DB instance identifier: `cgv-db-enterprise`.
-   - Master username: `postgres`.
-   - Master password: `CgvEnterpriseP@ss2026`.
-   - Instance class: `db.m6g.large` hoặc `db.t4g.medium`.
-   - Storage: `100 GiB gp3`, tích chọn **Enable storage autoscaling**.
-   - Virtual private cloud (VPC): `cgv-enterprise-vpc`.
-   - DB subnet group: `cgv-rds-data-subnet-group`.
-   - Public access: **No** (Bắt buộc).
-   - VPC security group: Chọn `cgv-db-sg`.
-   - Additional configuration: Initial database name: `cgv`.
-   - Bấm **Create database** -> Copy **Regional Endpoint**.
+3.1. GIẢI THÍCH QUY ƯỚC PHÂN TẦNG 6 SUBNETS (KIẾN TRÚC 3-TIER ENTERPRISE):
+Khi sử dụng tính năng "VPC and more" ở Bước 1, AWS tự động sinh ra 6 Subnets:
+┌─────────────────────────┬──────────────────────┬───────────────────────────────────────────────────────────────┐
+│ TÊN SUBNET TRÊN AWS     │ DẢI CIDR IP MẠNG     │ QUY ƯỚC VAI TRÒ & NƠI SẼ GÁN TÀI NGUYÊN                       │
+├─────────────────────────┼──────────────────────┼───────────────────────────────────────────────────────────────┤
+│ • public1-ap-southeast-1a│ 10.0.0.0/20          │ [WEB / LOAD BALANCER TIER]: Hứng traffic trực tiếp từ khách   │
+│ • public2-ap-southeast-1b│ 10.0.16.0/20         │ hàng trên Internet. Gán vào: Application Load Balancer (ALB).  │
+├─────────────────────────┼──────────────────────┼───────────────────────────────────────────────────────────────┤
+│ • private1-ap-southeast-1a 10.0.128.0/20        │ [APPLICATION TIER]: Chạy các container Backend và API Gateway. │
+│ • private2-ap-southeast-1b 10.0.144.0/20        │ Sẽ gán vào: Máy chủ EC2 chạy Docker (Kong + Microservices).   │
+├─────────────────────────┼──────────────────────┼───────────────────────────────────────────────────────────────┤
+│ • private3-ap-southeast-1a 10.0.160.0/20        │ [DATABASE / DATA TIER]: Cô lập dữ liệu, bảo mật tối đa.       │
+│ • private4-ap-southeast-1b 10.0.176.0/20        │ Đang gán vào: RDS PostgreSQL Multi-AZ, Kafka MSK, Redis.      │
+└─────────────────────────┴──────────────────────┴───────────────────────────────────────────────────────────────┘
 
-3.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ RDS MULTI-AZ:
+💡 CÂU HỎI KỸ THUẬT: "ĐÂY LÀ QUY ƯỚC HAY AWS TỰ GÁN? CÓ THIẾT LẬP NÀO GÁN PRIVATE 1 & 2 CHO APP CHƯA?"
+1. Bản chất: Đây là QUY ƯỚC KIẾN TRÚC (Architectural Convention) chuẩn quốc tế. Bản thân AWS không tự ép subnet nào phải chạy App hay DB, mà do Kỹ sư Cloud phân bổ và gán vai trò khi tạo từng tài nguyên.
+2. Thứ tự thiết lập thực tế trong dự án:
+   - Bước 1 (Tạo VPC): Chỉ mới "chia lô đất trống" thành 6 Subnets, chưa cắm bất kỳ máy chủ nào vào.
+   - Bước 2 (Security Groups): Chỉ mới tạo các "thẻ bài tường lửa", chưa áp vào máy chủ nào.
+   - Bước 3 (NGAY LÚC NÀY - RDS): Đây là bước ĐẦU TIÊN bắt đầu phân đất! Ta tạo "DB Subnet Group" và chọn `private3` & `private4` để ra lệnh cho RDS: Toàn bộ máy chủ Database chỉ được phép nằm ở 2 subnet này.
+   - Bước 4 (Tạo EC2 Backend): Khi bấm tạo EC2, AWS sẽ hỏi "Đặt EC2 ở Subnet nào?", ta sẽ CHỦ ĐỘNG chọn `private1` và `private2`.
+   - Bước ALB (Load Balancer): AWS hỏi "ALB đón khách đặt ở đâu?", ta sẽ CHỦ ĐỘNG chọn `public1` và `public2`.
+3. Vì sao tách biệt App (`private1, 2`) và Data (`private3, 4`)?
+   - Phòng thủ chiều sâu (Defense-in-Depth): Giả sử 1 container web bị hacker chiếm quyền, hacker không thể quét trực tiếp mạng LAN của Database vì 2 tầng nằm ở 2 dải IP khác nhau.
+   - Quản lý Route Table độc lập: App cần ra Internet qua NAT Gateway để gọi VNPay/MoMo/gửi mail vé, trong khi Database tuyệt đối CẤM ra ngoài Internet.
+
+3.2. Thao tác trên AWS Console:
+1. Vào **RDS** -> **Subnet groups** -> **Create DB Subnet Group**:
+   - **Name**: `cgv-rds-data-subnet-group`
+   - **Description**: `Private database subnet group for CGV enterprise system`
+   - **VPC**: Chọn `cgv-enterprise-vpc-vpc`
+   - **Availability Zones**: Chọn `ap-southeast-1a` và `ap-southeast-1b`
+   - **Subnets**: Tích chọn đúng 2 Subnet Private Data sau:
+     + Tại `ap-southeast-1a`: Chọn `cgv-enterprise-vpc-subnet-private3-ap-southeast-1a` (`10.0.160.0/20`)
+     + Tại `ap-southeast-1b`: Chọn `cgv-enterprise-vpc-subnet-private4-ap-southeast-1b` (`10.0.176.0/20`)
+   - Bấm **Create**.
+
+2. Vào **Databases** -> **Create database**:
+   - Database creation method: **Full configuration** (hoặc Standard create) — *TUYỆT ĐỐI KHÔNG chọn Easy create vì nó sẽ tự động tống vào Default VPC*.
+   - Engine type: **PostgreSQL** (Version `16.x`)
+   - Templates:
+     + Chọn **Production** nếu muốn cấu hình Multi-AZ đầy đủ tính năng cao cấp.
+     + Chọn **Free tier** nếu tài khoản của bạn đang dùng gói Free Tier tiết kiệm tối đa.
+   - Availability and durability (Deployment options):
+     + **Multi-AZ DB Instance / Cluster**: Dành cho môi trường doanh nghiệp có trả phí (tính sẵn sàng 99.99%).
+     + **Single DB instance**: Tối ưu cho Free Tier (miễn phí 750 giờ/tháng).
+   - DB instance identifier: `cgv-db-enterprise`
+   - Master username: `postgres`
+   - Credentials management: `Self managed`
+   - Master password & Confirm: `CgvEnterpriseP@ss2026` (hoặc mật khẩu mạnh của bạn).
+   - Additional credentials settings: Giữ nguyên `Password authentication`.
+   - Instance configuration (DB instance class):
+     + Gói Free Tier: Chọn **`db.t4g.micro`** (chip Graviton thế hệ mới) hoặc `db.t3.micro` (0đ chi phí).
+     + Gói Doanh nghiệp lớn: Chọn `db.m6g.large` hoặc `db.t4g.medium`.
+   - Storage:
+     + Gói Free Tier: `20 GiB gp3` (nằm trong hạn mức miễn phí của AWS).
+     + Gói Doanh nghiệp: `100 GiB gp3`, tích chọn **Enable storage autoscaling**.
+   - Connectivity (Kết nối mạng — Cực kỳ quan trọng):
+     + Virtual private cloud (VPC): Chọn đúng `cgv-enterprise-vpc-vpc`.
+     + DB subnet group: Chọn `cgv-rds-data-subnet-group` vừa tạo.
+     + Public access: Chọn **No** (Khóa cứng cơ sở dữ liệu trong mạng kín an toàn 100%).
+     + VPC security group: Chọn `Choose existing` -> Chọn `cgv-db-sg` (xóa group `default`).
+   - Additional configuration:
+     + Initial database name: Gõ chữ **`cgv`** (để PostgreSQL tự sinh DB tên `cgv` cho Backend).
+     + Enable deletion protection: Để **Unchecked** (không tích) ở môi trường Test/Dev để thuận tiện dọn dẹp lab sau này.
+   - Bấm **Create database** -> Đợi chuyển sang trạng thái `Available` (mất khoảng 5-7 phút) -> Copy **Endpoint**.
+
+3.3. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ RDS (FREE TIER & ENTERPRISE):
 ┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
 │ THÔNG SỐ RDS           │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
 │ PostgreSQL Version     │ 16.x                 │ • Bản ổn định mới nhất, cải thiện 30% tốc độ truy vấn JSONB, tối ưu    │
 │                        │                      │   VACUUM dọn dẹp bảng và hỗ trợ chuẩn Logical Decoding cho Debezium.  │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Deployment Options     │ Multi-AZ Cluster     │ • Nhân bản đồng bộ (Synchronous Replication) sang node Standby ở AZ-b. │
-│                        │ (hoặc Instance)      │ • Khi Data Center A sập, AWS tự động chuyển Endpoint sang AZ-b trong   │
-│                        │                      │   vòng < 60 giây (RTO < 60s, RPO = 0: Không mất 1 bản ghi vé nào).     │
+│ Deployment Options     │ Single DB instance   │ • Miễn phí 750 giờ/tháng theo AWS Free Tier. Vẫn chạy đầy đủ tính năng │
+│                        │ (hoặc Multi-AZ)      │   chuẩn, nằm trọn trong Private Subnet và VPC bảo mật như Enterprise. │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Instance Class         │ db.m6g.large         │ • Chip Graviton 3 (ARM) do AWS tự sản xuất, hiệu năng cao hơn 20%      │
-│                        │                      │   và tiết kiệm 20% chi phí so với chip Intel x86 truyền thống.         │
+│ Instance Class         │ db.t4g.micro         │ • Dùng chip AWS Graviton thế hệ mới (ARM), vừa thuộc Free Tier vừa cho │
+│                        │                      │   tốc độ xử lý cao hơn 20% so với chip Intel t3 cũ.                    │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Storage gp3 &          │ 100 GiB gp3          │ • Cung cấp sẵn 3,000 IOPS và 125 MB/s băng thông độc lập dung lượng.   │
-│ Autoscaling            │ Autoscaling Enabled  │ • Autoscaling tự phình to khi rạp chiếu có hàng triệu đơn đặt vé,      │
-│                        │                      │   tránh thảm họa đầy ổ cứng làm sập database trong giờ cao điểm.       │
+│ Storage gp3            │ 20 GiB gp3           │ • Vừa vặn 100% trong hạn mức miễn phí 20GB SSD của AWS Free Tier.      │
+│                        │                      │   Cung cấp sẵn 3,000 IOPS cơ bản xử lý hàng ngàn query/giây.           │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Public Access          │ No                   │ • Khóa cứng DB trong mạng kín. Chỉ cho phép các ứng dụng trong VPC     │
-│                        │                      │   truy cập. Hacker không có cách nào chọc trực tiếp vào cơ sở dữ liệu. │
+│ Public Access = No     │ No                   │ • Khóa cứng DB trong mạng kín. Hacker toàn cầu không thể scan thấy IP  │
+│                        │                      │   hay cổng 5432. Truy cập quản trị an toàn qua SSH Tunnel của DBeaver. │
 └────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
 
+3.4. HƯỚNG DẪN KẾT NỐI DBEAVER VÀO DATABASE RDS PRIVATE (CHUẨN SSH TUNNEL):
+Khi Database để Public access: No, DBeaver trên máy tính của bạn vẫn kết nối xem và sửa dữ liệu dễ dàng thông qua máy chủ EC2 (đóng vai trò Bastion/Jump Host trung gian):
+
+• Sơ đồ kết nối:
+  [Máy tính bạn / DBeaver] --- (SSH mã hóa cổng 22) ---> [EC2 Backend] --- (Nội bộ cổng 5432) ---> [RDS PostgreSQL]
+
+• Các bước thiết lập trong DBeaver:
+1. Mở DBeaver trên máy tính -> Bấm tạo kết nối mới (New Database Connection) -> Chọn PostgreSQL.
+2. Tab Main:
+   - Host: Dán dòng Endpoint của RDS (ví dụ: cgv-db-enterprise.xxxx.ap-southeast-1.rds.amazonaws.com).
+   - Port: 5432.
+   - Database: cgv.
+   - Username: postgres.
+   - Password: <Mật khẩu bạn đã đặt lúc tạo RDS>.
+3. Chuyển sang tab SSH:
+   - Tích chọn ô: Use SSH Tunnel.
+   - Host/IP: Điền Public IP của máy chủ EC2 Backend (sẽ có sau Bước 4).
+   - Port: 22.
+   - User name: ubuntu (hoặc ec2-user).
+   - Authentication Method: Chọn Public Key -> Trỏ đường dẫn tới file khóa cgv-key.pem tải từ AWS.
+4. Bấm Test Connection -> Hiện thông báo màu xanh Connected -> Bấm Finish để bắt đầu truy vấn trực tiếp!
+
 --------------------------------------------------------------------------------
-BƯỚC 4: TẠO AMAZON MSK (MANAGED STREAMING FOR APACHE KAFKA)
+BƯỚC 4: KAFKA CLUSTER (FREE TIER: DOCKER TRÊN EC2 | ENTERPRISE: AMAZON MSK)
 --------------------------------------------------------------------------------
-4.1. Thao tác trên AWS Console:
+⚠️ LƯU Ý SỐNG CÒN VỀ CHI PHÍ (FINOPS / FREE TIER):
+• Amazon MSK (Managed Streaming for Apache Kafka) HOÀN TOÀN KHÔNG CÓ TRONG GÓI FREE TIER.
+  Nếu tạo cụm MSK trên AWS Console, bạn sẽ bị tính phí tối thiểu ~0.042$/giờ x 2 broker x 720h + phí lưu trữ EBS = ~50$ - 70$/tháng (trừ trực tiếp vào thẻ visa).
+• VÌ VẬY: ĐỐI VỚI TÀI KHOẢN FREE TIER, CHÚNG TA KHÓA / COMMENT LẠI THAO TÁC TẠO MSK TRÊN CONSOLE (BỎ QUA KHÔNG TẠO TRÊN WEB).
+• PHƯƠNG ÁN THỰC THI (0 ĐỒNG): Cụm Kafka Cluster 2 Broker (chế độ KRaft siêu nhẹ, bỏ hoàn toàn Zookeeper) đã được tích hợp sẵn trong file docker-compose-prod.yml.
+  Khi khởi động máy chủ EC2 ở Bước 6, Kafka sẽ tự động chạy dưới dạng Docker Container trong cùng mạng nội bộ VPC, kết nối trực tiếp với backend qua cổng 9092 & 9094 mà KHÔNG TỐN MỘT ĐỒNG NÀO!
+
+================================================================================
+[KHÓA / COMMENT] MỤC THAM KHẢO DÀNH CHO DOANH NGHIỆP TRẢ PHÍ (ENTERPRISE PAID OPTION)
+(Bỏ qua bước này nếu bạn đang dùng tài khoản Free Tier)
+================================================================================
+/*
+4.1. Thao tác trên AWS Console (Chỉ làm khi tài khoản có ngân sách Enterprise):
 1. Vào **Amazon MSK** -> Bấm **Create cluster**:
    - Cluster name: `cgv-msk-enterprise`.
    - Cluster type: **Provisioned**.
    - Apache Kafka version: Phiên bản 3.5.x trở lên.
 2. Networking:
-   - VPC: `cgv-enterprise-vpc`.
-   - Subnets: Chọn 2 Private Data Subnets (`10.0.20.0/24` và `10.0.21.0/24`).
+   - VPC: `cgv-enterprise-vpc-vpc`.
+   - Subnets: Chọn 2 Private Data Subnets (`cgv-enterprise-vpc-subnet-private3` và `private4`).
    - Security Groups: Chọn `cgv-msk-sg`.
 3. Brokers:
    - Broker type: `kafka.m5.large` (hoặc `kafka.t3.small`).
-   - Number of brokers per zone: `1` (Tổng 2 hoặc 3 brokers).
+   - Number of brokers per zone: `1` (Tổng 2 hoặc 3 brokers trên 2-3 AZs).
 4. Security & Encryption:
    - Encryption: Bật **TLS encryption between brokers** và **TLS encryption in transit**.
-   - Access control: Chọn **SASL/SCRAM** (Lưu thông tin tài khoản trong AWS Secrets Manager) hoặc **Unauthenticated** (nếu chạy hoàn toàn trong mạng Private).
+   - Access control: Chọn **SASL/SCRAM** (Lưu tài khoản trong AWS Secrets Manager) hoặc **Unauthenticated** (trong VPC kín).
 5. Bấm **Create cluster** -> Chờ khoảng 15 phút -> Copy chuỗi **Bootstrap servers (TLS)**.
 
 4.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ AMAZON MSK:
@@ -380,67 +459,335 @@ BƯỚC 4: TẠO AMAZON MSK (MANAGED STREAMING FOR APACHE KAFKA)
 │ SASL/SCRAM Auth        │ Enabled              │ • Cơ chế xác thực mạnh mẽ bằng thuật toán băm Salted Challenge Response│
 │                        │                      │   Password, chống giả mạo danh tính khi gửi thông điệp vào topic.      │
 └────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
-
+*/
 --------------------------------------------------------------------------------
-BƯỚC 5: TẠO AMAZON ELASTICACHE REDIS CLUSTER MULTI-AZ
+BƯỚC 5: TẠO AMAZON ELASTICACHE REDIS (FREE TIER: 1 NODE cache.t3.micro 750H)
 --------------------------------------------------------------------------------
-5.1. Thao tác trên AWS Console:
-1. Vào **ElastiCache** -> **Redis clusters** -> Bấm **Create Redis cluster**:
-   - Deployment option: **Cluster Mode Enabled** (Scale ngang đa Shard).
-   - Cluster name: `cgv-redis-enterprise`.
-   - Multi-AZ: TÍCH CHỌN **Enable Multi-AZ**.
-   - Auto-failover: TÍCH CHỌN **Enable**.
-   - Subnet group: Chọn 2 Private Data Subnets.
-   - Security group: Chọn `cgv-redis-sg`.
-   - Encryption: Bật **Encryption in-transit** và **Encryption at-rest**.
-2. Bấm **Create** -> Copy **Configuration Endpoint**.
+⚠️ LƯU Ý SỐNG CÒN VỀ CHI PHÍ (FINOPS / FREE TIER):
+• Gói AWS Free Tier tặng 750 giờ/tháng cho 1 node `cache.t3.micro` (hoặc `cache.t2.micro`).
+• BẮT BUỘC: Chọn Deployment option là "Node-based cluster", Cluster Mode "Disabled" và Replicas = "0".
+  (TUYỆT ĐỐI KHÔNG chọn "Serverless" vì Serverless tính phí theo data/request; KHÔNG bật Multi-AZ / Replicas vì sẽ chạy từ 2 node trở lên dẫn tới vượt 750h và bị trừ tiền visa!).
 
-5.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ ELASTICACHE REDIS:
+5.1. Thao tác trên giao diện AWS Console (Chuẩn Production & Free Tier):
+
+MÀN HÌNH 1: Cache settings (Cluster info, Node type & VPC Subnets):
+1. **Engine**: Tích chọn **Redis OSS** (tương thích 100% với thư viện `spring-boot-starter-data-redis` và Lettuce driver).
+2. **Deployment option**: Tích chọn **Node-based cluster** (để dùng gói Free Tier 750 giờ/tháng; TUYỆT ĐỐI không chọn Serverless).
+3. **Creation method**: Chọn **`Cluster cache`** (để tự kiểm soát 100% thông số).
+4. **Cluster info**:
+   - **Name**: `cgv-redis`.
+   - **Description**: `CGV Redis In-Memory Cache and Seat Lock`.
+5. **Location & Multi-AZ**:
+   - **Location**: `AWS Cloud`.
+   - **Multi-AZ**: **BỎ TÍCH (Disabled)** (Bắt buộc tắt để không chạy 2 node song song vượt quá 750h Free Tier).
+6. **Cache settings**:
+   - **Engine version**: `7.1` (bản mới nhất, hỗ trợ tốt nhất cho Redis Lua Script).
+   - **Port**: `6379` (cổng Redis tiêu chuẩn).
+   - **Parameter groups**: `default.redis7`.
+   - **Node type**: Chọn **`cache.t4g.micro`** (chip Graviton ARM thế hệ mới, 0.5 GiB RAM - Free Tier eligible).
+   - **Number of replicas**: **ĐIỀN SỐ `0`** (Bắt buộc là 0 để chỉ chạy đúng 1 node duy nhất, 720h/tháng = 0đ).
+7. **Connectivity (Mạng VPC & Subnet)**:
+   - **Network type**: `IPv4`.
+   - **Subnet groups**: Chọn `Create a new subnet group`.
+   - **Name**: `cgv-redis-subnet-group`.
+   - **VPC ID**: **CHỌN ĐÚNG `vpc-05607ed346b92a67f (cgv-enterprise-vpc-vpc)`** (VPC 10.0.0.0/16 của dự án. Tuyệt đối không chọn nhầm Default VPC!).
+   - **Selected subnets**: Bấm nút **`Manage`** -> Sang trang 1 và 2 bỏ tích 4 subnet kia, **chỉ tích chọn đúng 2 Subnet Private Data**:
+     * `cgv-enterprise-vpc-subnet-private3-ap-southeast-1a` (10.0.160.0/20)
+     * `cgv-enterprise-vpc-subnet-private4-ap-southeast-1b` (10.0.176.0/20)
+   - Bấm **Choose** (hiển thị đúng `Subnets (2/6)`).
+   - Bấm **Next**.
+
+MÀN HÌNH 2: Advanced settings (Security, Backup, Maintenance & Logs):
+1. **Security**:
+   - **Encryption at rest**: **Enable** (Default key - mã hóa dữ liệu trên đĩa, miễn phí).
+   - **Encryption in-transit**: **Enable** (Chuẩn Production PCI-DSS: Mã hóa đường truyền mạng TLS giữa Backend và Redis, miễn phí 0đ).
+   - **Access control**: `No access control` (Cách ly bằng mạng riêng và Security Group).
+   - **Selected security groups**: Bấm **`Manage`** -> Tích chọn đúng **`cgv-redis-sg`** (port 6379 mở cho `cgv-app-sg`). Bỏ chọn `default`.
+2. **Backup**:
+   - **Enable automatic backups**: Tích chọn `Enable`.
+   - **Backup retention period**: `1 ngày` (Chuẩn Production Disaster Recovery, snapshot tự động hàng ngày miễn phí với instance nhỏ).
+3. **Maintenance & Logs**:
+   - **Maintenance window**: `No preference`.
+   - **Auto upgrade minor versions**: `Enable` (Tự động cập nhật các bản vá lỗi bảo mật).
+   - **Topic for Amazon SNS**: `Disable notifications` (Không bật SNS để tránh phát sinh chi phí).
+   - **Slow logs & Engine logs**: **BỎ TRỐNG (Unchecked)** (Không bật để tránh bị tính phí đẩy log sang CloudWatch Logs).
+4. Bấm **Next** -> Xem lại trang Review -> Bấm **Create cluster**.
+   - Chờ cụm Redis khởi tạo khoảng 3 - 5 phút chuyển sang trạng thái **Available**.
+   - Copy chuỗi **Primary Endpoint** (VD: `cgv-redis.xxxxxx.0001.apse1.cache.amazonaws.com:6379`) để điền vào cấu hình backend ở Bước 6.
+
+5.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC THÔNG SỐ ELASTICACHE REDIS & LÝ DO THIẾT KẾ:
 ┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
-│ THÔNG SỐ REDIS         │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
+│ THÔNG SỐ THIẾT LẬP     │ GIÁ TRỊ LỰA CHỌN     │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Cluster Mode Enabled   │ Sharding Enabled     │ • Băm nhỏ dữ liệu ra 16,384 Hash Slots. Cho phép scale ngang bộ nhớ    │
-│                        │                      │   và chia tải đọc ghi lên hàng chục node khi có công chiếu phim bom tấn│
+│ Engine                 │ Redis OSS            │ • Tương thích 100% với thư viện `spring-boot-starter-data-redis`       │
+│                        │                      │   và Lettuce driver có sẵn trong mã nguồn Spring Boot của dự án.       │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Multi-AZ Auto-failover │ Enabled              │ • Khi node Redis Master sập, Replica sẽ tự động được đôn lên làm       │
-│                        │                      │   Master trong vòng 5 giây, bảo toàn 100% các phiên khóa ghế (SeatLock)│
+│ Engine Version         │ 7.1                  │ • Phiên bản ổn định cao cấp, hỗ trợ đầy đủ các tập lệnh Lua Script     │
+│                        │                      │   nguyên tử (`redis.call`) mà `SeatLockServiceImpl` dùng để giữ ghế.   │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Encryption in-transit  │ TLS Enabled          │ • Mã hóa đường truyền Redis với Spring Boot Lettuce Client qua cổng 6379│
+│ Deployment Option      │ Node-based cluster   │ • Nằm trong chính sách AWS Free Tier tặng 750 giờ/tháng.               │
+│                        │                      │ • Tránh dùng Serverless vì Serverless tính tiền theo data/request.     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Cluster Mode           │ Disabled             │ • Chạy 1 cụm độc lập, không chia Shard 16,384 Hash Slots. Tránh lỗi   │
+│                        │                      │   `CROSSSLOT` hoặc `MOVED redirection` trên Spring Boot Lettuce client.│
+│                        │                      │ • Đủ sức chịu tải >10,000 request/giây cho toàn bộ luồng demo đồ án.   │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Node Type              │ cache.t4g.micro      │ • Sử dụng chip ARM AWS Graviton thế hệ mới tiết kiệm điện, 0.5 GiB RAM.│
+│                        │                      │ • 500 MB RAM đủ lưu trữ hơn 300,000 khóa ghế và toàn bộ cache phim.   │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Multi-AZ               │ Disabled (Bỏ tích)   │ • KHÔNG bật Multi-AZ để tránh AWS tự nhân đôi số lượng node chạy ngầm. │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Number of Replicas     │ 0 (Bắt buộc là 0)    │ • Đảm bảo chỉ có DUY NHẤT 1 NODE chạy (720h/tháng <= 750h Free Tier).  │
+│                        │                      │ • Nếu để 2 như mặc định thì AWS sẽ bật 3 máy -> Bị trừ tiền vào visa!  │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ VPC ID                 │ cgv-enterprise-vpc   │ • BẮT BUỘC chọn đúng VPC của dự án (10.0.0.0/16). Nếu để Default VPC   │
+│                        │ (vpc-05607ed346b9...)│   thì EC2 Backend sau này không thể kết nối được do khác mạng kín!     │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Subnets                │ private3 & private4  │ • Cache và Database phải nằm ở Subnet Private Data sâu nhất (cô lập), │
+│                        │ (Private Data)       │   không cấp Public IP để chống hacker scan hoặc brute-force cổng 6379. │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Security Group         │ cgv-redis-sg         │ • Chỉ mở port 6379 cho nguồn duy nhất là `cgv-app-sg` (máy chủ backend)│
+│                        │ (Port 6379)          │   truy cập. Mọi IP lạ từ bên ngoài đều bị tường lửa chặn đứng.         │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Encryption in-transit  │ Enabled (Bật TLS)    │ • Chuẩn Production Zero-Trust / PCI-DSS: Mã hóa dữ liệu trên đường     │
+│                        │                      │   truyền nội bộ, hoàn toàn miễn phí 0đ, chống nghe lén gói tin mạng.   │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Automatic Backups      │ Enabled (1 ngày)     │ • Chuẩn Production Disaster Recovery: Snapshot tự động mỗi ngày        │
+│                        │                      │   để phục hồi dữ liệu khi cần, miễn phí với instance dung lượng nhỏ.   │
 └────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
 
---------------------------------------------------------------------------------
-BƯỚC 6: TRIỂN KHAI CỤM MÁY CHỦ APPLICATION (EC2 PRIVATE SUBNET)
---------------------------------------------------------------------------------
-6.1. Thao tác trên AWS Console:
-1. Vào **EC2** -> **Launch instances**:
-   - Name: `cgv-app-node-1` (và tương tự cho `cgv-app-node-2`).
-   - OS: `Ubuntu Server 24.04 LTS`.
-   - Instance type: `t3.medium` hoặc `c6g.large` (2 vCPU, 4-8 GB RAM).
-   - Network settings:
-     * VPC: `cgv-enterprise-vpc`.
-     * Subnet: Chọn **Private App Subnet** (`10.0.10.0/24`).
-     * Auto-assign Public IP: **Disable** (Bắt buộc không cấp IP Public!).
-     * Security group: Chọn `cgv-app-sg`.
-   - Advanced details -> **IAM instance profile**: Chọn Role có gắn policy `AmazonSSMManagedInstanceCore`.
-2. Bấm **Launch instance**.
-3. Kết nối vào máy ảo: Trên trang Instances -> Chọn máy -> Bấm nút **Connect** ở góc trên -> Chọn tab **Session Manager** -> Bấm **Connect** (Mở terminal trực tiếp trên trình duyệt, an toàn tuyệt đối 100% không cần mở port 22!).
+5.3. GIẢI THÍCH MÔ HÌNH MẠNG 3 TẦNG (3-TIER ENTERPRISE NETWORK):
+┌─────────────────────────┬────────────────────────────┬─────────────────────────────────────────────────────────────────┐
+│ TẦNG MẠNG (TIER)        │ DANH SÁCH SUBNETS          │ VAI TRÒ VÀ TÀI NGUYÊN HOẠT ĐỘNG BÊN TRONG                       │
+├─────────────────────────┼────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+│ Tầng 1: Public Subnets  │ public1 (10.0.0.0/20)      │ • Dành cho Internet-facing Application Load Balancer (ALB) và   │
+│                         │ public2 (10.0.16.0/20)     │   NAT Gateway. Là cửa ngõ duy nhất tiếp xúc với Internet.       │
+├─────────────────────────┼────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+│ Tầng 2: Private App     │ private1 (10.0.128.0/20)   │ • Dành riêng cho cụm máy chủ EC2 chạy Backend Microservices     │
+│                         │ private2 (10.0.144.0/20)   │   (Spring Boot, Kong API Gateway). Không có Public IP.          │
+│                         │                            │ • Đi ra ngoài gọi API thanh toán VNPAY/Mail qua NAT Gateway.    │
+├─────────────────────────┼────────────────────────────┼─────────────────────────────────────────────────────────────────┤
+│ Tầng 3: Private Data    │ private3 (10.0.160.0/20)   │ • Dành riêng cho Database (RDS Postgres) và In-Memory Cache     │
+│                         │ private4 (10.0.176.0/20)   │   (ElastiCache Redis). Cách ly tuyệt đối 100% khỏi Internet,    │
+│                         │                            │   chỉ cho phép tầng App (Private 1, 2) truy vấn nội bộ.         │
+└─────────────────────────┴────────────────────────────┴─────────────────────────────────────────────────────────────────┘
+/*
+- Deployment option: Node-based cluster
+- Cluster Mode: Enabled (16,384 Hash Slots chia đều đa shard scale ngang tải)
+- Multi-AZ Auto-failover: Enabled (tự động failover khi master sập trong 5 giây)
+- Node type: cache.r6g.large hoặc cache.m6g.large
+- Replicas per shard: 1 - 2 replicas
+*/
 
-6.2. BẢNG GIẢI THÍCH CHI TIẾT THÔNG SỐ EC2 PRIVATE:
+--------------------------------------------------------------------------------
+BƯỚC 6: TRIỂN KHAI CỤM MÁY CHỦ APPLICATION (EC2 TRONG PRIVATE APP SUBNET)
+--------------------------------------------------------------------------------
+6.1. Chuẩn bị IAM Role cho EC2 (Kết nối qua AWS Systems Manager / SSM):
+1. Thao tác trên AWS Console (như trong ảnh bạn chụp):
+   - **Service or use case**: Giữ nguyên **EC2** (hoặc chọn ô radio đầu tiên: **`(o) EC2 - Allows EC2 instances to call AWS services on your behalf`**).
+   - Bấm nút màu cam **Next** ở góc dưới bên phải.
+2. Thêm quyền (Permissions):
+   - Trong ô tìm kiếm Policy name, gõ: `AmazonSSMManagedInstanceCore`.
+   - Tích chọn vào ô vuông trước policy **`AmazonSSMManagedInstanceCore`** -> Bấm **Next**.
+3. Đặt tên Role:
+   - **Role name**: `cgv-ec2-ssm-role`.
+   - **Description**: `IAM Role cho phép EC2 Private kết nối AWS Systems Manager Session Manager`.
+   - Bấm **Create role**.
+
+6.1.1. BẢNG GIẢI THÍCH VÌ SAO CẦN IAM ROLE & CHI TIẾT CÁC QUYỀN (PERMISSIONS):
+┌──────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ CÂU HỎI KỸ THUẬT                     │ GIẢI THÍCH CHI TIẾT & BẢN CHẤT KIẾN TRÚC DOANH NGHIỆP                   │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 1. Vì sao EC2 lại cần IAM Role?      │ • Mặc định máy ảo EC2 KHÔNG có bất kỳ quyền hạn nào để gọi dịch vụ AWS.│
+│                                      │ • Best Practice: Dùng IAM Role gắn vào EC2 (Instance Profile) để máy ảo │
+│                                      │   tự nhận Temporary Credentials (mã xác thực tạm thời xoay vòng qua     │
+│                                      │   IMDSv2). Triệt tiêu 100% rủi ro bị lộ AWS Access Key/Secret Key.      │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 2. Vì sao cần AWS SSM thay vì SSH?   │ • Máy chủ `cgv-app-node-1` nằm trong Private Subnet (KHÔNG Public IP). │
+│ (AWS Systems Manager Session Manager)│ • Tắt hoàn toàn port 22 (SSH) giúp ngăn chặn 100% hacker scan IP/Brute  │
+│                                      │   Force mật khẩu.                                                       │
+│                                      │ • Tiến trình ngầm `amazon-ssm-agent` trên Ubuntu sẽ tự động kết nối     │
+│                                      │   Outbound qua HTTPS port 443 tới AWS SSM. Khi kỹ sư bấm "Connect", AWS │
+│                                      │   mở terminal trực tiếp trên web cực kỳ an toàn mà không cần mở port 22.│
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 3. Chi tiết các Permission bên trong │ Policy này tuân thủ nguyên tắc Quyền tối thiểu (Least Privilege), gồm: │
+│    AmazonSSMManagedInstanceCore      │ • `ssm:UpdateInstanceInformation`: Báo trạng thái Online cho AWS SSM.   │
+│                                      │ • `ssmmessages:CreateControlChannel` & `CreateDataChannel`: Thiết lập   │
+│                                      │   kênh truyền WebSocket 2 chiều an toàn giữa trình duyệt và terminal EC2│
+│                                      │ • `ec2messages:AcknowledgeMessage` & `GetMessages`: Nhận/gửi lệnh shell.│
+│                                      │ • `ssm:GetDocument`: Đọc kịch bản thực thi lệnh an toàn từ AWS Console. │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 4. So sánh Quản trị IAM vs Khóa .pem │ • Dùng file khóa SSH .pem: Khó quản lý, dễ bị gửi nhầm qua chat/lộ key. │
+│                                      │ • Dùng IAM SSM: Phân quyền theo User đăng nhập, lưu log toàn bộ câu lệnh│
+│                                      │   đã gõ vào AWS CloudTrail để kiểm toán (Audit Trail) chuẩn PCI-DSS.    │
+└──────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+6.2. Khởi chạy máy chủ EC2 (Launch Instance):
+1. Vào **EC2** -> Bấm **Launch instances**:
+   - **Name**: `cgv-app-node-1`.
+   - **Application and OS Images**: Chọn **Ubuntu Server 24.04 LTS** (Free tier eligible).
+   - **Instance type**:
+     * Lựa chọn 1 (Free Tier 100%): `t3.micro` (1 vCPU, 1 GB RAM - miễn phí 750h). Sau khi vào máy ta sẽ tạo 4GB Swap RAM để chạy êm ru toàn bộ microservices.
+     * Lựa chọn 2 (Mượt mà để test tải): `t3.small` (2 GB RAM) hoặc `t3.medium` (4 GB RAM, chi phí rất rẻ ~0.04$/giờ).
+   - **Key pair (login)**: Bấm *Create new key pair* -> Đặt tên `cgv-key` -> Type: `RSA`, Format: `.pem` -> Bấm Create key pair (file .pem tự tải về máy).
+   - **Network settings** (Bấm Edit ở góc phải):
+     * VPC: Chọn đúng **`cgv-enterprise-vpc-vpc`** (10.0.0.0/16).
+     * Subnet: Chọn **`cgv-enterprise-vpc-subnet-private1-ap-southeast-1a`** (10.0.128.0/20 - Private App Tier).
+     * Auto-assign Public IP: Chọn **Disable** (Bắt buộc không cấp IP Public để bảo mật).
+     * Firewall (Security groups): Chọn **Select existing security group** -> Tích chọn đúng **`cgv-app-sg`** (đã tạo ở Bước 2).
+   - **Configure storage**:
+     * Nhập dung lượng: **`30 GiB`** - Loại: **`gp3`** (AWS Free Tier tặng tối đa 30 GiB ổ cứng EBS miễn phí).
+   - **Advanced details** (Cuộn xuống dưới cùng):
+     * **IAM instance profile**: Bấm vào dropdown chọn đúng **`cgv-ec2-ssm-role`** (vừa tạo ở bước 6.1).
+2. Bấm **Launch instance**.
+3. Chờ 1 - 2 phút máy khởi tạo xong -> Vào trang **Instances** -> Tích chọn `cgv-app-node-1` -> Bấm nút **Connect** ở góc trên -> Chọn tab **Session Manager** -> Bấm nút màu cam **Connect**.
+   (Terminal màu đen của Ubuntu sẽ mở ra trực tiếp ngay trên trình duyệt, sẵn sàng cài Docker!).
+
+6.3. BẢNG GIẢI THÍCH CHI TIẾT THÔNG SỐ EC2 PRIVATE:
 ┌────────────────────────┬──────────────────────┬────────────────────────────────────────────────────────────────────────┐
 │ THÔNG SỐ EC2           │ GIÁ TRỊ THIẾT LẬP    │ VÌ SAO CHỌN GIÁ TRỊ NÀY & MỤC ĐÍCH KỸ THUẬT LÀ GÌ?                     │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ Vị trí Subnet          │ Private App Subnet   │ • Máy chủ chứa mã nguồn và xử lý nghiệp vụ thanh toán nằm hoàn toàn    │
-│                        │ (10.0.10.x, 10.0.11.x│   bên trong mạng kín. Mọi kết nối ra ngoài đều qua NAT Gateway.        │
+│ Vị trí Subnet          │ private1             │ • Máy chủ chứa mã nguồn và xử lý nghiệp vụ thanh toán nằm hoàn toàn    │
+│                        │ (10.0.128.0/20)      │   bên trong mạng kín. Mọi kết nối ra ngoài đều qua NAT Gateway.        │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
 │ Auto-assign Public IP  │ Disable              │ • Không cấp IP Public giúp triệt tiêu hoàn toàn khả năng bị rà quét    │
 │                        │                      │   lỗ hổng hay tấn công trực diện từ mạng Internet.                     │
 ├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
-│ IAM Instance Profile   │ SSM Managed Core     │ • Cho phép kỹ sư quản trị remote qua AWS Systems Manager.              │
-│                        │                      │ • Kiểm soát đăng nhập qua quyền IAM và lưu vết log truy cập CloudTrail,│
+│ IAM Instance Profile   │ cgv-ec2-ssm-role     │ • Cho phép kỹ sư quản trị remote qua AWS Systems Manager.              │
+│                        │ (SSM Managed Core)   │ • Kiểm soát đăng nhập qua quyền IAM và lưu vết log truy cập CloudTrail,│
 │                        │                      │   loại bỏ hoàn toàn rủi ro bị mất file khóa SSH .pem.                  │
+├────────────────────────┼──────────────────────┼────────────────────────────────────────────────────────────────────────┤
+│ Storage (Ổ cứng EBS)   │ 30 GiB gp3           │ • Dung lượng tối đa được miễn phí trong AWS Free Tier.                 │
+│                        │                      │ • gp3 cho tốc độ baseline 3000 IOPS và 125 MB/s, đủ để build Docker/K8s│
 └────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
 
---------------------------------------------------------------------------------
+6.4. CHIẾN LƯỢC DEVOPS CHO NODE 2 (TIẾT KIỆM 100% CHI PHÍ & CÔNG SỨC):
+• TẠI SAO CHƯA TẠO NODE 2 LÚC NÀY?:
+  1. Hạn mức Free Tier: Ổ cứng EBS chỉ tặng tối đa 30 GiB. Node 1 đã lấy trọn 30 GiB. Nếu tạo thêm Node 2 (thêm 30 GiB) sẽ vượt hạn mức và bị tính tiền ổ cứng.
+  2. Giờ chạy máy ảo: Free Tier tặng 750 giờ/tháng. Chạy song song 2 máy thì sau 15 ngày sẽ hết sạch giờ miễn phí.
+  3. Tiết kiệm công sức: Cấu hình hoàn chỉnh Node 1 trước. Khi nào cần demo báo cáo hội đồng, ta chỉ cần bấm chuột phải vào Node 1 -> Chọn "Create Image (AMI)" -> Launch ra "cgv-app-node-2" ở Subnet private2 chỉ trong 30 giây mà không cần cài lại từ đầu!
+
+6.5. TRIỂN KHAI KUBERNETES (K8S) TRÊN MÁY CHỦ EC2 (CHUẨN K3S SIÊU NHẸ):
+Sau khi kết nối vào Session Manager của `cgv-app-node-1`, ta thực hiện:
+1. Tạo 4GB Swap RAM (Bắt buộc để K8s và các Pod Java chạy mượt trên t3.micro):
+   sudo fallocate -l 4G /swapfile
+   sudo chmod 600 /swapfile
+   sudo mkswap /swapfile
+   sudo swapon /swapfile
+   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+2. Cài đặt K3s (Kubernetes lightweight được chứng nhận CNCF, tiêu tốn chỉ ~500MB RAM):
+   curl -sfL https://get.k3s.io | sh -
+   mkdir -p ~/.kube
+   sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+   sudo chown $(id -u):$(id -g) ~/.kube/config
+   export KUBECONFIG=~/.kube/config
+
+3. Kiểm tra cụm K8s hoạt động:
+   kubectl get nodes
+
+4. Triển khai toàn bộ hệ thống CGV từ thư mục `k8s/`:
+   kubectl apply -f k8s/00-namespace.yml
+   kubectl apply -f k8s/01-configmap.yml
+   kubectl apply -f k8s/02-secrets.yml
+   kubectl apply -f k8s/kafka/
+   kubectl apply -f k8s/kong/
+   kubectl apply -f k8s/services/identity-service/
+   kubectl apply -f k8s/services/catalog-service/
+   kubectl apply -f k8s/services/booking-service/
+   kubectl apply -f k8s/services/payment-service/
+   kubectl apply -f k8s/services/notification-service/
+   kubectl apply -f k8s/services/marketing-service/
+   kubectl apply -f k8s/services/media-service/
+6.6. TRIỂN KHAI ENTERPRISE AMAZON EKS (ELASTIC KUBERNETES SERVICE AUTO MODE):
+
+6.6.1. TỔNG HỢP 2 IAM ROLES ĐÃ TẠO CHO EKS:
+1. `cgv-eks-auto-cluster-role` (Gắn vào EKS Control Plane với EKS Auto Mode):
+   - Trusted Entity: `eks.amazonaws.com` (với action `sts:AssumeRole` và `sts:TagSession`)
+   - Policies đính kèm (5 policies chuẩn Auto Mode do AWS tự động cấu hình):
+     * `AmazonEKSClusterPolicy`
+     * `AmazonEKSComputePolicy`
+     * `AmazonEKSBlockStoragePolicyV2`
+     * `AmazonEKSLoadBalancingPolicy`
+     * `AmazonEKSNetworkingPolicy`
+2. `cgv-eks-nodegroup-role` (Gắn vào Node IAM Role cho các máy ảo Worker Nodes):
+   - Trusted Entity: `ec2.amazonaws.com`
+   - Policies đính kèm (3 policies):
+     * `AmazonEKSWorkerNodePolicy`
+     * `AmazonEC2ContainerRegistryReadOnly`
+     * `AmazonEKS_CNI_Policy`
+
+6.6.2. BẢNG GIẢI THÍCH CHI TIẾT CÁC POLICY & PERMISSIONS CỦA AMAZON EKS AUTO MODE:
+┌──────────────────────────────────────┬─────────────────────────────────────────────────────────────────────────┐
+│ TÊN POLICY IAM                       │ BẢN CHẤT KỸ THUẬT & VÌ SAO KUBERNETES BẮT BUỘC PHẢI CÓ QUYỀN NÀY?        │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 1. AmazonEKSClusterPolicy            │ • Cấp quyền cho EKS Control Plane (do AWS quản lý) tự động tương tác    │
+│    (Gắn vào Cluster Role)            │   với tài nguyên hạ tầng AWS: tạo ENI, quản lý Security Groups, kết nối.│
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 2. AmazonEKSComputePolicy            │ • ĐẶC TRƯNG AUTO MODE: Cho phép cụm EKS tự động tính toán tài nguyên và │
+│    (Gắn vào Cluster Role)            │   tự khởi chạy/tắt máy ảo EC2 Worker phù hợp theo nhu cầu tải của Pods. │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 3. AmazonEKSBlockStoragePolicyV2     │ • Cho phép cụm EKS tự động tạo, gắn và xóa các ổ đĩa EBS Volumes khi các│
+│    (Gắn vào Cluster Role)            │   Pods yêu cầu Persistent Volume Claim (PVC) lưu trữ dữ liệu bền vững.  │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 4. AmazonEKSLoadBalancingPolicy      │ • Cho phép EKS tự động tạo và điều khiển Application Load Balancer (ALB)│
+│    (Gắn vào Cluster Role)            │   và Network Load Balancer (NLB) ngay khi bạn apply Ingress/Service.    │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 5. AmazonEKSNetworkingPolicy         │ • Quản lý cấu hình mạng phân bổ IP nội bộ tự động cho các Pods trong VPC│
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 6. AmazonEKSWorkerNodePolicy         │ • Cho phép tiến trình `kubelet` trên worker kết nối và xác thực an toàn │
+│    (Gắn vào Node Role)               │   với Kubernetes API Server ở Master Node, báo cáo CPU/RAM và nhận Pod. │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 7. AmazonEC2ContainerRegistryReadOnly│ • Cấp quyền kéo (docker pull) Container Images từ Amazon ECR về chạy,   │
+│    (Gắn vào Node Role)               │   tránh lỗi `ImagePullBackOff` hoặc 401 Unauthorized khi pull ảnh.      │
+├──────────────────────────────────────┼─────────────────────────────────────────────────────────────────────────┤
+│ 8. AmazonEKS_CNI_Policy              │ • Cấp quyền cho AWS VPC CNI Plugin gán trực tiếp địa chỉ IP thật của VPC│
+│    (Gắn vào Node Role)               │   (10.0.x.x) cho từng Pod. Giúp Pod gọi thẳng RDS Postgres và Redis 1ms.│
+└──────────────────────────────────────┴─────────────────────────────────────────────────────────────────────────┘
+
+6.6.3. ĐẶC QUYỀN VƯỢT TRỘI CỦA EKS AUTO MODE:
+• Thông báo trên Console: "EKS will create nodes as needed."
+• Bạn KHÔNG CẦN phải tự tạo Managed Node Group thủ công!
+• Cơ chế Auto Mode tích hợp engine Karpenter thông minh: Khi bạn nạp các file `k8s/` lên (Booking, Payment, Kafka...), EKS sẽ tự động phát hiện các Pod cần bao nhiêu CPU/RAM và tự động bật số lượng máy ảo Worker tương ứng trong Subnet Private App!
+1. Vào **Amazon EKS** -> **Clusters** -> Bấm nút màu cam **Create cluster**:
+   - **Name**: `cgv-eks-cluster`.
+   - **Kubernetes version**: Chọn bản mới nhất ổn định (ví dụ: `1.30` hoặc `1.29`).
+   - **Cluster service role**: Bấm dropdown chọn đúng **`cgv-eks-cluster-role`** (đã tạo ở bước 6.6.1).
+   - Bấm **Next**.
+2. **Specify networking**:
+   - **VPC**: Chọn đúng **`cgv-enterprise-vpc-vpc`** (`vpc-05607ed346b92a67f`).
+   - **Subnets**: Chọn 2 Subnet Private App (`private1` và `private2` trên 2 AZs `1a` và `1b`).
+   - **Cluster endpoint access**: Tích chọn **Public and private** (Chuẩn tốt nhất: Kỹ sư có thể dùng lệnh `kubectl` từ máy tính cá nhân qua mạng Internet được bảo vệ bởi IAM, trong khi các worker node giao tiếp nội bộ trong mạng private).
+   - Bấm **Next**.
+3. **Configure observability (Giảm chi phí)**:
+   - Các mục Control plane logging (API server, Audit, Authenticator...): **Bỏ tích toàn bộ** (để tránh phát sinh phí CloudWatch Logs không cần thiết).
+   - Bấm **Next**.
+4. **Select add-ons**:
+   - AWS tự động tích sẵn các add-on cốt lõi: `Amazon VPC CNI`, `CoreDNS`, `kube-proxy`, `Amazon EKS Pod Identity Agent`. Giữ nguyên mặc định -> Bấm **Next** -> Bấm **Next**.
+5. **Review and create**:
+   - Kiểm tra lại các thông số -> Bấm nút màu cam **Create**.
+   - *(AWS sẽ khởi tạo Control plane trong khoảng 8 - 12 phút. Cụm sẽ chuyển từ trạng thái `Creating` sang `Active`).*
+
+6.6.4. THAO TÁC TẠO MANAGED NODE GROUP (CỤM MÁY CHỦ WORKER CHẠY PODS):
+Sau khi cụm `cgv-eks-cluster` chuyển sang trạng thái **Active**:
+1. Bấm vào tên cụm `cgv-eks-cluster` -> Chọn tab **Compute** -> Bấm **Add node group**:
+   - **Name**: `cgv-managed-nodes`.
+   - **Node IAM Role**: Chọn đúng **`cgv-eks-nodegroup-role`**.
+   - Bấm **Next**.
+2. **Set compute and scaling configuration**:
+   - **AMI type**: `Amazon Linux 2023 (AL2023_x86_64_STANDARD)` hoặc `Ubuntu`.
+   - **Capacity type**: `On-Demand` (hoặc `Spot` để tiết kiệm 70% chi phí).
+   - **Instance types**: Chọn `t3.medium` (2 vCPU, 4GB RAM) để đảm bảo đủ bộ nhớ cho 7 microservices và Kafka.
+   - **Disk size**: `30 GiB`.
+   - **Node group scaling**:
+     * Minimum size: `1`
+     * Maximum size: `3`
+     * Desired size: `2` (hoặc `1` để tiết kiệm chi phí).
+   - Bấm **Next**.
+3. **Specify networking**:
+   - **Subnets**: Chọn 2 Subnet Private App (`private1` và `private2`).
+   - Bấm **Next** -> Bấm **Create**.
+   - Chờ khoảng 3 - 5 phút các máy ảo Worker Nodes sẽ tự động gia nhập cụm và sẵn sàng chạy các file `k8s/`!
 BƯỚC 7: TẠO APPLICATION LOAD BALANCER (ALB) & CHỨNG CHỈ ACM
 --------------------------------------------------------------------------------
 7.1. Thao tác trên AWS Console:
@@ -506,6 +853,179 @@ BƯỚC 8: CẤU HÌNH TƯỜNG LỬA CLOUDFLARE WAF + TÊN MIỀN DOANH NGHIỆ
 └────────────────────────┴──────────────────────┴────────────────────────────────────────────────────────────────────────┘
 
 ================================================================================
+BƯỚC 9: ĐÓNG GÓI DOCKER & ĐẨY LÊN KHO CHỨA AMAZON ECR (ELASTIC CONTAINER REGISTRY)
+================================================================================
+9.1. GIẢI THÍCH BẢN CHẤT LỖI VÀ VÌ SAO PHẢI DÙNG ECR (KHÔNG THỂ DÙNG DOCKER LOCAL):
+
+1. Vì sao có lỗi ImagePullBackOff / ErrImagePull?
+   - Khi K8s chạy các Pod microservice (booking-service, identity-service,...), file deployment.yml
+     ban đầu ghi `image: cgv/booking-service:latest`.
+   - Các Pod chạy trên các máy chủ EC2 tại Singapore (AWS Cloud). Khi chúng tìm kiếm `cgv/*:latest`,
+     mặc định K8s sẽ lên mạng internet công cộng (Docker Hub: docker.io) để tải về.
+   - Do `cgv/*` là code dự án nội bộ của bạn (chỉ nằm trên máy tính cá nhân), Docker Hub không hề có
+     và trả về lỗi: `insufficient_scope: authorization failed / repository does not exist`.
+
+2. Phân biệt Docker Local vs Amazon ECR vs Amazon EKS:
+   - DOCKER LOCAL (Máy tính của bạn / CI Server): Là "Xưởng sản xuất". Nhiệm vụ là đọc mã nguồn Java,
+     thực hiện lệnh `docker build` để đóng gói thành Docker Image.
+   - AMAZON ECR (Elastic Container Registry): Là "Kho tổng lưu trữ trên đám mây". Đây là kho chứa Docker
+     riêng tư, bảo mật 100% của riêng tài khoản AWS của bạn (Account ID: 313078327818).
+     ECR không tự biên dịch code, mà nó chờ bạn hoặc CI/CD `docker push` các image lên đây cất giữ.
+   - AMAZON EKS (Kubernetes Cluster): Là "Nhà máy vận hành". EKS sẽ tự động kéo (pull) các Docker Image
+     từ kho ECR về các máy ảo EC2 để chạy thành các Pods phục vụ người dùng.
+
+3. Các lỗi hạ tầng đã được tự động xử lý thành công:
+   - Lỗi Kong Gateway: Tag cũ ghi `kong:3.4-alpine` (Docker Hub đã bỏ tag alpine cho bản 3.x),
+     đã chuyển thành `kong:3.4` -> Kong Gateway đã chuyển sang trạng thái 1/1 RUNNING (XANH 100%).
+   - Lỗi Kafka Brokers: Kafka KRaft mode yêu cầu RAM khởi tạo LogCleaner tối thiểu 256MB-512MB.
+     Cấu hình cũ để Heap 180MB gây lỗi `OutOfMemoryError: Java heap space`. Đã nâng cấp Heap lên
+     `-Xmx512m -Xms256m` và RAM limit 750Mi -> Cả 3 Broker Kafka (kafka-1, kafka-2, kafka-3)
+     đều đã chuyển sang trạng thái 1/1 RUNNING (XANH 100%).
+
+--------------------------------------------------------------------------------
+9.2. BẢNG DANH MỤC 7 DỊCH VỤ MICROSERVICES CẦN ĐẨY LÊN ECR:
+--------------------------------------------------------------------------------
+AWS Account ID: 313078327818 | Region: ap-southeast-1 (Singapore)
+ECR Registry URI: 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com
+
+┌───┬──────────────────────┬──────┬─────────────────────────────────────────────────────────────────────────────────┐
+│STT│ MICROSERVICE         │ PORT │ TÊN REPOSITORY & ECR FULL IMAGE URI                                             │
+├───┼──────────────────────┼──────┼─────────────────────────────────────────────────────────────────────────────────┤
+│ 1 │ Identity Service     │ 8081 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/identity-service:latest     │
+│ 2 │ Booking Service      │ 8082 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/booking-service:latest      │
+│ 3 │ Catalog Service      │ 8083 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/catalog-service:latest      │
+│ 4 │ Payment Service      │ 8085 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/payment-service:latest      │
+│ 5 │ Notification Service │ 8086 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/notification-service:latest │
+│ 6 │ Marketing Service    │ 8084 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/marketing-service:latest    │
+│ 7 │ Media Service        │ 8087 │ 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/media-service:latest        │
+└───┴──────────────────────┴──────┴─────────────────────────────────────────────────────────────────────────────────┘
+
+--------------------------------------------------------------------------------
+9.3. CÁC LỆNH THỰC THI CHI TIẾT (COPY & CHẠY THEO THỨ TỰ):
+--------------------------------------------------------------------------------
+
+BƯỚC 9.3.1: ĐĂNG NHẬP DOCKER VÀO AMAZON ECR
+```bash
+aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com
+```
+
+BƯỚC 9.3.2: TẠO TẤT CẢ KHO CHỨA (REPOSITORIES) TRÊN AMAZON ECR
+```bash
+aws ecr create-repository --repository-name cgv/identity-service --region ap-southeast-1
+aws ecr create-repository --repository-name cgv/booking-service --region ap-southeast-1
+aws ecr create-repository --repository-name cgv/catalog-service --region ap-southeast-1
+aws ecr create-repository --repository-name cgv/payment-service --region ap-southeast-1
+aws ecr create-repository --repository-name cgv/notification-service --region ap-southeast-1
+aws ecr create-repository --repository-name cgv/marketing-service --region ap-southeast-1
+aws ecr create-repository --repository-name cgv/media-service --region ap-southeast-1
+```
+
+BƯỚC 9.3.3: BUILD, ĐÁNH NHÃN (TAG) VÀ ĐẨY (PUSH) TỪNG SERVICE LÊN ECR
+(Chạy tại thư mục gốc của dự án CGV nơi chứa source code các service):
+
+# 1. Identity Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/identity-service:latest --push identityservice
+
+# 2. Booking Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/booking-service:latest --push bookingservice
+
+# 3. Catalog Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/catalog-service:latest --push catalogservice
+
+# 4. Payment Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/payment-service:latest --push paymentservice
+
+# 5. Notification Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/notification-service:latest --push notificationservice
+
+# 6. Marketing Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/marketing-service:latest --push marketingservice
+
+# 7. Media Service
+docker buildx build --platform linux/amd64 --provenance=false -t 313078327818.dkr.ecr.ap-southeast-1.amazonaws.com/cgv/media-service:latest --push mediaservice
+
+BƯỚC 9.3.4: CẬP NHẬT K8S DEPLOYMENT SANG IMAGE ECR VÀ APPLY LẠI:
+Sau khi các file deployment.yml trong k8s/services/*/deployment.yml được cập nhật image trỏ về ECR:
+```bash
+kubectl apply -f k8s/services/
+kubectl get pods -n cgv-prod -w
+```
+Toàn bộ các Pods sẽ tự động tải image từ ECR và chuyển sang trạng thái Running 1/1!
+
+--------------------------------------------------------------------------------
+BƯỚC 9.3.5: KHỞI TẠO TOÀN BỘ KAFKA TOPICS BẰNG SCRIPT (.SH):
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+Khi các microservices (identity-service, booking-service, notification-service, marketing-service)
+khởi động, các `@KafkaListener` consumer sẽ liên tục gửi request lấy metadata của các topic.
+Nếu các topic chưa tồn tại trên cluster, console log sẽ liên tục spam cảnh báo:
+`WARN: {booking.confirmed=UNKNOWN_TOPIC_OR_PARTITION}`.
+
+THỰC HIỆN (Chạy 1 lệnh duy nhất từ máy Mac qua kỹ thuật Pipe Stdin):
+```bash
+kubectl -n cgv-prod exec -i deploy/kafka-1 -- sh < scripts/init-kafka-topics.sh
+```
+
+Bản chất: Lệnh này truyền trực tiếp toàn bộ nội dung file `scripts/init-kafka-topics.sh` từ máy tính
+của bạn vào thẳng bên trong container Kafka để khởi tạo 12 topics (gồm các topic nghiệp vụ chính
+và các topic Dead Letter Queue - DLT với 3 partitions, replication-factor=3).
+
+LỆNH KIỂM TRA LẠI DANH SÁCH TOPIC SAU KHI TẠO:
+```bash
+kubectl -n cgv-prod exec deploy/kafka-1 -- /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+```
+Kết quả hiển thị đầy đủ:
+- `booking.confirmed`, `booking.confirmed.DLT`
+- `booking.created`, `booking.created.DLT`
+- `booking.cancelled`
+- `payment.completed`, `payment.completed.DLT`
+- `payment.failed`
+- `user.registered`, `user.registered.DLT`
+- `notification.send`, `notification.send.DLT`
+
+--------------------------------------------------------------------------------
+BƯỚC 9.3.6: NẠP MASTER SEED DATA VÀO DATABASE AWS RDS POSTGRESQL:
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+Hibernate JPA tự động sinh 25 bảng (`ddl-auto: update`), nhưng cơ sở dữ liệu ban đầu rỗng.
+Cần nạp toàn bộ danh mục rạp, phòng chiếu, 480 ghế, phim bom tấn, suất chiếu hôm nay, khuyến mãi
+để ứng dụng hoạt động ngay lập tức.
+
+CÁCH THỰC HIỆN TỪ TERMINAL (Dùng pod tạm thời pgclient):
+```bash
+# 1. Bật pod client PostgreSQL tạm thời
+kubectl run pgclient --image=postgres:16-alpine --restart=Never -n cgv-prod -- sleep 3600
+
+# 2. Copy file seed-data.sql từ máy vào pod
+kubectl cp scripts/seed-data.sql cgv-prod/pgclient:/tmp/seed-data.sql
+
+# 3. Thực thi toàn bộ script SQL vào RDS
+kubectl exec -n cgv-prod pgclient -- sh -c "PGPASSWORD=CGVPassword2026 psql -h cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com -U postgres -d cgv -f /tmp/seed-data.sql"
+
+# 4. Xóa pod tạm thời sau khi nạp xong
+kubectl delete pod pgclient -n cgv-prod
+```
+(Hoặc bạn có thể mở DBeaver kết nối qua `localhost:5432` như hướng dẫn ở Chương 10 và chạy file `scripts/seed-data.sql`).
+
+--------------------------------------------------------------------------------
+BƯỚC 9.3.7: CẬP NHẬT KONG GATEWAY ROUTING VÀ GOOGLE OAUTH CHO KEYCLOAK:
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+- Định tuyến `/realms`, `/resources`, `/js` từ Kong Ingress sang Keycloak để tránh lỗi Kong 404 khi người dùng click đăng nhập bằng Google.
+- Cấu hình biến môi trường `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` và `KC_HOSTNAME_PORT: "80"` cho Keycloak.
+
+CÁC LỆNH ÁP DỤNG:
+```bash
+# 1. Áp dụng cấu hình Kong Ingress mới
+kubectl apply -f k8s/kong/kong-configmap.yml
+kubectl -n cgv-prod rollout restart deploy/kong-gateway
+
+# 2. Áp dụng cấu hình Keycloak Pod mới
+kubectl apply -f k8s/keycloak/keycloak.yml
+kubectl -n cgv-prod rollout status deploy/keycloak
+```
+
+================================================================================
 5. TỔNG KẾT VẬN HÀNH & KẾT QUẢ ĐẠT ĐƯỢC
 ================================================================================
 Khi triển khai xong theo đúng bản thiết kế này:
@@ -515,4 +1035,224 @@ Khi triển khai xong theo đúng bản thiết kế này:
   trong vòng dưới 60 giây mà không cần con người can thiệp.
 ✓ Lưu lượng từ khách hàng được tăng tốc qua CDN toàn cầu, bảo vệ bởi tường lửa WAF của Cloudflare.
 ✓ Đạt 100% tiêu chuẩn kiến trúc của các tập đoàn công nghệ lớn trên thế giới!
+================================================================================
+
+================================================================================
+CHƯƠNG 10: HƯỚNG DẪN KẾT NỐI DBEAVER VÀO AMAZON RDS POSTGRESQL
+================================================================================
+Thông tin RDS Database hiện tại:
+- Endpoint: cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com
+- Port: 5432
+- Database Name: cgv
+- Username: postgres
+- Password: CGVPassword2026
+
+--------------------------------------------------------------------------------
+CÁCH 1 (KHUYÊN DÙNG - BẢO MẬT 100% QUA K8S PORT-FORWARD):
+--------------------------------------------------------------------------------
+RDS hiện tại được đặt trong Private Subnet (PubliclyAccessible = false). Bạn không
+cần phải mở cổng RDS ra toàn thế giới để tránh nguy cơ bị hacker rà quét.
+Hệ thống đã triển khai sẵn Pod proxy siêu nhẹ (alpine/socat) trong cụm EKS.
+
+BƯỚC 1: Mở Terminal máy tính của bạn và gõ lệnh sau để mở đường hầm (tunnel):
+```bash
+kubectl port-forward -n cgv-prod deploy/rds-proxy 5432:5432
+```
+(Giữ cửa sổ terminal này chạy ngầm trong lúc bạn dùng DBeaver).
+
+BƯỚC 2: Mở DBeaver trên máy:
+1. Bấm vào biểu tượng 'New Database Connection' (hình phích cắm điện có dấu cộng).
+2. Chọn loại Cơ sở dữ liệu: 'PostgreSQL' -> Bấm 'Next'.
+3. Tại tab 'Main', điền các thông số:
+   • Host: localhost
+   • Port: 5432
+   • Database: cgv
+   • Username: postgres
+   • Password: CGVPassword2026
+4. Bấm 'Test Connection':
+   -> Nhận thông báo: 'Connected' (hiển thị phiên bản PostgreSQL 16.x).
+5. Bấm 'Finish'. Bạn có thể xem và chỉnh sửa toàn bộ 25 bảng và dữ liệu mẫu trực quan!
+
+--------------------------------------------------------------------------------
+CÁCH 2: KẾT NỐI TRỰC TIẾP TỪ INTERNET (THỰC HIỆN TRÊN AWS WEB CONSOLE):
+--------------------------------------------------------------------------------
+Nếu bạn muốn DBeaver kết nối thẳng vào địa chỉ RDS mà không cần chạy lệnh terminal:
+
+BƯỚC 1: Bật Publicly Accessible cho RDS
+1. Đăng nhập AWS Console -> Tìm dịch vụ 'RDS' -> Vào mục 'Databases'.
+2. Click chọn database 'cgv-db-enterprise' -> Bấm nút 'Modify' (góc trên bên phải).
+3. Cuộn xuống phần 'Connectivity':
+   • Chọn 'Publicly accessible': Chuyển từ 'No' thành 'Yes'.
+4. Bấm nút 'Continue' (ở cuối trang) -> Chọn 'Apply immediately' -> Bấm 'Modify DB instance'.
+   (Đợi 2-3 phút cho trạng thái chuyển sang 'Available').
+
+BƯỚC 2: Mở tường lửa (Security Group) cho phép máy bạn truy cập
+1. Tại trang chi tiết database 'cgv-db-enterprise', vào tab 'Connectivity & security'.
+2. Tại mục 'VPC security groups', click vào link Security Group (ví dụ: 'sg-0456e63314521b649').
+3. Chuyển sang tab 'Inbound rules' -> Bấm 'Edit inbound rules'.
+4. Bấm 'Add rule':
+   • Type: Chọn 'PostgreSQL' (Port 5432).
+   • Source: Chọn 'My IP' (AWS sẽ tự động lấy địa chỉ IP mạng nhà bạn hiện tại).
+   • Description: 'Allow my laptop DBeaver access'.
+5. Bấm 'Save rules'.
+
+BƯỚC 3: Cấu hình trên DBeaver
+• Host: cgv-db-enterprise.c1g082ggo02h.ap-southeast-1.rds.amazonaws.com
+• Port: 5432
+• Database: cgv
+• Username: postgres
+• Password: CGVPassword2026
+• Bấm 'Test Connection' -> Thành công.
+
+
+================================================================================
+CHƯƠNG 11: BƯỚC TIẾP THEO: CẤU HÌNH CLOUDFRONT (HTTPS) VÀ AWS WAF
+================================================================================
+TẠI SAO BẮT BUỘC PHẢI LÀM BƯỚC NÀY?
+1. Lỗi Mixed Content: Khi Frontend deploy lên Vercel, Vercel luôn chạy HTTPS (https://...).
+   Nếu gọi backend qua HTTP thô của NLB (http://k8s-cgvprod-kongprox...), trình duyệt Chrome/Safari
+   sẽ CHẶN TOÀN BỘ API vì vi phạm Mixed Content (Failed to fetch)!
+2. Cố định URL: Địa chỉ NLB của AWS rất dài. CloudFront giúp tạo domain HTTPS cố định
+   (https://dXXXXXXXXX.cloudfront.net hoặc domain riêng https://api.yourdomain.com).
+3. Tường lửa AWS WAF: Bảo vệ rạp chiếu phim khỏi bot spam đặt vé ma, quét lỗ hổng SQLi, XSS.
+
+--------------------------------------------------------------------------------
+11.1. CÁC BƯỚC TẠO CLOUDFRONT DISTRIBUTION TRÊN GIAO DIỆN WIZARD MỚI (4 BƯỚC):
+--------------------------------------------------------------------------------
+Vào AWS Web Console -> Tìm kiếm dịch vụ 'CloudFront' -> Bấm nút màu cam 'Create distribution'.
+
+BƯỚC 1: Get started / Distribution details (Chi tiết ban đầu)
+1. Distribution name: Nhập 'cgv-api-cdn'
+2. Distribution type: Giữ nguyên mặc định "Single website configuration".
+3. Route 53 managed domain - optional: ĐỂ TRỐNG (AWS sẽ tự cấp domain HTTPS *.cloudfront.net miễn phí).
+4. Bấm nút màu cam 'Next'.
+
+BƯỚC 2: Specify origin (Cấu hình nguồn Backend Kong NLB)
+1. Origin type: Tích chọn ô "Elastic Load Balancer".
+2. Elastic Load Balancing origin: Dán hoặc chọn đúng DNS của Kong NLB:
+   k8s-cgvprod-kongprox-b0dc6588ff-c408e1f3fa455726.elb.ap-southeast-1.amazonaws.com
+3. Origin path - optional: Để trống.
+4. Settings:
+   • Origin settings: Giữ nguyên "Use recommended origin settings".
+   • Cache settings: Giữ nguyên "Use recommended cache settings tailored to serving Elastic Load Balancing content".
+5. Bấm nút màu cam 'Next'.
+
+BƯỚC 3: Enable security (Tường lửa WAF & Chi phí)
+LƯU Ý CỰC KỲ QUAN TRỌNG VỀ CHI PHÍ:
+• Nếu chọn "Enable security protections": AWS WAF sẽ bật tường lửa chống DDoS Layer 7, SQLi, Rate limit... nhưng AWS CÓ THU PHÍ (ước tính khoảng ~$37.5 / tháng cho WAF).
+• Nếu chọn "Do not enable security protections": Hoàn toàn MIỄN PHÍ ($0) trong gói AWS Free Tier. CloudFront vẫn cấp HTTPS cực kỳ an toàn, giải quyết 100% lỗi Mixed Content.
+👉 KHUYẾN NGHỊ:
+Tích chọn ô bên phải: "Do not enable security protections" (để không phát sinh chi phí). Sau này khi có nhu cầu lên Production thực thụ, bạn có thể bấm bật WAF bất kỳ lúc nào.
+Bấm nút màu cam 'Next'.
+
+BƯỚC 4: Review and create (Kiểm tra và Khởi tạo)
+1. Kiểm tra lại thông tin tổng thể.
+2. Bấm nút màu cam 'Create distribution'.
+3. Đợi khoảng 2 - 3 phút, CloudFront chuyển sang trạng thái 'Enabled' và cấp domain HTTPS:
+   https://d2z63drupmmdh8.cloudfront.net
+
+⚠️ LƯU Ý KỸ THUẬT QUAN TRỌNG VỀ GIAO THỨC ORIGIN & CORS (BẮT BUỘC ĐỂ TRÁNH LỖI 504 VÀ CORS):
+1. Đổi Origin Protocol sang HTTP cổng 80:
+   • Vào CloudFront Distribution `d2z63drupmmdh8.cloudfront.net` -> Tab 'Origins'.
+   • Chọn Origin NLB -> Bấm 'Edit' -> Mục 'Protocol': Chọn 'HTTP only' (Cổng 80) -> Bấm 'Save changes'.
+2. Cấu hình Tab 'Behaviors' (Để thông suốt CORS và Method OPTIONS cho Frontend Vercel):
+   • Vào Tab 'Behaviors' -> Chọn dòng 'Default (*)' -> Bấm 'Edit'.
+   • Allowed HTTP methods: Chọn 'GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE'.
+   • Cache key and origin requests:
+     - Chọn 'Cache policy and origin request policy (recommended)'
+     - Cache policy: Chọn 'CachingDisabled' (Để dữ liệu vé, phim luôn realtime, không bị dính cache cũ).
+     - Origin request policy: Chọn 'AllViewerExceptHostHeader' (Hoặc 'AllViewerAndCloudFrontHeaders-2022-06' để chuyển tiếp đầy đủ Header CORS `Origin`, `Access-Control-*`, `Authorization`).
+   • Bấm 'Save changes'. Khi đó CloudFront và Vercel sẽ hoạt động hoàn hảo 100%!
+
+--------------------------------------------------------------------------------
+11.2. CẬP NHẬT DOMAIN CLOUDFRONT LÊN VERCEL VÀ GOOGLE CLOUD:
+--------------------------------------------------------------------------------
+Domain CloudFront chính thức: https://d2z63drupmmdh8.cloudfront.net
+1. Trên Vercel Dashboard:
+   • Vào Project 'cgvfeuser' -> 'Settings' -> 'Environment Variables'.
+   • Sửa hoặc thêm biến:
+     VITE_API_GATEWAY_URL = https://d2z63drupmmdh8.cloudfront.net
+     VITE_KEYCLOAK_URL    = https://d2z63drupmmdh8.cloudfront.net
+   • Vào tab 'Deployments' -> Bấm dấu 3 chấm ở bản deploy mới nhất -> Chọn 'Redeploy'.
+2. Thêm Redirect URI vào Google Cloud Console:
+   • Thêm URL: https://d2z63drupmmdh8.cloudfront.net/realms/cgv-realm/broker/google/endpoint
+   • Bấm 'Save' để đăng nhập Google OAuth qua HTTPS hoạt động trơn tru!
+
+
+================================================================================
+CHƯƠNG 12: HƯỚNG DẪN DEPLOY TOÀN DIỆN FRONTEND LÊN VERCEL
+================================================================================
+Hệ thống CGV gồm 2 giao diện người dùng:
+1. CGV-FE-USER: Web đặt vé dành cho khách hàng.
+2. CGV-FE-ADMIN: Dashboard quản trị dành cho SuperAdmin / Cinema Manager.
+
+Cả 2 dự án đã được tự động bổ sung file 'vercel.json' để xử lý Single Page Application (SPA),
+đảm bảo khi khách hàng F5 (Refresh) trang web tại các route như /movies/..., /cinemas không bị lỗi 404.
+
+--------------------------------------------------------------------------------
+12.1. CÁC BƯỚC DEPLOY CGV-FE-USER LÊN VERCEL:
+--------------------------------------------------------------------------------
+1. Truy cập https://vercel.com và đăng nhập bằng tài khoản GitHub của bạn.
+2. Bấm nút 'Add New...' -> Chọn 'Project'.
+3. Chọn Git Repository chứa dự án CGV của bạn -> Bấm 'Import'.
+4. Tại màn hình 'Configure Project':
+   • Project Name: 'cgv-cinema-fe'
+   • Framework Preset: Chọn 'Vite'
+   • Root Directory: Bấm 'Edit' -> Chọn thư mục 'CGV-FE-USER' -> Bấm 'Continue'.
+   • Build and Output Settings: Giữ mặc định (Build: `npm run build`, Output: `dist`).
+5. Mục 'Environment Variables' (CỰC KỲ QUAN TRỌNG - THÊM CÁC BIẾN SAU):
+   ┌────────────────────────┬──────────────────────────────────────────────────────────────────┐
+   │ TÊN BIẾN (KEY)         │ GIÁ TRỊ (VALUE)                                                  │
+   ├────────────────────────┼──────────────────────────────────────────────────────────────────┤
+   │ VITE_API_GATEWAY_URL   │ https://<domain-cloudfront-hoac-kong>                           │
+   │ VITE_KEYCLOAK_URL      │ https://<domain-cloudfront-hoac-kong>                           │
+   │ VITE_KEYCLOAK_REALM    │ cgv-realm                                                        │
+   │ VITE_KEYCLOAK_CLIENT_ID│ CGV_App                                                          │
+   └────────────────────────┴──────────────────────────────────────────────────────────────────┘
+6. Bấm nút 'Deploy'. Vercel sẽ tự động build và cấp phát tên miền miễn phí (ví dụ: https://cgv-cinema-fe.vercel.app).
+
+--------------------------------------------------------------------------------
+12.2. CÁC BƯỚC DEPLOY CGV-FE-ADMIN LÊN VERCEL:
+--------------------------------------------------------------------------------
+1. Trên Vercel Dashboard, tiếp tục bấm 'Add New...' -> 'Project'.
+2. Chọn cùng Git Repository -> Bấm 'Import'.
+3. Tại cấu hình:
+   • Project Name: 'cgv-admin-dashboard'
+   • Root Directory: Bấm 'Edit' -> Chọn thư mục 'CGV-FE-ADMIN'.
+4. Environment Variables:
+   • VITE_API_GATEWAY_URL = https://<domain-cloudfront-hoac-kong>
+5. Bấm nút 'Deploy'. Dashboard quản trị viên sẽ online toàn cầu!
+
+
+================================================================================
+CHƯƠNG 13: QUẢN LÝ DATABASE MIGRATION & SEED DATA TỪNG SERVICE BẰNG FLYWAY
+================================================================================
+Toàn bộ mã nguồn đã được tách biệt theo đúng nguyên lý Microservices Database-per-Service.
+Mỗi service độc lập sở hữu schema và seed data riêng tại 'src/main/resources/db/migration/':
+
+1. identityservice:
+   • V1__init_schema.sql: Tạo bảng membership_tiers, users, user_connected_accounts.
+   • V2__seed_data.sql: Nạp 4 hạng thành viên và các tài khoản quản trị/test với Keycloak UUID chuẩn.
+
+2. catalogservice:
+   • V1__init_schema.sql: Tạo bảng regions, cinemas, cinema_amenities, rooms, seat_types, seats, genres, movies, movie_genres, movie_casts, showtimes, articles, events.
+   • V2__seed_data.sql: Nạp 5 khu vực, 6 cụm rạp CGV, 6 phòng chiếu, 480 ghế ngồi, 5 phim bom tấn, 10 suất chiếu hôm nay/ngày mai, 2 bài viết review.
+
+3. marketingservice:
+   • V1__init_schema.sql: Tạo bảng promotions, promotion_usages.
+   • V2__seed_data.sql: Nạp 4 mã ưu đãi (CGVWELCOME, CGVIP50K, MEGASALE, CGVPLATINUM).
+
+4. bookingservice:
+   • V1__init_schema.sql: Tạo bảng bookings, booking_seats, seat_locks, outbox_booking_events.
+   • V2__seed_data.sql: Nạp các đơn đặt vé mẫu và liên kết ghế ngồi.
+
+5. paymentservice:
+   • V1__init_schema.sql: Tạo bảng payments, payment_logs, outbox_payment_events.
+   • V2__seed_data.sql: Nạp giao dịch thanh toán VNPAY mẫu.
+
+KHI NÀO CẦN BẬT FLYWAY?
+• Môi trường Local / Dev: Đặt 'spring.flyway.enabled: true' để mỗi khi khởi động service,
+  Flyway sẽ tự động chạy migration tạo bảng và nạp dữ liệu mẫu cho service đó mà không cần can thiệp tay.
+• Môi trường Production: Khi cần cập nhật thêm cột hoặc bảng mới, chỉ cần thêm file V3__ten_thay_doi.sql
+  vào thư mục db/migration của service đó, Flyway sẽ tự động đồng bộ mà không làm mất dữ liệu cũ.
 ================================================================================

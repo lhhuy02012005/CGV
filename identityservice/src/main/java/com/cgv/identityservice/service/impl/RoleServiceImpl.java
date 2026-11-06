@@ -5,7 +5,7 @@ import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.identityservice.dto.request.RoleRepresentation;
 import com.cgv.identityservice.repository.httpclient.KeycloakClient;
 import com.cgv.identityservice.service.RoleService;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import feign.FeignException;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -116,7 +116,7 @@ public class RoleServiceImpl implements RoleService {
             log.info("Đã xoá thành công Role: {}", roleName);
         }catch (Exception e){
             log.error(e.getMessage());
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể tạo được vai trò !");
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể xóa được vai trò !");
         }
     }
 

@@ -47,8 +47,11 @@ build/
 # SECRETS & ENV — KHÔNG BAO GIỜ COMMIT
 # ==========================================
 .env
+.env.demo
 .env.local
 .env.*.local
+rootkey.csv
+k8s/02-secrets.yml
 *.key
 *.crt
 *.pem
@@ -96,3 +99,7 @@ node_modules/
 **/node_modules/
 k6/*.html
 
+
+# Python script cache
+__pycache__/
+*.py[cod]
