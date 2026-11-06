@@ -4,6 +4,7 @@ import com.cgv.mediaservice.service.MediaService;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -17,6 +18,7 @@ import java.net.URL;
 import java.time.Duration;
 
 @Service
+@ConditionalOnProperty(prefix = "aws.s3", name = "enabled", havingValue = "true")
 public class S3MediaServiceImpl implements MediaService {
     private final S3Presigner s3Presigner;
     private final String bucketName;

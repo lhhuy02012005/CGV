@@ -28,7 +28,7 @@ public class OpenApiConfig {
                 .info(new Info()
                         .title("CGV Media Service API")
                         .version("1.0.0")
-                        .description("Tài liệu API upload và quản lý media (ảnh poster, banner, trailer video) lưu trữ trên AWS S3.")
+                        .description("API ký upload poster Cloudinary; endpoint S3 presigned URL vẫn được giữ.")
                         .contact(new Contact()
                                 .name("CGV Tech Team")
                                 .email("dev@cgv.vn"))
