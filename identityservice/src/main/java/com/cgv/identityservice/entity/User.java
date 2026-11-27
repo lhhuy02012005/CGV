@@ -34,6 +34,15 @@ public class User extends BaseEntity {
     @Column(name = "phone", length = 20)
     String phone;
 
+    @Column(name = "birth_date")
+    java.time.LocalDate birthDate;
+
+    @Column(name = "gender", length = 10)
+    String gender;
+
+    @Column(name = "address", length = 255)
+    String address;
+
     @Builder.Default
     @Column(nullable = false)
     String status = "ACTIVE";

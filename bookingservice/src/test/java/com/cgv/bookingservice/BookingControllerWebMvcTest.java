@@ -92,7 +92,7 @@ class BookingControllerWebMvcTest {
         when(jwtDecoder.decode("staff-token")).thenReturn(org.springframework.security.oauth2.jwt.Jwt.withTokenValue("staff-token")
                 .header("alg","RS256").subject("staff").claim("realm_access",java.util.Map.of("roles",java.util.List.of("TICKET_STAFF"))).build());
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/bookings/admin/search").header("Authorization","Bearer staff-token"))
-                .andExpect(status().isOk()); verify(service).adminSearchBookings(any(),any());
+                .andExpect(status().isOk()); verify(service).adminSearchBookings(any(),any(),any());
     }
 
 }

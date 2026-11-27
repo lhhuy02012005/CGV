@@ -21,6 +21,9 @@ public class UserResponse {
     String email;
     String fullName;
     String phone;
+    java.time.LocalDate birthDate;
+    String gender;
+    String address;
     MemberShipTierResponse membershipTier;
     BigDecimal total_spend_ytd;
     String status;

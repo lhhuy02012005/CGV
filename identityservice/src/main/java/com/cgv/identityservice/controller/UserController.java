@@ -103,6 +103,18 @@ public class UserController {
                 .build();
     }
 
+    @PutMapping("/me/password")
+    public ApiResponse<Void> changeMyPassword(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody @Valid com.cgv.identityservice.dto.request.ChangePasswordRequest request
+    ) {
+        userService.changePassword(getUserId(jwt), request);
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Đổi mật khẩu thành công")
+                .build();
+    }
+
     @PutMapping("/me")
     public ApiResponse<UserResponse> updateMyProfile(
             @AuthenticationPrincipal Jwt jwt,

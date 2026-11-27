@@ -40,6 +40,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/bookings/seat-locks/{showtimeId}", "/bookings/seat-locks/booked/{showtimeId}").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/bookings/guest-lookup").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .anyRequest().authenticated()
                 )

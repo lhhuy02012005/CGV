@@ -37,6 +37,13 @@ public class MovieDocument {
     @Field(type = FieldType.Text, analyzer = "vietnamese_search_analyzer")
     private String director;
 
+    // Tên diễn viên để tìm phim theo diễn viên (1.2.2)
+    @Field(type = FieldType.Text, analyzer = "vietnamese_search_analyzer")
+    private List<String> casts;
+
+    @Field(type = FieldType.Keyword)
+    private String country;
+
     @Field(type = FieldType.Keyword)
     private String ageRating;
 

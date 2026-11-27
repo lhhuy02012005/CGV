@@ -52,6 +52,15 @@ public class BookingPaymentAccess {
         return new Access(owner, deadline);
     }
 
+    /** Trạng thái hiện tại của đơn (bảng bookings dùng chung database). */
+    public String bookingStatus(UUID bookingId) {
+        try {
+            return jdbc.queryForObject("SELECT status FROM bookings WHERE id = ?", String.class, bookingId);
+        } catch (EmptyResultDataAccessException exception) {
+            throw new BusinessException(ErrorCode.NOT_EXISTED, "Không tìm thấy đơn vé");
+        }
+    }
+
     public boolean lockAndCheckBooking(UUID bookingId, BigDecimal amount) {
         try {
             return Boolean.TRUE.equals(jdbc.queryForObject(

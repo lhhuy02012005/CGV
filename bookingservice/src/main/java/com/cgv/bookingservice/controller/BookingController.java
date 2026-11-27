@@ -2,6 +2,7 @@ package com.cgv.bookingservice.controller;
 
 import com.cgv.bookingservice.dto.request.BookingCreateRequest;
 import com.cgv.bookingservice.dto.request.BookingFilterRequest;
+import com.cgv.bookingservice.dto.request.GuestBookingLookupRequest;
 import com.cgv.bookingservice.dto.response.BookingResponse;
 import com.cgv.bookingservice.dto.response.DashboardStatisticsResponse;
 import com.cgv.bookingservice.service.BookingService;
@@ -67,6 +68,30 @@ public class BookingController {
                 .build();
     }
 
+    @PostMapping("/guest-lookup")
+    public ApiResponse<List<BookingResponse>> guestLookup(
+            @Valid @RequestBody GuestBookingLookupRequest request
+    ) {
+        boolean hasEmail = request.getEmail() != null && !request.getEmail().isBlank();
+        boolean hasPhone = request.getPhone() != null && !request.getPhone().isBlank();
+        if (!hasEmail && !hasPhone) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Vui lòng nhập Email hoặc Số điện thoại đã dùng khi đặt vé");
+        }
+
+        UUID bookingId;
+        try {
+            bookingId = parseBookingUuid(request.getBookingId());
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Mã đơn vé không đúng định dạng");
+        }
+
+        return ApiResponse.<List<BookingResponse>>builder()
+                .status(HttpStatus.OK.value())
+                .data(bookingService.lookupGuestBooking(bookingId, request.getEmail(), request.getPhone()))
+                .message("Tra cứu vé thành công")
+                .build();
+    }
+
     @GetMapping("/my-bookings")
     public ApiResponse<PageResponse<BookingResponse>> getMyBookings(
             @AuthenticationPrincipal Jwt jwt,
@@ -111,9 +136,22 @@ public class BookingController {
     @PreAuthorize("hasAnyAuthority('ticket:view', 'TICKET_STAFF', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
     public ApiResponse<PageResponse<BookingResponse>> adminSearch(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) com.cgv.bookingservice.enums.BookingStatus status,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate fromDate,
+            @RequestParam(required = false) @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate toDate,
             @PageableDefault(size = 15, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        var results = bookingService.adminSearchBookings(keyword, pageable);
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc");
+        }
+        // Ngày lọc theo giờ Việt Nam; toDate tính trọn ngày (exclusive ở 00:00 ngày kế tiếp)
+        java.time.ZoneId vn = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
+        BookingFilterRequest filter = BookingFilterRequest.builder()
+                .status(status)
+                .fromDate(fromDate == null ? null : fromDate.atStartOfDay(vn).toInstant())
+                .toDate(toDate == null ? null : toDate.plusDays(1).atStartOfDay(vn).toInstant())
+                .build();
+        var results = bookingService.adminSearchBookings(keyword, filter, pageable);
         return ApiResponse.<PageResponse<BookingResponse>>builder()
                 .status(HttpStatus.OK.value())
                 .data(results)

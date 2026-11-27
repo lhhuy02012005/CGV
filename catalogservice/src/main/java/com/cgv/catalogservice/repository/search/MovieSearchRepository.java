@@ -15,7 +15,7 @@ public interface MovieSearchRepository extends ElasticsearchRepository<MovieDocu
     {
       "multi_match": {
         "query": "?0",
-        "fields": ["title^3", "originalTitle^2", "synopsis", "director"],
+        "fields": ["title^3", "originalTitle^2", "casts^2", "director", "synopsis"],
         "fuzziness": "AUTO"
       }
     }

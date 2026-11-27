@@ -12,6 +12,7 @@ import com.cgv.catalogservice.enums.ShowingStatus;
 import com.cgv.catalogservice.exception.ResourceConflictException;
 import com.cgv.catalogservice.mapper.MovieMapper;
 import com.cgv.catalogservice.repository.MovieRepository;
+import com.cgv.catalogservice.repository.ShowtimeRepository;
 import com.cgv.catalogservice.repository.search.MovieSearchRepository;
 import com.cgv.catalogservice.service.MovieService;
 import com.cgv.catalogservice.specification.MovieSpecification;
@@ -22,6 +23,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import lombok.extern.slf4j.Slf4j;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +47,8 @@ public class MovieServiceImpl implements MovieService {
     MovieRepository movieRepository;
     MovieMapper movieMapper;
     MovieSearchRepository movieSearchRepository;
+    ShowtimeRepository showtimeRepository;
+    com.cgv.catalogservice.repository.MovieGenreRepository movieGenreRepository;
     com.cgv.catalogservice.service.CatalogRealtimeService catalogRealtimeService;
 
     @Override
@@ -76,7 +81,7 @@ public class MovieServiceImpl implements MovieService {
             log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
         }
 
-        return movieMapper.toResponse(savedMovie);
+        return withGenres(movieMapper.toResponse(savedMovie));
     }
 
     @Override
@@ -112,7 +117,7 @@ public class MovieServiceImpl implements MovieService {
             log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
         }
 
-        return movieMapper.toResponse(movie);
+        return withGenres(movieMapper.toResponse(movie));
     }
 
     private static void validateMoviePeriod(LocalDate releaseDate, LocalDate endDate) {
@@ -156,7 +161,7 @@ public class MovieServiceImpl implements MovieService {
             log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
         }
 
-        return movieMapper.toResponse(movie);
+        return withGenres(movieMapper.toResponse(movie));
     }
 
     @Override
@@ -182,7 +187,45 @@ public class MovieServiceImpl implements MovieService {
             log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
         }
 
-        return movieMapper.toResponse(movie);
+        return withGenres(movieMapper.toResponse(movie));
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
+    public void deleteMovie(UUID movieId) {
+        Movie movie = movieRepository.findById(movieId)
+                .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
+
+        // showtimes.movie_id có ON DELETE CASCADE: xóa phim sẽ xóa luôn suất chiếu đã có vé.
+        if (showtimeRepository.existsByMovieId(movieId)) {
+            throw new ResourceConflictException(
+                    "Không thể xóa phim đã có suất chiếu. Vui lòng chuyển trạng thái phim sang ẨN (HIDDEN).");
+        }
+
+        String title = movie.getTitle();
+        movieRepository.delete(movie);
+        log.info("Deleted movie: movieId={}, title={}", movieId, title);
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                try {
+                    movieSearchRepository.deleteById(movieId.toString());
+                } catch (Exception e) {
+                    log.warn("Failed to delete movie {} from Elasticsearch: {}", movieId, e.getMessage());
+                }
+                try {
+                    catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", java.util.Map.of(
+                            "movieId", movieId.toString(),
+                            "title", title,
+                            "action", "DELETED"
+                    ));
+                } catch (Exception e) {
+                    log.warn("Failed to broadcast MOVIE_STATUS_CHANGED: {}", e.getMessage());
+                }
+            }
+        });
     }
 
     @Override
@@ -193,7 +236,7 @@ public class MovieServiceImpl implements MovieService {
         Movie movie = movieRepository.findByIdWithCasts(movieId)
                 .orElseThrow(() -> new EntityNotFoundException("Không tìm thấy movie với id: " + movieId));
 
-        return movieMapper.toDetailResponse(movie);
+        return withGenres(movieMapper.toDetailResponse(movie));
     }
 
     @Override
@@ -229,6 +272,9 @@ public class MovieServiceImpl implements MovieService {
                         MovieSpecification.hasLanguage(
                                 filter.language()
                         ),
+                        MovieSpecification.hasCountry(
+                                filter.country()
+                        ),
                         MovieSpecification.hasAgeRating(
                                 filter.ageRating()
                         ),
@@ -239,7 +285,7 @@ public class MovieServiceImpl implements MovieService {
 
         Page<Movie> moviePage = movieRepository.findAll(specification, pageable);
 
-        List<MovieResponse> movieResponseList = movieMapper.toResponseList(moviePage.getContent());
+        List<MovieResponse> movieResponseList = withGenres(movieMapper.toResponseList(moviePage.getContent()));
 
         return PageResponse.<MovieResponse>builder()
                 .data(movieResponseList)
@@ -257,7 +303,7 @@ public class MovieServiceImpl implements MovieService {
         Specification<Movie> spec = Specification.where(MovieSpecification.hasStatus(com.cgv.catalogservice.enums.MovieStatus.ACTIVE))
                 .and(MovieSpecification.hasShowingStatus(com.cgv.catalogservice.enums.ShowingStatus.NOW_SHOWING));
         Page<Movie> page = movieRepository.findAll(spec, pageable);
-        List<MovieResponse> list = movieMapper.toResponseList(page.getContent());
+        List<MovieResponse> list = withGenres(movieMapper.toResponseList(page.getContent()));
         return PageResponse.<MovieResponse>builder()
                 .data(list)
                 .pageNumber(page.getNumber() + 1)
@@ -274,7 +320,7 @@ public class MovieServiceImpl implements MovieService {
         Specification<Movie> spec = Specification.where(MovieSpecification.hasStatus(com.cgv.catalogservice.enums.MovieStatus.ACTIVE))
                 .and(MovieSpecification.hasShowingStatus(com.cgv.catalogservice.enums.ShowingStatus.COMING_SOON));
         Page<Movie> page = movieRepository.findAll(spec, pageable);
-        List<MovieResponse> list = movieMapper.toResponseList(page.getContent());
+        List<MovieResponse> list = withGenres(movieMapper.toResponseList(page.getContent()));
         return PageResponse.<MovieResponse>builder()
                 .data(list)
                 .pageNumber(page.getNumber() + 1)
@@ -307,11 +353,11 @@ public class MovieServiceImpl implements MovieService {
             if (!movieIds.isEmpty()) {
                 List<Movie> movies = movieRepository.findAllById(movieIds);
                 Map<UUID, Movie> movieMap = movies.stream().collect(Collectors.toMap(Movie::getId, m -> m));
-                return movieIds.stream()
+                return withGenres(movieIds.stream()
                         .map(movieMap::get)
                         .filter(Objects::nonNull)
                         .map(movieMapper::toResponse)
-                        .toList();
+                        .toList());
             }
         } catch (Exception e) {
             log.warn("Elasticsearch search error, fallback to SQL LIKE query: {}", e.getMessage());
@@ -319,6 +365,24 @@ public class MovieServiceImpl implements MovieService {
 
         // Database fallback
         Page<Movie> fallbackPage = movieRepository.findAll(MovieSpecification.containsKeyword(keyword.trim()), pageable);
-        return movieMapper.toResponseList(fallbackPage.getContent());
+        return withGenres(movieMapper.toResponseList(fallbackPage.getContent()));
+    }
+
+    /** Gắn tên thể loại cho danh sách phim bằng 1 truy vấn (tránh N+1). */
+    private List<MovieResponse> withGenres(List<MovieResponse> responses) {
+        if (responses == null || responses.isEmpty()) {
+            return responses;
+        }
+        Set<UUID> ids = responses.stream().map(MovieResponse::id).collect(Collectors.toSet());
+        Map<UUID, List<String>> genresByMovie = movieGenreRepository.findByIdMovieIdIn(ids).stream()
+                .collect(Collectors.groupingBy(mg -> mg.getId().getMovieId(),
+                        Collectors.mapping(mg -> mg.getGenre().getName(), Collectors.toList())));
+        return responses.stream()
+                .map(r -> r.withGenres(genresByMovie.getOrDefault(r.id(), List.of())))
+                .toList();
+    }
+
+    private MovieResponse withGenres(MovieResponse response) {
+        return response == null ? null : withGenres(List.of(response)).get(0);
     }
 }

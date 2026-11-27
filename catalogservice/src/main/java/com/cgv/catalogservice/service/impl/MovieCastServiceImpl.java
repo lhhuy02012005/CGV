@@ -36,6 +36,7 @@ public class MovieCastServiceImpl implements MovieCastService {
     MovieRepository movieRepository;
     MovieCastMapper movieCastMapper;
     CatalogRealtimeService catalogRealtimeService;
+    org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -52,6 +53,7 @@ public class MovieCastServiceImpl implements MovieCastService {
         movieCast.setMovie(movie);
 
         MovieCast savedMovieCast = movieCastRepository.save(movieCast);
+        eventPublisher.publishEvent(new com.cgv.catalogservice.listener.MovieIndexEvent(savedMovieCast.getMovie().getId()));
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", Map.of(
@@ -89,6 +91,7 @@ public class MovieCastServiceImpl implements MovieCastService {
                     ));
             movieCast.setMovie(movie);
         }
+        eventPublisher.publishEvent(new com.cgv.catalogservice.listener.MovieIndexEvent(movieCast.getMovie().getId()));
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", Map.of(
@@ -117,6 +120,7 @@ public class MovieCastServiceImpl implements MovieCastService {
         UUID movieId = movieCast.getMovie().getId();
         String title = movieCast.getMovie().getTitle();
         movieCastRepository.delete(movieCast);
+        eventPublisher.publishEvent(new com.cgv.catalogservice.listener.MovieIndexEvent(movieId));
 
         try {
             catalogRealtimeService.broadcast("MOVIE_STATUS_CHANGED", Map.of(

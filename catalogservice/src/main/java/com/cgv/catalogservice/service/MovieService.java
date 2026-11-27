@@ -27,6 +27,8 @@ public interface MovieService {
             MovieUpdateShowingStatusRequest request
     );
 
+    void deleteMovie(UUID movieId);
+
     MovieResponse getMovieById(UUID movieId);
 
     PageResponse<MovieResponse> getNowShowingMovies(Pageable pageable);

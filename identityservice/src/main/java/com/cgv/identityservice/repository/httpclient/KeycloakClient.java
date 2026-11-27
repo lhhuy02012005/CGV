@@ -34,6 +34,10 @@ public interface KeycloakClient {
     void updateUser(@RequestHeader("Authorization") String token, @PathVariable String realm,
                     @PathVariable String userId, @RequestBody Map<String, ?> user);
 
+    @PutMapping(value = "/admin/realms/{realm}/users/{userId}/reset-password", consumes = MediaType.APPLICATION_JSON_VALUE)
+    void resetPassword(@RequestHeader("Authorization") String token, @PathVariable String realm,
+                       @PathVariable String userId, @RequestBody Map<String, ?> credential);
+
     @DeleteMapping("/admin/realms/{realm}/users/{userId}")
     void deleteUser(@RequestHeader("Authorization") String token, @PathVariable String realm,
                     @PathVariable String userId);

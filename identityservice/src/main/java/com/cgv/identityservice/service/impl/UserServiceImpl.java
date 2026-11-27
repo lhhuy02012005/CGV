@@ -4,6 +4,7 @@ import com.cgv.commondto.dto.PageResponse;
 import com.cgv.commondto.exception.ErrorCode;
 import com.cgv.commondto.exception.BusinessException;
 import com.cgv.identityservice.dto.request.UpdateProfileRequest;
+import com.cgv.identityservice.dto.request.ChangePasswordRequest;
 import com.cgv.identityservice.dto.request.AdminUserRequest;
 import com.cgv.identityservice.dto.request.UserCreationParam;
 import com.cgv.identityservice.dto.request.RoleRepresentation;
@@ -161,8 +162,45 @@ public class UserServiceImpl implements UserService {
             user.setPhone(newPhone);
         }
 
+        if (request.getBirthDate() != null) {
+            user.setBirthDate(request.getBirthDate());
+        }
+        if (request.getGender() != null && !request.getGender().isBlank()) {
+            user.setGender(request.getGender());
+        }
+        if (request.getAddress() != null) {
+            user.setAddress(request.getAddress().isBlank() ? null : request.getAddress().trim());
+        }
+
         User saved = userRepository.save(user);
         return userMapper.toUserResponse(saved);
+    }
+
+    @Override
+    public void changePassword(String userId, ChangePasswordRequest request) {
+        if (request.getCurrentPassword().equals(request.getNewPassword())) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Mật khẩu mới không được trùng với mật khẩu hiện tại");
+        }
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_EXISTED, "Không tìm thấy thông tin tài khoản người dùng"));
+
+        // Xác minh mật khẩu hiện tại bằng chính Keycloak (password grant), không lưu mật khẩu ở service.
+        try {
+            keycloakClient.exchangeToken(realm, Map.of(
+                    "grant_type", "password", "client_id", clientId, "client_secret", clientSecret,
+                    "username", user.getEmail(), "password", request.getCurrentPassword()));
+        } catch (FeignException e) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST,
+                    "Mật khẩu hiện tại không đúng (tài khoản đăng nhập bằng Google/Facebook chưa có mật khẩu)");
+        }
+
+        try {
+            keycloakClient.resetPassword(adminToken(), realm, userId, Map.of(
+                    "type", "password", "value", request.getNewPassword(), "temporary", false));
+        } catch (FeignException e) {
+            log.error("Reset password failed for {}: {}", userId, e.getMessage());
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Mật khẩu mới không đạt chính sách bảo mật của hệ thống");
+        }
     }
 
     @Override

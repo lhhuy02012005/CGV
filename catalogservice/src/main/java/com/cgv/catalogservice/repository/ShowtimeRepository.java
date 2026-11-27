@@ -33,6 +33,8 @@ public interface ShowtimeRepository
 
     boolean existsByRoomId(UUID roomId);
 
+    boolean existsByMovieId(UUID movieId);
+
     boolean existsByRoomIdAndStatusAndEndTimeAfter(
             UUID roomId,
             ShowtimeStatus status,

@@ -334,6 +334,27 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<BookingResponse> lookupGuestBooking(UUID bookingId, String email, String phone) {
+        String normalizedEmail = email == null ? "" : email.trim();
+        String normalizedPhone = digitsOnly(phone);
+        if (bookingId == null || (normalizedEmail.isEmpty() && normalizedPhone.isEmpty())) {
+            return List.of();
+        }
+
+        // Không phân biệt "không có đơn" và "sai email/SĐT" để không lộ mã đơn hợp lệ.
+        return bookingRepository.findById(bookingId)
+                .filter(b -> (!normalizedEmail.isEmpty() && normalizedEmail.equalsIgnoreCase(b.getGuestEmail()))
+                        || (!normalizedPhone.isEmpty() && normalizedPhone.equals(digitsOnly(b.getGuestPhone()))))
+                .map(b -> List.of(mapToBookingResponse(b, null)))
+                .orElse(List.of());
+    }
+
+    private static String digitsOnly(String value) {
+        return value == null ? "" : value.replaceAll("\\D", "");
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public PageResponse<BookingResponse> getMyBookings(String userId, BookingFilterRequest filter, Pageable pageable) {
         Specification<Booking> spec = BookingSpecification.filterMyBookings(userId, filter);
         Page<Booking> bookingPage = bookingRepository.findAll(spec, pageable);
@@ -364,8 +385,8 @@ public class BookingServiceImpl implements BookingService {
 
     @Override
     @Transactional(readOnly = true)
-    public PageResponse<BookingResponse> adminSearchBookings(String keyword, Pageable pageable) {
-        Page<Booking> page = bookingRepository.searchBookingsByKeyword(keyword, pageable);
+    public PageResponse<BookingResponse> adminSearchBookings(String keyword, BookingFilterRequest filter, Pageable pageable) {
+        Page<Booking> page = bookingRepository.findAll(BookingSpecification.adminSearch(keyword, filter), pageable);
         Map<UUID, ShowtimePricingResponse> showtimeCache = new HashMap<>();
         List<BookingResponse> responses = page.getContent().stream()
                 .map(b -> mapToBookingResponse(b, showtimeCache))

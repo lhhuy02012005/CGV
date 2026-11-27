@@ -15,12 +15,13 @@ public interface BookingService {
     BookingResponse createBooking(String userId, String userEmail, BookingCreateRequest request);
     void confirmBooking(PaymentCompletedEvent event);
     BookingResponse getBookingById(UUID bookingId, String userId);
+    List<BookingResponse> lookupGuestBooking(UUID bookingId, String email, String phone);
     BookingResponse getPendingBooking(String userId, UUID showtimeId);
     PageResponse<BookingResponse> getMyBookings(String userId, BookingFilterRequest filter, Pageable pageable);
     void cancelBooking(UUID bookingId, String userId);
     void rollbackBooking(UUID bookingId, String reason);
 
-    PageResponse<BookingResponse> adminSearchBookings(String keyword, Pageable pageable);
+    PageResponse<BookingResponse> adminSearchBookings(String keyword, BookingFilterRequest filter, Pageable pageable);
     BookingResponse adminCheckIn(UUID bookingId);
     BookingResponse adminRefund(UUID bookingId);
     DashboardStatisticsResponse getDashboardStatistics();

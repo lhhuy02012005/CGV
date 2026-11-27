@@ -266,6 +266,42 @@ public class SeatServiceImpl implements SeatService {
     }
 
     @Override
+    @Caching(
+            evict = {
+                    @CacheEvict(value = "seatsByRoom", allEntries = true),
+                    @CacheEvict(value = "roomsByCinema", allEntries = true)
+            }
+    )
+    @Transactional
+    public void deleteSeat(UUID seatId) {
+
+        log.info("Deleting seat: seatId={}", seatId);
+
+        Seat seat = seatRepository.findById(seatId)
+                .orElseThrow(() ->
+                        new EntityNotFoundException(
+                                "Không tìm thấy seat với id: " + seatId
+                        )
+                );
+
+        Room room = seat.getRoom();
+
+        // Vé đã bán lưu seatId; nếu phòng đã từng có suất chiếu thì chỉ cho phép vô hiệu hóa ghế.
+        if (showtimeRepository.existsByRoomId(room.getId())) {
+            throw new ResourceConflictException(
+                    "Không thể xóa ghế của phòng đã có suất chiếu. Vui lòng chuyển ghế sang trạng thái NGỪNG HOẠT ĐỘNG."
+            );
+        }
+
+        seatRepository.delete(seat);
+        seatRepository.flush();
+
+        room.setTotalSeats(
+                seatRepository.countByRoomId(room.getId())
+        );
+    }
+
+    @Override
     @Cacheable(
             value = "seatsByRoom",
             key = "#roomId"
