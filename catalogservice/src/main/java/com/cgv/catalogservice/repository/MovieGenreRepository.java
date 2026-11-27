@@ -16,6 +16,9 @@ public interface MovieGenreRepository
     @EntityGraph(attributePaths = {"movie", "genre"})
     List<MovieGenre> findByIdMovieId(UUID movieId);
 
+    @EntityGraph(attributePaths = {"genre"})
+    List<MovieGenre> findByIdMovieIdIn(java.util.Collection<UUID> movieIds);
+
     @EntityGraph(attributePaths = {"movie", "genre"})
     Page<MovieGenre> findByIdGenreId(Integer genreId, Pageable pageable);
 

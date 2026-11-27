@@ -34,9 +34,11 @@ public class MovieGenreServiceImpl implements MovieGenreService {
     GenreRepository genreRepository;
 
     MovieGenreMapper movieGenreMapper;
+    org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public MovieGenreResponse createMovieGenre(
             MovieGenreCreateRequest request
     ) {
@@ -73,12 +75,14 @@ public class MovieGenreServiceImpl implements MovieGenreService {
 
         MovieGenre savedMovieGenre =
                 movieGenreRepository.save(movieGenre);
+        eventPublisher.publishEvent(new com.cgv.catalogservice.listener.MovieIndexEvent(savedMovieGenre.getId().getMovieId()));
 
         return movieGenreMapper.toResponse(savedMovieGenre);
     }
 
     @Override
     @Transactional
+    @org.springframework.cache.annotation.CacheEvict(value = {"movies:detail", "movies:now-showing", "movies:coming-soon"}, allEntries = true)
     public void deleteMovieGenre(
             UUID movieId,
             Integer genreId
@@ -99,6 +103,7 @@ public class MovieGenreServiceImpl implements MovieGenreService {
         }
 
         movieGenreRepository.deleteById(movieGenreId);
+        eventPublisher.publishEvent(new com.cgv.catalogservice.listener.MovieIndexEvent(movieId));
     }
 
     @Override

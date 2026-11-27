@@ -23,6 +23,7 @@ public record MovieCreateRequest(
         String director,
 
         String language,
+        String country,
 
         String subtitle,
 

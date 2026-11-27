@@ -27,6 +27,7 @@ public record MovieFilterRequest(
         Integer maxDuration,
 
         String language,
+        String country,
 
         String ageRating,
 

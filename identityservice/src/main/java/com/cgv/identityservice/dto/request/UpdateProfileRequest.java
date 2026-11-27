@@ -14,4 +14,13 @@ public class UpdateProfileRequest {
     String fullName;
 
     String phone;
+
+    @jakarta.validation.constraints.Past(message = "Ngày sinh phải ở trong quá khứ")
+    java.time.LocalDate birthDate;
+
+    @jakarta.validation.constraints.Pattern(regexp = "MALE|FEMALE|OTHER", message = "Giới tính không hợp lệ")
+    String gender;
+
+    @jakarta.validation.constraints.Size(max = 255, message = "Địa chỉ tối đa 255 ký tự")
+    String address;
 }

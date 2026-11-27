@@ -44,6 +44,9 @@ public class Movie extends BaseEntity {
 
     String language;
 
+    @Column(name = "country", length = 100)
+    String country;
+
     String subtitle;
 
     @Column(name = "supported_modes")

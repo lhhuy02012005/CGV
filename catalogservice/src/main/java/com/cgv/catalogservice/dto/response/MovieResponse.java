@@ -15,6 +15,7 @@ public record MovieResponse(
         String synopsis,
         String director,
         String language,
+        String country,
         String subtitle,
         String supportedModes,
         String ageRating,
@@ -29,14 +30,24 @@ public record MovieResponse(
         MovieStatus status,
         Instant createdAt,
         Instant updatedAt,
-        List<MovieCastResponse> casts
+        List<MovieCastResponse> casts,
+        List<String> genres
 ) {
     public MovieResponse withCasts(List<MovieCastResponse> newCasts) {
         return new MovieResponse(
-                id, title, originalTitle, synopsis, director, language, subtitle,
+                id, title, originalTitle, synopsis, director, language, country, subtitle,
                 supportedModes, ageRating, durationMinutes, releaseDate, endDate,
                 showingStatus, posterUrl, backdropUrl, trailerYoutubeUrl,
-                isFeatured, status, createdAt, updatedAt, newCasts
+                isFeatured, status, createdAt, updatedAt, newCasts, genres
+        );
+    }
+
+    public MovieResponse withGenres(List<String> newGenres) {
+        return new MovieResponse(
+                id, title, originalTitle, synopsis, director, language, country, subtitle,
+                supportedModes, ageRating, durationMinutes, releaseDate, endDate,
+                showingStatus, posterUrl, backdropUrl, trailerYoutubeUrl,
+                isFeatured, status, createdAt, updatedAt, casts, newGenres
         );
     }
 }

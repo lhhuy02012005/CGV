@@ -21,6 +21,7 @@ import lombok.experimental.FieldDefaults;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
@@ -100,6 +101,28 @@ public class SeatController {
                 .status(HttpStatus.OK.value())
                 .data(response)
                 .message("Cập nhật trạng thái ghế thành công")
+                .build();
+    }
+
+    @Operation(
+            summary = "Xóa ghế",
+            description = "Xóa ghế khỏi sơ đồ phòng chiếu. Chỉ xóa được khi phòng chưa từng có suất chiếu."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Xóa ghế thành công"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy ghế"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Phòng đã có suất chiếu, không thể xóa ghế")
+    })
+    @DeleteMapping("/{seatId}")
+    @PreAuthorize("hasAnyAuthority('cinema:manage', 'CINEMA_MANAGER', 'SUPER_ADMIN')")
+    public ApiResponse<Void> delete(
+            @Parameter(description = "ID của ghế", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID seatId
+    ) {
+        seatService.deleteSeat(seatId);
+
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Xóa ghế thành công")
                 .build();
     }
 

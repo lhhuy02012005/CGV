@@ -19,6 +19,7 @@ public record MovieUpdateRequest(
         String director,
 
         String language,
+        String country,
 
         String subtitle,
 

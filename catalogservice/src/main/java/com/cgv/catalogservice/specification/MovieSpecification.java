@@ -23,12 +23,25 @@ public final class MovieSpecification {
 
             String pattern = "%" + keyword.trim().toLowerCase() + "%";
 
+            var castSubquery = query.subquery(java.util.UUID.class);
+            var cast = castSubquery.from(com.cgv.catalogservice.entity.MovieCast.class);
+            castSubquery.select(cast.get("movie").get("id"))
+                    .where(cb.like(cb.lower(cast.get("actorName")), pattern));
+
             return cb.or(
                     cb.like(cb.lower(root.get("title")), pattern),
                     cb.like(cb.lower(root.get("originalTitle")), pattern),
-                    cb.like(cb.lower(root.get("director")), pattern)
+                    cb.like(cb.lower(root.get("director")), pattern),
+                    root.get("id").in(castSubquery)
             );
         };
+    }
+
+    public static Specification<Movie> hasCountry(String country) {
+        return (root, query, cb) ->
+                country == null || country.isBlank()
+                        ? cb.conjunction()
+                        : cb.equal(cb.lower(root.get("country")), country.trim().toLowerCase());
     }
 
     public static Specification<Movie> hasShowingStatus(

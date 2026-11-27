@@ -8,6 +8,7 @@ public interface UserService {
     PageResponse<UserResponse> getAllUsers(String keyword, String sort, int page, int size);
     UserResponse getMyProfile(String userId);
     UserResponse updateProfile(String userId, UpdateProfileRequest request);
+    void changePassword(String userId, com.cgv.identityservice.dto.request.ChangePasswordRequest request);
     UserResponse createAdminUser(com.cgv.identityservice.dto.request.AdminUserRequest request);
     UserResponse updateAdminUser(String userId, com.cgv.identityservice.dto.request.AdminUserRequest request);
     void setBlocked(String userId, String actorId, boolean blocked);

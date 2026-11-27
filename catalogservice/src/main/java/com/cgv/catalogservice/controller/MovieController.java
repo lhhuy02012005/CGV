@@ -139,6 +139,28 @@ public class MovieController {
     }
 
     @Operation(
+            summary = "Xóa phim",
+            description = "Xóa phim theo ID. Chỉ xóa được phim chưa có suất chiếu nào."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Xóa phim thành công"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Không tìm thấy phim"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Phim đã có suất chiếu, không thể xóa")
+    })
+    @DeleteMapping("/{movieId}")
+    @PreAuthorize("hasAnyAuthority('movie:manage', 'CONTENT_MANAGER', 'SUPER_ADMIN')")
+    public ApiResponse<Void> delete(
+            @Parameter(description = "ID của phim", required = true, schema = @Schema(type = "string", format = "uuid")) @PathVariable UUID movieId
+    ) {
+        movieService.deleteMovie(movieId);
+
+        return ApiResponse.<Void>builder()
+                .status(HttpStatus.OK.value())
+                .message("Xóa phim thành công")
+                .build();
+    }
+
+    @Operation(
             summary = "Xem chi tiết phim",
             description = "Lấy thông tin chi tiết phim theo ID."
     )
