@@ -123,4 +123,11 @@ public interface KeycloakClient {
             @PathVariable("role-name") String parentRoleName,
             @RequestBody List<RoleRepresentation> childRoles
     );
+
+    @GetMapping(value = "/admin/realms/{realm}/roles/{role-name}/composites", produces = MediaType.APPLICATION_JSON_VALUE)
+    List<RoleRepresentation> getCompositeRoles(
+            @RequestHeader("Authorization") String adminToken,
+            @PathVariable("realm") String realm,
+            @PathVariable("role-name") String roleName
+    );
 }

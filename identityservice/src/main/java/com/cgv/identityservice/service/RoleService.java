@@ -7,6 +7,7 @@ import java.util.List;
 public interface RoleService {
     void createRole(RoleRepresentation request);
     RoleRepresentation getRole(String roleName);
+    List<String> getCompositeRoleNames(String roleName);
     List<RoleRepresentation> getAllRoles();
     void updateRole(String roleName, RoleRepresentation request);
     void deleteRole(String roleName);

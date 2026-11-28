@@ -46,6 +46,15 @@ public class RoleController {
                 .build();
     }
 
+    @GetMapping("/{roleName}/composites")
+    public ApiResponse<List<String>> getCompositeRoles(@PathVariable String roleName) {
+        return ApiResponse.<List<String>>builder()
+                .status(HttpStatus.OK.value())
+                .data(roleService.getCompositeRoleNames(roleName))
+                .message("Danh sách quyền con của Role")
+                .build();
+    }
+
     @PutMapping("/{roleName}")
     public ApiResponse<Void> updateRole(@PathVariable String roleName, @RequestBody RoleRepresentation request) {
         roleService.updateRole(roleName, request);
