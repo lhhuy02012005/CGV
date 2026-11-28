@@ -73,7 +73,7 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     @Transactional(readOnly = true)
-    @Cacheable(value = "promotions:active")
+    // Không cache: RedisSerializer.json() không đọc lại được List<PromotionResponse> (lưu mảng thiếu type info -> 500)
     public List<PromotionResponse> getActivePromotions() {
         return promotionRepository.findActivePromotions(Instant.now())
                 .stream()
