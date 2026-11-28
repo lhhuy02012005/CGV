@@ -80,6 +80,23 @@ public class RoleServiceImpl implements RoleService {
         }
     }
 
+    /** Tên các quyền con (realm role) của một role tổng hợp, đọc trực tiếp từ Keycloak. */
+    @PreAuthorize("hasAuthority('SUPER_ADMIN')")
+    @Override
+    public List<String> getCompositeRoleNames(String roleName) {
+        try {
+            String token = getAdminAccessToken();
+            return keycloakClient.getCompositeRoles(token, realm, roleName).stream()
+                    .filter(r -> !Boolean.TRUE.equals(r.getClientRole()))
+                    .map(RoleRepresentation::getName)
+                    .sorted()
+                    .toList();
+        } catch (Exception e) {
+            log.error("Không lấy được quyền con của role {}: {}", roleName, e.getMessage());
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "Không thể xem quyền con của vai trò !");
+        }
+    }
+
     @PreAuthorize("hasAuthority('SUPER_ADMIN')")
     @Override
     @Cacheable(value = "roles:all")
